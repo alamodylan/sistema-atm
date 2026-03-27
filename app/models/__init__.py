@@ -29,6 +29,11 @@ from .work_order_line import WorkOrderLine
 from .work_order_request import WorkOrderRequest
 from .work_order_request_line import WorkOrderRequestLine
 from .work_order_service import WorkOrderService
+from .inventory_entry import InventoryEntry
+from .inventory_entry_line import InventoryEntryLine
+from .purchase_order import PurchaseOrder
+from .purchase_request import PurchaseRequest
+from .service_catalog import ServiceCatalog
 
 __all__ = [
     "Role",
@@ -71,4 +76,9 @@ __all__ = [
 
     "UserSiteAccess",
     "UserWarehouseAccess",
+    "InventoryEntry",
+    "InventoryEntryLine",
+    "PurchaseOrder",
+    "PurchaseRequest",
+    "ServiceCatalog",
 ]
