@@ -117,6 +117,13 @@ class User(UserMixin, db.Model):
         overlaps="mechanics",
     )
 
+    work_order_requests = db.relationship(
+        "WorkOrderRequest",
+        foreign_keys="WorkOrderRequest.requested_by_user_id",
+        back_populates="requested_by_user",
+        lazy="dynamic",
+    )
+
     def set_password(self, raw_password: str) -> None:
         self.password_hash = generate_password_hash(raw_password)
 
