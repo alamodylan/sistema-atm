@@ -129,7 +129,7 @@ class WarehouseStock(db.Model):
         index=True,
     )
 
-    quantity = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+    quantity_on_hand = db.Column(db.Numeric(14, 2), nullable=False, default=0)
     reserved_quantity = db.Column(db.Numeric(14, 2), nullable=False, default=0)
 
     created_at = db.Column(
@@ -157,7 +157,7 @@ class WarehouseStock(db.Model):
 
     @property
     def available_quantity(self):
-        quantity = self.quantity or 0
+        quantity = self.quantity_on_hand or 0
         reserved = self.reserved_quantity or 0
         return quantity - reserved
 
