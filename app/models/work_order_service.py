@@ -37,11 +37,14 @@ class WorkOrderService(db.Model):
         default=lambda: datetime.now(UTC),
     )
 
-    # RELACIONES
-
     work_order = db.relationship(
         "WorkOrder",
         back_populates="services",
+    )
+
+    service = db.relationship(
+        "ServiceCatalog",
+        back_populates="work_order_services",
     )
 
     created_by_user = db.relationship(

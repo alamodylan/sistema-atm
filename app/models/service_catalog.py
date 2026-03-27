@@ -7,17 +7,23 @@ class ServiceCatalog(db.Model):
 
     id = db.Column(db.BigInteger, primary_key=True)
 
-    code = db.Column(db.String(50), unique=True, nullable=False)
-    name = db.Column(db.String(120), nullable=False)
-    category = db.Column(db.String(100))
-    description = db.Column(db.Text)
-
+    code = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False, index=True)
+    category = db.Column(db.String(100), nullable=True)
+    description = db.Column(db.Text, nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
-    created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.func.now(),
+    )
 
     work_order_services = db.relationship(
         "WorkOrderService",
         back_populates="service",
         lazy="dynamic",
     )
+
+    def __repr__(self) -> str:
+        return f"<ServiceCatalog {self.code} - {self.name}>"
