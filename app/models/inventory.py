@@ -164,7 +164,7 @@ class WarehouseStock(db.Model):
     def __repr__(self) -> str:
         return (
             f"<WarehouseStock warehouse={self.warehouse_id} "
-            f"article={self.article_id} qty={self.quantity}>"
+            f"article={self.article_id} qty={self.quantity_on_hand}>"
         )
 
 
