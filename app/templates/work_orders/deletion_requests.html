@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+
+{% block title %}Solicitudes de Eliminación | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% set title = "Solicitudes de Eliminación de Líneas" %}
+{% set subtitle = "Gestione las solicitudes pendientes, aprobadas o rechazadas." %}
+{% include 'components/page_header.html' with context %}
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body">
+
+        <!-- ===================== FILTROS ===================== -->
+        <form method="GET" action="{{ url_for('work_orders.deletion_requests_list') }}" class="row g-3 mb-4">
+            <div class="col-12 col-md-10">
+                <select name="status" class="form-select">
+                    <option value="">Todos los estados</option>
+                    <option value="PENDIENTE" {% if status == "PENDIENTE" %}selected{% endif %}>PENDIENTE</option>
+                    <option value="APROBADA" {% if status == "APROBADA" %}selected{% endif %}>APROBADA</option>
+                    <option value="RECHAZADA" {% if status == "RECHAZADA" %}selected{% endif %}>RECHAZADA</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+            </div>
+        </form>
+
+        <!-- ===================== TABLA ===================== -->
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>OT</th>
+                        <th>Artículo</th>
+                        <th>Solicitó</th>
+                        <th>Motivo</th>
+                        <th>Estado</th>
+                        <th>Fecha</th>
+                        <th>Revisión</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    {% if delete_requests %}
+                        {% for req in delete_requests %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('work_orders.get_work_order', work_order_id=req.work_order_line.work_order.id) }}"
+                                       class="text-decoration-none fw-semibold">
+                                        {{ req.work_order_line.work_order.number }}
+                                    </a>
+                                </td>
+
+                                <td>
+                                    {{ req.work_order_line.article.code }} - {{ req.work_order_line.article.name }}
+                                </td>
+
+                                <td>
+                                    {{ req.requested_by_user.full_name if req.requested_by_user else "-" }}
+                                </td>
+
+                                <td>
+                                    <div class="small">
+                                        {{ req.reason or "-" }}
+                                    </div>
+                                </td>
+
+                                <td>
+                                    {% if req.status == "PENDIENTE" %}
+                                        <span class="badge text-bg-warning">PENDIENTE</span>
+                                    {% elif req.status == "APROBADA" %}
+                                        <span class="badge text-bg-success">APROBADA</span>
+                                    {% elif req.status == "RECHAZADA" %}
+                                        <span class="badge text-bg-danger">RECHAZADA</span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">{{ req.status }}</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ req.created_at.strftime('%Y-%m-%d %H:%M') if req.created_at else "-" }}
+                                </td>
+
+                                <td>
+                                    {% if req.reviewed_by_user or req.review_notes or req.reviewed_at %}
+                                        <div class="small">
+                                            <div>
+                                                <strong>Revisó:</strong>
+                                                {{ req.reviewed_by_user.full_name if req.reviewed_by_user else "-" }}
+                                            </div>
+                                            <div>
+                                                <strong>Fecha:</strong>
+                                                {{ req.reviewed_at.strftime('%Y-%m-%d %H:%M') if req.reviewed_at else "-" }}
+                                            </div>
+                                            <div>
+                                                <strong>Notas:</strong>
+                                                {{ req.review_notes or "-" }}
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if req.status == "PENDIENTE" %}
+                                        <div class="d-flex flex-column gap-2">
+
+                                            <form method="POST"
+                                                  action="{{ url_for('deletions.approve_request', request_id=req.id) }}">
+                                                <div class="mb-2">
+                                                    <textarea
+                                                        name="review_notes"
+                                                        class="form-control form-control-sm"
+                                                        rows="2"
+                                                        placeholder="Notas de aprobación (opcional)"
+                                                    ></textarea>
+                                                </div>
+                                                <button type="submit" class="btn btn-sm btn-success w-100">
+                                                    Aprobar
+                                                </button>
+                                            </form>
+
+                                            <form method="POST"
+                                                  action="{{ url_for('deletions.reject_request', request_id=req.id) }}">
+                                                <div class="mb-2">
+                                                    <textarea
+                                                        name="review_notes"
+                                                        class="form-control form-control-sm"
+                                                        rows="2"
+                                                        placeholder="Motivo del rechazo / notas"
+                                                    ></textarea>
+                                                </div>
+                                                <button type="submit" class="btn btn-sm btn-danger w-100">
+                                                    Rechazar
+                                                </button>
+                                            </form>
+
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                No hay solicitudes de eliminación.
+                            </td>
+                        </tr>
+                    {% endif %}
+
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

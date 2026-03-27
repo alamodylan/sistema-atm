@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block title %}Buscar artículo | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% set title = "Buscar artículo" %}
+{% set subtitle = "Consulte artículos por código, nombre o código de barras." %}
+{% include 'components/page_header.html' with context %}
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('inventory.search_articles') }}" class="row g-3 mb-4">
+            <div class="col-12 col-lg-5">
+                <label class="form-label fw-semibold">Código</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    name="code"
+                    placeholder="Ej: 10001"
+                    value="{{ code or '' }}"
+                >
+            </div>
+
+            <div class="col-12 col-lg-5">
+                <label class="form-label fw-semibold">Nombre o código de barras</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    name="q"
+                    placeholder="Ej: tornillo / 7501234567890"
+                    value="{{ query or '' }}"
+                >
+            </div>
+
+            <div class="col-12 col-lg-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Buscar</button>
+            </div>
+        </form>
+
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Código</th>
+                        <th>Artículo</th>
+                        <th>Unidad</th>
+                        <th>Familia</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if articles %}
+                        {% for article in articles %}
+                            <tr>
+                                <td>{{ article.code }}</td>
+                                <td>{{ article.name }}</td>
+                                <td>{{ article.unit.code if article.unit else "-" }}</td>
+                                <td>{{ article.family_code or "-" }}</td>
+                                <td>
+                                    <a href="{{ url_for('inventory.article_summary', article_id=article.id) }}"
+                                       class="btn btn-sm btn-outline-primary">
+                                        Ver resumen
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">
+                                No se encontraron artículos.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

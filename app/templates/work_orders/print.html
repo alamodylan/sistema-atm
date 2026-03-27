@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Impresión OT</title>
+    <style>
+        body { font-family: Arial, sans-serif; color: #111827; margin: 40px; }
+        h1, h2, h3, p { margin: 0; }
+        .header { margin-bottom: 24px; }
+        .section { margin-bottom: 24px; }
+        .table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        .table th, .table td { border: 1px solid #d1d5db; padding: 8px; font-size: 14px; }
+        .table th { background: #f3f4f6; text-align: left; }
+        .signatures { margin-top: 50px; display: flex; justify-content: space-between; gap: 30px; }
+        .signature-box { width: 45%; text-align: center; }
+        .line { border-top: 1px solid #111827; margin-top: 40px; padding-top: 6px; }
+    </style>
+</head>
+<body>
+
+    <!-- ===================== HEADER ===================== -->
+    <div class="header">
+        <h1>Orden de Trabajo</h1>
+        <p><strong>Número:</strong> {{ work_order.number }}</p>
+        <p><strong>Estado:</strong> {{ work_order.status }}</p>
+        <p><strong>Fecha:</strong> {{ work_order.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+    </div>
+
+    <!-- ===================== INFO GENERAL ===================== -->
+    <div class="section">
+        <h3>Información general</h3>
+        <p><strong>Predio:</strong> {{ work_order.site.name if work_order.site else "-" }}</p>
+        <p><strong>Bodega:</strong> {{ work_order.warehouse.name if work_order.warehouse else "-" }}</p>
+        <p><strong>Responsable:</strong> {{ work_order.responsible_user.full_name if work_order.responsible_user else "-" }}</p>
+        <p><strong>Equipo:</strong> {{ work_order.equipment_code_snapshot or "-" }}</p>
+        <p><strong>Descripción:</strong> {{ work_order.description or "-" }}</p>
+    </div>
+
+    <!-- ===================== MECÁNICOS ===================== -->
+    <div class="section">
+        <h3>Mecánicos asignados</h3>
+        <p>
+            {% if work_order.mechanics %}
+                {% for mechanic in work_order.mechanics %}
+                    {{ mechanic.full_name }}{% if not loop.last %}, {% endif %}
+                {% endfor %}
+            {% else %}
+                -
+            {% endif %}
+        </p>
+    </div>
+
+    <!-- ===================== LÍNEAS ===================== -->
+    <div class="section">
+        <h3>Detalle de líneas</h3>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Artículo</th>
+                    <th>Cantidad</th>
+                    <th>Inventario</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+
+                {% if work_order.lines %}
+                    {% for line in work_order.lines %}
+                        <tr>
+                            <td>
+                                {{ line.article.code }} - {{ line.article.name }}
+                            </td>
+
+                            <td>
+                                {{ line.quantity }}
+                            </td>
+
+                            <td>
+                                {% if line.inventory_posted %}
+                                    Aplicado
+                                {% else %}
+                                    No aplicado
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if line.line_status == "ACTIVE" %}
+                                    ACTIVA
+                                {% elif line.line_status == "REMOVAL_PENDING" %}
+                                    PENDIENTE ELIMINACIÓN
+                                {% elif line.line_status == "REMOVED" %}
+                                    ELIMINADA
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="4" style="text-align:center;">Sin líneas registradas</td>
+                    </tr>
+                {% endif %}
+
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ===================== FIRMAS ===================== -->
+    <div class="signatures">
+        <div class="signature-box">
+            <div class="line">Responsable</div>
+        </div>
+        <div class="signature-box">
+            <div class="line">Revisión / Aprobación</div>
+        </div>
+    </div>
+
+</body>
+</html>

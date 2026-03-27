@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block title %}Nueva acta de desecho | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% set title = "Nueva Acta de Desecho" %}
+{% set subtitle = "Defina el rango de fechas y filtros para consultar productos candidatos a desecho." %}
+{% include 'components/page_header.html' with context %}
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+        <form method="POST" action="{{ url_for('waste.create_waste_act_action') }}">
+            <div class="row g-4">
+                <div class="col-12 col-md-3">
+                    <label class="form-label fw-semibold">Número de acta</label>
+                    <input
+                        type="text"
+                        class="form-control"
+                        name="number"
+                        placeholder="AD-00001"
+                        required
+                    >
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <label class="form-label fw-semibold">Predio</label>
+                    <select class="form-select" name="site_id" required>
+                        <option value="">Seleccione...</option>
+                        {% if sites %}
+                            {% for site in sites %}
+                                <option value="{{ site.id }}">{{ site.name }}</option>
+                            {% endfor %}
+                        {% endif %}
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <label class="form-label fw-semibold">Bodega</label>
+                    <select class="form-select" name="warehouse_id" required>
+                        <option value="">Seleccione...</option>
+                        {% if warehouses %}
+                            {% for warehouse in warehouses %}
+                                <option value="{{ warehouse.id }}">{{ warehouse.name }}</option>
+                            {% endfor %}
+                        {% endif %}
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <label class="form-label fw-semibold">Creado por</label>
+                    <input
+                        type="text"
+                        class="form-control"
+                        value="{{ current_user.full_name if current_user.is_authenticated else 'Usuario actual' }}"
+                        disabled
+                    >
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold">Fecha inicial</label>
+                    <input type="date" class="form-control" name="date_from" required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold">Fecha final</label>
+                    <input type="date" class="form-control" name="date_to" required>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Observaciones</label>
+                    <textarea
+                        class="form-control"
+                        name="notes"
+                        rows="3"
+                        placeholder="Observaciones generales del acta..."
+                    ></textarea>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{{ url_for('waste.list_waste_acts') }}" class="btn btn-light border">Cancelar</a>
+                <button type="submit" class="btn btn-primary px-4">Consultar candidatos</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

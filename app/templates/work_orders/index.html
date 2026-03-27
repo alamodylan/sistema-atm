@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}Órdenes de Trabajo | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% include 'components/page_header.html' with context %}
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body">
+
+        <form method="GET" action="{{ url_for('work_orders.list_work_orders') }}" class="row g-3 mb-4">
+            <div class="col-12 col-md-10">
+                <select name="status" class="form-select">
+                    <option value="">Todos los estados</option>
+                    <option value="EN_PROCESO" {% if status == "EN_PROCESO" %}selected{% endif %}>EN_PROCESO</option>
+                    <option value="FINALIZADA" {% if status == "FINALIZADA" %}selected{% endif %}>FINALIZADA</option>
+                    <option value="CERRADA" {% if status == "CERRADA" %}selected{% endif %}>CERRADA</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+            </div>
+        </form>
+
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>OT</th>
+                        <th>Estado</th>
+                        <th>Predio</th>
+                        <th>Bodega</th>
+                        <th>Responsable</th>
+                        <th>Equipo</th>
+                        <th>Fecha creación</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if work_orders %}
+                        {% for work_order in work_orders %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('work_orders.get_work_order', work_order_id=work_order.id) }}"
+                                       class="text-decoration-none fw-semibold">
+                                        {{ work_order.number }}
+                                    </a>
+                                </td>
+
+                                <td>
+                                    {% if work_order.status == "EN_PROCESO" %}
+                                        <span class="badge text-bg-warning">{{ work_order.status }}</span>
+                                    {% elif work_order.status == "FINALIZADA" %}
+                                        <span class="badge text-bg-info">{{ work_order.status }}</span>
+                                    {% elif work_order.status == "CERRADA" %}
+                                        <span class="badge text-bg-dark">{{ work_order.status }}</span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">{{ work_order.status }}</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ work_order.site.name if work_order.site else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ work_order.warehouse.name if work_order.warehouse else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ work_order.responsible_user.full_name if work_order.responsible_user else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ work_order.equipment_code_snapshot or "-" }}
+                                </td>
+
+                                <td>
+                                    {{ work_order.created_at.strftime('%Y-%m-%d %H:%M') if work_order.created_at else "-" }}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                No hay órdenes de trabajo para mostrar.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

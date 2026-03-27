@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+
+{% block title %}Reporte de órdenes de trabajo | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% set title = "Reporte de órdenes de trabajo" %}
+{% set subtitle = "Consulte historial, estados, responsables, equipos y fechas clave." %}
+{% include 'components/page_header.html' with context %}
+
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('reports.work_orders_report') }}" class="row g-3">
+            <div class="col-12 col-md-10">
+                <label class="form-label fw-semibold">Estado</label>
+                <select class="form-select" name="status">
+                    <option value="">Todos</option>
+                    <option value="EN_PROCESO" {% if status == "EN_PROCESO" %}selected{% endif %}>EN_PROCESO</option>
+                    <option value="FINALIZADA" {% if status == "FINALIZADA" %}selected{% endif %}>FINALIZADA</option>
+                    <option value="CERRADA" {% if status == "CERRADA" %}selected{% endif %}>CERRADA</option>
+                </select>
+            </div>
+
+            <div class="col-12 col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Consultar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table align-middle table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>OT</th>
+                        <th>Estado</th>
+                        <th>Predio</th>
+                        <th>Bodega</th>
+                        <th>Responsable</th>
+                        <th>Equipo</th>
+                        <th>Inicio</th>
+                        <th>Finalización</th>
+                        <th>Cierre</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if work_orders %}
+                        {% for work_order in work_orders %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('work_orders.get_work_order', work_order_id=work_order.id) }}"
+                                       class="text-decoration-none fw-semibold">
+                                        {{ work_order.number }}
+                                    </a>
+                                </td>
+
+                                <td>
+                                    {% if work_order.status == "EN_PROCESO" %}
+                                        <span class="badge text-bg-warning">EN_PROCESO</span>
+                                    {% elif work_order.status == "FINALIZADA" %}
+                                        <span class="badge text-bg-info">FINALIZADA</span>
+                                    {% elif work_order.status == "CERRADA" %}
+                                        <span class="badge text-bg-dark">CERRADA</span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">{{ work_order.status }}</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ work_order.site.name if work_order.site else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ work_order.warehouse.name if work_order.warehouse else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ work_order.responsible_user.full_name if work_order.responsible_user else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ work_order.equipment_code_snapshot or "-" }}
+                                </td>
+
+                                <td>
+                                    {{ work_order.created_at.strftime('%Y-%m-%d %H:%M') if work_order.created_at else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ work_order.finalized_at.strftime('%Y-%m-%d %H:%M') if work_order.finalized_at else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ work_order.closed_at.strftime('%Y-%m-%d %H:%M') if work_order.closed_at else "-" }}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                No hay órdenes de trabajo para mostrar.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% include 'components/page_header.html' with context %}
+
+<div class="row g-4">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body">
+                <div class="text-secondary small text-uppercase fw-semibold">OT en proceso</div>
+                <div class="display-6 fw-bold text-dark mt-2">
+                    {{ kpi.work_orders_in_process if kpi else "-" }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body">
+                <div class="text-secondary small text-uppercase fw-semibold">Solicitudes pendientes</div>
+                <div class="display-6 fw-bold text-dark mt-2">
+                    {{ kpi.pending_deletions if kpi else "-" }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body">
+                <div class="text-secondary small text-uppercase fw-semibold">Actas de desecho</div>
+                <div class="display-6 fw-bold text-dark mt-2">
+                    {{ kpi.waste_acts if kpi else "-" }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-1">
+    <div class="col-12 col-xl-8">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-body">
+                <h5 class="fw-bold mb-3">Resumen operativo</h5>
+                <p class="text-secondary mb-0">
+                    Panel general del sistema. Aquí se integrarán indicadores reales de inventario,
+                    órdenes de trabajo y movimientos.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-4">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-body">
+                <h5 class="fw-bold mb-3">Actividad reciente</h5>
+
+                <ul class="list-group list-group-flush">
+                    {% if recent_activity %}
+                        {% for item in recent_activity %}
+                            <li class="list-group-item px-0">
+                                {{ item }}
+                            </li>
+                        {% endfor %}
+                    {% else %}
+                        <li class="list-group-item px-0 text-muted">
+                            Sin actividad reciente
+                        </li>
+                    {% endif %}
+                </ul>
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

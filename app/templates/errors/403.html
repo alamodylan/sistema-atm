@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block title %}Acceso denegado | Sistema de Bodega{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-center min-vh-75">
+    <div class="text-center">
+        <div class="display-1 fw-bold text-warning">403</div>
+        <h2 class="fw-bold mt-3">Acceso denegado</h2>
+        <p class="text-secondary mt-2 mb-4">
+            No tiene permisos para acceder a esta sección del sistema.
+        </p>
+        <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary px-4">Volver al dashboard</a>
+    </div>
+</div>
+{% endblock %}

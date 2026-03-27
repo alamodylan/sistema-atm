@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+
+{% block title %}Actas de Desecho | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% include 'components/page_header.html' with context %}
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body">
+
+        <form method="GET" action="{{ url_for('waste.list_waste_acts') }}" class="row g-3 mb-4">
+            <div class="col-12 col-md-10">
+                <select name="status" class="form-select">
+                    <option value="">Todos los estados</option>
+                    <option value="BORRADOR" {% if status == "BORRADOR" %}selected{% endif %}>BORRADOR</option>
+                    <option value="REGISTRADA" {% if status == "REGISTRADA" %}selected{% endif %}>REGISTRADA</option>
+                    <option value="IMPRESA" {% if status == "IMPRESA" %}selected{% endif %}>IMPRESA</option>
+                    <option value="CERRADA" {% if status == "CERRADA" %}selected{% endif %}>CERRADA</option>
+                    <option value="CANCELADA" {% if status == "CANCELADA" %}selected{% endif %}>CANCELADA</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+            </div>
+        </form>
+
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Número</th>
+                        <th>Predio</th>
+                        <th>Bodega</th>
+                        <th>Rango</th>
+                        <th>Estado</th>
+                        <th>Creado por</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if waste_acts %}
+                        {% for waste_act in waste_acts %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('waste.waste_candidates', waste_act_id=waste_act.id) }}"
+                                       class="text-decoration-none fw-semibold">
+                                        {{ waste_act.number }}
+                                    </a>
+                                </td>
+
+                                <td>
+                                    {{ waste_act.site.name if waste_act.site else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ waste_act.warehouse.name if waste_act.warehouse else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ waste_act.date_from }} a {{ waste_act.date_to }}
+                                </td>
+
+                                <td>
+                                    {% if waste_act.status == "BORRADOR" %}
+                                        <span class="badge text-bg-secondary">BORRADOR</span>
+                                    {% elif waste_act.status == "REGISTRADA" %}
+                                        <span class="badge text-bg-success">REGISTRADA</span>
+                                    {% elif waste_act.status == "IMPRESA" %}
+                                        <span class="badge text-bg-info">IMPRESA</span>
+                                    {% elif waste_act.status == "CERRADA" %}
+                                        <span class="badge text-bg-dark">CERRADA</span>
+                                    {% elif waste_act.status == "CANCELADA" %}
+                                        <span class="badge text-bg-danger">CANCELADA</span>
+                                    {% else %}
+                                        <span class="badge text-bg-light border text-dark">{{ waste_act.status }}</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ waste_act.created_by_user.full_name if waste_act.created_by_user else "-" }}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                No hay actas de desecho para mostrar.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

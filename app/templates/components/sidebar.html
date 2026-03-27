@@ -1,0 +1,76 @@
+<div class="offcanvas-lg offcanvas-start sidebar-wrapper bg-white border-end shadow-sm"
+     tabindex="-1"
+     id="sidebarOffcanvas"
+     aria-labelledby="sidebarOffcanvasLabel">
+    <div class="offcanvas-header border-bottom">
+        <div>
+            <h5 class="offcanvas-title fw-bold mb-0" id="sidebarOffcanvasLabel">ATM Systems</h5>
+            <small class="text-secondary">Panel principal</small>
+        </div>
+        <button type="button"
+                class="btn-close d-lg-none"
+                data-bs-dismiss="offcanvas"
+                aria-label="Cerrar"></button>
+    </div>
+
+    <div class="offcanvas-body p-0 d-flex flex-column">
+        <div class="px-3 py-3 border-bottom">
+            <div class="small text-uppercase text-secondary fw-semibold mb-2">Predio activo</div>
+            <div class="bg-light rounded-3 px-3 py-2 fw-semibold text-dark">
+                {{ active_site.name if active_site else "Sin predio definido" }}
+            </div>
+        </div>
+
+        <nav class="nav flex-column py-3 px-2 gap-1">
+            <a href="{{ url_for('dashboard.index') }}"
+               class="nav-link sidebar-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+                <i class="bi bi-speedometer2 me-2"></i>Dashboard
+            </a>
+
+            <a href="{{ url_for('inventory.inventory_home') }}"
+               class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('inventory.') %}active{% endif %}">
+                <i class="bi bi-box-seam me-2"></i>Inventario
+            </a>
+
+            <a href="{{ url_for('work_orders.list_work_orders') }}"
+               class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('work_orders.') %}active{% endif %}">
+                <i class="bi bi-clipboard-check me-2"></i>Órdenes de trabajo
+            </a>
+
+            <a href="{{ url_for('waste.list_waste_acts') }}"
+               class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('waste.') %}active{% endif %}">
+                <i class="bi bi-trash3 me-2"></i>Actas de desecho
+            </a>
+
+            <a href="{{ url_for('reports.reports_home') }}"
+               class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('reports.') %}active{% endif %}">
+                <i class="bi bi-bar-chart-line me-2"></i>Reportes
+            </a>
+
+            <span class="nav-link sidebar-link disabled">
+                <i class="bi bi-cart3 me-2"></i>Compras
+            </span>
+
+            <span class="nav-link sidebar-link disabled">
+                <i class="bi bi-arrow-left-right me-2"></i>Traslados
+            </span>
+
+            <span class="nav-link sidebar-link disabled">
+                <i class="bi bi-list-check me-2"></i>Inventario físico
+            </span>
+
+            <span class="nav-link sidebar-link disabled">
+                <i class="bi bi-shield-check me-2"></i>Auditoría
+            </span>
+
+            <span class="nav-link sidebar-link disabled">
+                <i class="bi bi-people me-2"></i>Usuarios
+            </span>
+        </nav>
+
+        <div class="mt-auto px-3 py-3 border-top bg-light">
+            <div class="small text-secondary">Sistema web corporativo</div>
+            <div class="fw-semibold text-dark">Versión inicial</div>
+        </div>
+    </div>
+</div>

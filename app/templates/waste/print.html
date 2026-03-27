@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Acta de Desecho</title>
+    <style>
+        body { font-family: Arial, sans-serif; color: #111827; margin: 40px; }
+        h1, h2, h3, p { margin: 0; }
+        .header { margin-bottom: 24px; }
+        .section { margin-bottom: 24px; }
+        .table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        .table th, .table td { border: 1px solid #d1d5db; padding: 8px; font-size: 14px; }
+        .table th { background: #f3f4f6; text-align: left; }
+        .signatures { margin-top: 50px; display: flex; justify-content: space-between; gap: 30px; }
+        .signature-box { width: 30%; text-align: center; }
+        .line { border-top: 1px solid #111827; margin-top: 40px; padding-top: 6px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Acta de Desecho</h1>
+        <p><strong>Número:</strong> {{ waste_act.number }}</p>
+        <p><strong>Predio:</strong> {{ waste_act.site.name if waste_act.site else "-" }}</p>
+        <p><strong>Bodega:</strong> {{ waste_act.warehouse.name if waste_act.warehouse else "-" }}</p>
+        <p><strong>Rango:</strong> {{ waste_act.date_from }} a {{ waste_act.date_to }}</p>
+        <p><strong>Estado:</strong> {{ waste_act.status }}</p>
+    </div>
+
+    <div class="section">
+        <h3>Detalle de artículos</h3>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>OT</th>
+                    <th>Equipo</th>
+                    <th>Código</th>
+                    <th>Artículo</th>
+                    <th>Cantidad</th>
+                    <th>Confirmado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if waste_act.lines %}
+                    {% for line in waste_act.lines %}
+                        <tr>
+                            <td>
+                                {% if line.work_order_line and line.work_order_line.delivered_at %}
+                                    {{ line.work_order_line.delivered_at.strftime('%Y-%m-%d') }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ line.work_order.number if line.work_order else "-" }}
+                            </td>
+                            <td>
+                                {% if line.work_order and line.work_order.equipment_code_snapshot %}
+                                    {{ line.work_order.equipment_code_snapshot }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ line.article.code if line.article else "-" }}
+                            </td>
+                            <td>
+                                {{ line.article.name if line.article else "-" }}
+                            </td>
+                            <td>
+                                {{ line.quantity }}
+                            </td>
+                            <td>
+                                {% if line.confirmed_for_disposal %}
+                                    Sí
+                                {% else %}
+                                    No
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="7" style="text-align:center;">Sin líneas registradas</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <p><strong>Observaciones:</strong> {{ waste_act.notes or "-" }}</p>
+    </div>
+
+    <div class="signatures">
+        <div class="signature-box">
+            <div class="line">Bodega</div>
+        </div>
+        <div class="signature-box">
+            <div class="line">Auditoría</div>
+        </div>
+        <div class="signature-box">
+            <div class="line">Aprobación</div>
+        </div>
+    </div>
+</body>
+</html>

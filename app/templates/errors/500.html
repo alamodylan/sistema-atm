@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block title %}Error interno | Sistema de Bodega{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-center min-vh-75">
+    <div class="text-center">
+        <div class="display-1 fw-bold text-danger">500</div>
+        <h2 class="fw-bold mt-3">Error interno del sistema</h2>
+        <p class="text-secondary mt-2 mb-4">
+            Ocurrió un problema inesperado. Intente nuevamente o contacte a TI si el problema persiste.
+        </p>
+        <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary px-4">Volver al dashboard</a>
+    </div>
+</div>
+{% endblock %}

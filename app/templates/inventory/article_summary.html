@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}Resumen de artículo | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% set title = "Resumen por bodegas" %}
+{% set subtitle = "Visualice todas las cantidades registradas del artículo en bodegas, minibodegas y cajas de herramientas." %}
+{% include 'components/page_header.html' with context %}
+
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body">
+        {% if article %}
+            <div class="row g-3">
+                <div class="col-12 col-md-3"><strong>Código:</strong> {{ article.code }}</div>
+                <div class="col-12 col-md-5"><strong>Artículo:</strong> {{ article.name }}</div>
+                <div class="col-12 col-md-2"><strong>Unidad:</strong> {{ article.unit.code if article.unit else "-" }}</div>
+                <div class="col-12 col-md-2"><strong>Familia:</strong> {{ article.family_code or "-" }}</div>
+            </div>
+        {% else %}
+            <div class="text-muted">No se encontró información del artículo.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-4">
+    {% if summary %}
+        {% for row in summary %}
+            <div class="col-12 col-md-6 col-xl-4">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-body">
+                        <div class="small text-secondary text-uppercase fw-semibold">
+                            Site ID: {{ row.site_id }}
+                        </div>
+
+                        <h5 class="fw-bold mt-2">
+                            {{ row.warehouse_name }}
+                        </h5>
+
+                        <div class="small text-secondary mb-2">
+                            Código: {{ row.warehouse_code }} | Tipo: {{ row.warehouse_type }}
+                        </div>
+
+                        <div class="mt-3">
+                            <div class="fs-6 text-secondary">Cantidad total</div>
+                            <div class="display-6 fw-bold text-dark">{{ row.quantity }}</div>
+                        </div>
+
+                        <div class="mt-3">
+                            <div class="fs-6 text-secondary">Reservado</div>
+                            <div class="fw-semibold">{{ row.reserved_quantity }}</div>
+                        </div>
+
+                        <div class="mt-3">
+                            <div class="fs-6 text-secondary">Disponible</div>
+                            <div class="fw-semibold text-success">{{ row.available_quantity }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body text-center text-muted py-4">
+                    No hay stock registrado para este artículo en ninguna bodega.
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

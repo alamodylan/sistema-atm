@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}Reporte de movimientos | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% set title = "Reporte de entradas y salidas" %}
+{% set subtitle = "Consulte movimientos por rango de fechas, artículo o bodega." %}
+{% include 'components/page_header.html' with context %}
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('inventory.stock_report') }}" class="row g-3 mb-4">
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-semibold">Fecha inicial</label>
+                <input
+                    type="date"
+                    class="form-control"
+                    name="date_from"
+                    value="{{ date_from or '' }}"
+                >
+            </div>
+
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-semibold">Fecha final</label>
+                <input
+                    type="date"
+                    class="form-control"
+                    name="date_to"
+                    value="{{ date_to or '' }}"
+                >
+            </div>
+
+            <div class="col-12 col-md-2">
+                <label class="form-label fw-semibold">Código</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    name="article_code"
+                    placeholder="Artículo"
+                    value="{{ article_code or '' }}"
+                >
+            </div>
+
+            <div class="col-12 col-md-2">
+                <label class="form-label fw-semibold">Bodega</label>
+                <select class="form-select" name="warehouse_id">
+                    <option value="">Todas</option>
+                    {% if warehouses %}
+                        {% for warehouse in warehouses %}
+                            <option value="{{ warehouse.id }}" {% if warehouse_id|string == warehouse.id|string %}selected{% endif %}>
+                                {{ warehouse.name }}
+                            </option>
+                        {% endfor %}
+                    {% endif %}
+                </select>
+            </div>
+
+            <div class="col-12 col-md-2">
+                <label class="form-label fw-semibold">Movimiento</label>
+                <select class="form-select" name="movement_type">
+                    <option value="">Todos</option>
+                    <option value="ENTRADA_COMPRA" {% if movement_type == "ENTRADA_COMPRA" %}selected{% endif %}>ENTRADA_COMPRA</option>
+                    <option value="SALIDA_OT" {% if movement_type == "SALIDA_OT" %}selected{% endif %}>SALIDA_OT</option>
+                    <option value="PRESTAMO_HERRAMIENTA" {% if movement_type == "PRESTAMO_HERRAMIENTA" %}selected{% endif %}>PRESTAMO_HERRAMIENTA</option>
+                    <option value="DEVOLUCION_HERRAMIENTA" {% if movement_type == "DEVOLUCION_HERRAMIENTA" %}selected{% endif %}>DEVOLUCION_HERRAMIENTA</option>
+                    <option value="TRASLADO_SALIDA" {% if movement_type == "TRASLADO_SALIDA" %}selected{% endif %}>TRASLADO_SALIDA</option>
+                    <option value="TRASLADO_ENTRADA" {% if movement_type == "TRASLADO_ENTRADA" %}selected{% endif %}>TRASLADO_ENTRADA</option>
+                    <option value="AJUSTE_INVENTARIO_FISICO" {% if movement_type == "AJUSTE_INVENTARIO_FISICO" %}selected{% endif %}>AJUSTE_INVENTARIO_FISICO</option>
+                    <option value="REVERSO_ELIMINACION_LINEA_OT" {% if movement_type == "REVERSO_ELIMINACION_LINEA_OT" %}selected{% endif %}>REVERSO_ELIMINACION_LINEA_OT</option>
+                    <option value="AJUSTE_MANUAL" {% if movement_type == "AJUSTE_MANUAL" %}selected{% endif %}>AJUSTE_MANUAL</option>
+                </select>
+            </div>
+
+            <div class="col-12 d-flex justify-content-end">
+                <button type="submit" class="btn btn-primary">Consultar</button>
+            </div>
+        </form>
+
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Código</th>
+                        <th>Artículo</th>
+                        <th>Bodega</th>
+                        <th>Cantidad</th>
+                        <th>Referencia</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if movements %}
+                        {% for movement in movements %}
+                            <tr>
+                                <td>
+                                    {{ movement.created_at.strftime('%Y-%m-%d %H:%M') if movement.created_at else "-" }}
+                                </td>
+
+                                <td>
+                                    {% if movement.quantity_change > 0 %}
+                                        <span class="badge text-bg-success">{{ movement.movement_type }}</span>
+                                    {% elif movement.quantity_change < 0 %}
+                                        <span class="badge text-bg-danger">{{ movement.movement_type }}</span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">{{ movement.movement_type }}</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ movement.article.code if movement.article else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ movement.article.name if movement.article else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ movement.warehouse.name if movement.warehouse else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ movement.quantity_change }}
+                                </td>
+
+                                <td>
+                                    {% if movement.reference_number %}
+                                        {{ movement.reference_number }}
+                                    {% elif movement.reference_type %}
+                                        {{ movement.reference_type }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                No hay movimientos para mostrar.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

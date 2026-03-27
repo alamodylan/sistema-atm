@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block title %}Login | Sistema de Bodega{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center align-items-center min-vh-100">
+        <div class="col-12 col-md-8 col-lg-5">
+            <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="card-body p-5 bg-white">
+                    <div class="text-center mb-4">
+                        <div class="mb-3">
+                            <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-subtle text-primary" style="width: 72px; height: 72px;">
+                                <i class="bi bi-box-seam fs-2"></i>
+                            </div>
+                        </div>
+                        <h1 class="h3 fw-bold mb-1">Bienvenido</h1>
+                        <p class="text-secondary mb-0">Sistema de Bodega y Taller</p>
+                    </div>
+
+                    <form method="POST" action="{{ url_for('auth.login') }}">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Usuario</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-person"></i></span>
+                                <input
+                                    type="text"
+                                    class="form-control form-control-lg"
+                                    name="username"
+                                    placeholder="Digite su usuario"
+                                    value="{{ request.form.get('username', '') }}"
+                                    required
+                                >
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">Contraseña</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-lock"></i></span>
+                                <input
+                                    type="password"
+                                    class="form-control form-control-lg"
+                                    name="password"
+                                    placeholder="Digite su contraseña"
+                                    required
+                                >
+                            </div>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg rounded-3 fw-semibold">
+                                Ingresar al sistema
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="text-center mt-4">
+                        <small class="text-secondary">Acceso controlado y auditado</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

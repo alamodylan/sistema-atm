@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}Reportes | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% include 'components/page_header.html' with context %}
+
+<div class="row g-4">
+    <div class="col-12 col-md-6 col-xl-4">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body d-flex flex-column">
+                <h5 class="fw-bold">Entradas y salidas</h5>
+                <p class="text-secondary">
+                    Reporte general de movimientos de inventario por rango de fechas.
+                </p>
+                <div class="mt-auto">
+                    <a href="{{ url_for('reports.inventory_movements_report') }}" class="btn btn-outline-primary">
+                        Abrir reporte
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-4">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body d-flex flex-column">
+                <h5 class="fw-bold">Órdenes de trabajo</h5>
+                <p class="text-secondary">
+                    Historial de órdenes, estados, tiempos y responsables.
+                </p>
+                <div class="mt-auto">
+                    <a href="{{ url_for('reports.work_orders_report') }}" class="btn btn-outline-primary">
+                        Abrir reporte
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-4">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body d-flex flex-column">
+                <h5 class="fw-bold">Actas de desecho</h5>
+                <p class="text-secondary">
+                    Consulta de actas generadas y detalle de líneas registradas.
+                </p>
+                <div class="mt-auto">
+                    <a href="{{ url_for('reports.waste_acts_report') }}" class="btn btn-outline-primary">
+                        Abrir reporte
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
