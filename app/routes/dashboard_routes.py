@@ -4,6 +4,8 @@ from flask_login import current_user, login_required
 from app.models.inventory import WarehouseStock
 from app.models.waste_act import WasteAct
 from app.models.work_order import WorkOrder
+from flask import session, redirect, url_for
+from flask_login import login_required
 
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -62,3 +64,9 @@ def index():
             waste_cancelada=0,
             inventory_records=0,
         )
+    
+@dashboard_bp.route("/set-site/<int:site_id>")
+@login_required
+def set_site(site_id):
+    session["active_site_id"] = site_id
+    return redirect(url_for("dashboard.index"))

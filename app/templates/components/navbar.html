@@ -22,7 +22,32 @@
         <!-- Lado derecho -->
         <div class="d-flex align-items-center gap-3">
 
-            <!-- Notificaciones (placeholder realista) -->
+            <!-- 🔥 Selector de predio -->
+            <div class="dropdown">
+                <button class="btn btn-outline-primary btn-sm dropdown-toggle"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false">
+
+                    {% if active_site %}
+                        <i class="bi bi-geo-alt me-1"></i>{{ active_site.name }}
+                    {% else %}
+                        <i class="bi bi-geo-alt me-1"></i>Seleccionar predio
+                    {% endif %}
+                </button>
+
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                    {% for site in sites %}
+                        <li>
+                            <a class="dropdown-item {% if active_site and site.id == active_site.id %}active{% endif %}"
+                               href="{{ url_for('dashboard.set_site', site_id=site.id) }}">
+                                {{ site.name }}
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Notificaciones -->
             <button class="btn btn-light position-relative border" disabled>
                 <i class="bi bi-bell fs-5 text-dark"></i>
                 {% if notifications_count and notifications_count > 0 %}
@@ -57,7 +82,6 @@
 
                     <li><hr class="dropdown-divider"></li>
 
-                    <!-- (Opcionales - no implementados aún) -->
                     <li>
                         <a class="dropdown-item disabled" href="#">
                             <i class="bi bi-person me-2"></i>Mi perfil
@@ -72,7 +96,6 @@
 
                     <li><hr class="dropdown-divider"></li>
 
-                    <!-- Logout real -->
                     <li>
                         <form method="POST" action="{{ url_for('auth.logout') }}" class="m-0">
                             <button type="submit" class="dropdown-item text-danger">

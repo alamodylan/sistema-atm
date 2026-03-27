@@ -1,9 +1,10 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, session
 from flask_login import current_user
 
 from .config import Config
 from .extensions import db, jwt, login_manager, migrate
 from .models.user import User
+from .models.site import Site
 
 
 def create_app():
@@ -52,8 +53,27 @@ def create_app():
 
     @app.context_processor
     def inject_global_template_data():
+        active_site = None
+        sites = []
+
+        if current_user.is_authenticated:
+            # Obtener todos los predios activos
+            sites = Site.query.filter_by(is_active=True).all()
+
+            active_site_id = session.get("active_site_id")
+
+            if active_site_id:
+                active_site = Site.query.get(active_site_id)
+
+            # Si no hay predio activo, asignar el primero disponible
+            if not active_site and sites:
+                active_site = sites[0]
+                session["active_site_id"] = active_site.id
+
         return {
-            "current_user": current_user
+            "current_user": current_user,
+            "active_site": active_site,
+            "sites": sites,
         }
 
     return app
