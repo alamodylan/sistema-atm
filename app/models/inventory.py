@@ -1,3 +1,4 @@
+# models/inventory.py
 from datetime import datetime, UTC
 
 from app.extensions import db

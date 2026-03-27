@@ -75,12 +75,6 @@ class Warehouse(db.Model):
         lazy="dynamic",
     )
 
-    location_stock_items = db.relationship(
-        "WarehouseLocationStock",
-        back_populates="warehouse",
-        lazy="dynamic",
-    )
-
     ledger_entries = db.relationship(
         "InventoryLedger",
         foreign_keys="InventoryLedger.warehouse_id",
