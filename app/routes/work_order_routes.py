@@ -1,6 +1,6 @@
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
 from app.models.deletion_request import WorkOrderLineDeleteRequest
 from app.models.article import Article
@@ -59,14 +59,18 @@ def list_work_orders():
 @work_order_bp.route("/create", methods=["GET"])
 @login_required
 def create_work_order_page():
+    active_site_id = session.get("active_site_id")
+
     sites = Site.query.filter_by(is_active=True).order_by(Site.name).all()
 
-    warehouses = (
+    warehouses_query = (
         Warehouse.query
         .filter(Warehouse.is_active.is_(True))
         .order_by(Warehouse.name)
-        .all()
     )
+    if active_site_id:
+        warehouses_query = warehouses_query.filter(Warehouse.site_id == int(active_site_id))
+    warehouses = warehouses_query.all()
 
     responsible_users = (
         User.query
@@ -75,12 +79,14 @@ def create_work_order_page():
         .all()
     )
 
-    mechanics = (
+    mechanics_query = (
         Mechanic.query
         .filter(Mechanic.is_active.is_(True))
         .order_by(Mechanic.name)
-        .all()
     )
+    if active_site_id:
+        mechanics_query = mechanics_query.filter(Mechanic.site_id == int(active_site_id))
+    mechanics = mechanics_query.all()
 
     return render_template(
         "work_orders/create.html",

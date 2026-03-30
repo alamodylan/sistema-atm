@@ -14,48 +14,30 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4 d-flex flex-column">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center me-3"
-                         style="width: 48px; height: 48px;">
+                    <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
                         <i class="bi bi-person-gear fs-5"></i>
                     </div>
                     <div>
                         <h5 class="mb-1 fw-bold">Mecánicos</h5>
-                        <p class="text-muted mb-0 small">
-                            Cree o actualice mecánicos para asignación en órdenes de trabajo.
-                        </p>
+                        <p class="text-muted mb-0 small">Crea o actualiza mecánicos del predio activo.</p>
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <div class="small text-muted mb-1">Columnas esperadas</div>
-                    <div class="small">
-                        <span class="badge text-bg-light border">codigo*</span>
-                        <span class="badge text-bg-light border">nombre*</span>
-                        <span class="badge text-bg-light border">activo</span>
-                    </div>
+                <div class="small text-muted mb-2">Columnas esperadas</div>
+                <div class="small mb-3">
+                    <span class="badge text-bg-light border">codigo*</span>
+                    <span class="badge text-bg-light border">nombre*</span>
+                    <span class="badge text-bg-light border">activo</span>
                 </div>
-
-                <div class="alert alert-light border small">
-                    Cada fila representa un mecánico. Si el código ya existe, se actualiza. Si no existe, se crea.
-                </div>
-
+                <div class="alert alert-light border small">Cada fila representa un mecánico del predio activo.</div>
                 <div class="mt-auto">
                     <div class="d-flex flex-wrap gap-2 mb-3">
                         <a href="{{ url_for('bulk.download_mechanics_template') }}" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-download me-1"></i>Descargar plantilla
                         </a>
                     </div>
-
-                    <form method="POST"
-                          action="{{ url_for('bulk.upload_mechanics') }}"
-                          enctype="multipart/form-data"
-                          class="row g-2">
+                    <form method="POST" action="{{ url_for('bulk.upload_mechanics') }}" enctype="multipart/form-data" class="row g-2">
                         <div class="col-12 col-md-8">
-                            <input type="file"
-                                   name="file"
-                                   class="form-control"
-                                   accept=".xlsx"
-                                   required>
+                            <input type="file" name="file" class="form-control" accept=".xlsx" required>
                         </div>
                         <div class="col-12 col-md-4 d-grid">
                             <button type="submit" class="btn btn-primary">
@@ -73,37 +55,36 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4 d-flex flex-column">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="rounded-circle bg-success bg-opacity-10 text-success d-flex align-items-center justify-content-center me-3"
-                         style="width: 48px; height: 48px;">
+                    <div class="rounded-circle bg-success bg-opacity-10 text-success d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
                         <i class="bi bi-rulers fs-5"></i>
                     </div>
                     <div>
                         <h5 class="mb-1 fw-bold">Unidades</h5>
-                        <p class="text-muted mb-0 small">
-                            Registre unidades de medida para artículos e inventario.
-                        </p>
+                        <p class="text-muted mb-0 small">Crea o actualiza unidades de medida.</p>
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <div class="small text-muted mb-1">Columnas esperadas</div>
-                    <div class="small">
-                        <span class="badge text-bg-light border">codigo*</span>
-                        <span class="badge text-bg-light border">nombre*</span>
+                <div class="small text-muted mb-2">Columnas esperadas</div>
+                <div class="small mb-3">
+                    <span class="badge text-bg-light border">codigo*</span>
+                    <span class="badge text-bg-light border">nombre*</span>
+                </div>
+                <div class="alert alert-light border small">Cada fila representa una unidad de medida, por ejemplo UND, KG o LT.</div>
+                <div class="mt-auto">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a href="{{ url_for('bulk.download_units_template') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-download me-1"></i>Descargar plantilla
+                        </a>
                     </div>
-                </div>
-
-                <div class="alert alert-light border small">
-                    Cada fila representa una unidad de medida, por ejemplo UND, KG, LT o CJ.
-                </div>
-
-                <div class="mt-auto d-flex flex-wrap gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" disabled>
-                        <i class="bi bi-download me-1"></i>Descargar plantilla
-                    </button>
-                    <button class="btn btn-secondary btn-sm" disabled>
-                        <i class="bi bi-upload me-1"></i>Próximamente
-                    </button>
+                    <form method="POST" action="{{ url_for('bulk.upload_units') }}" enctype="multipart/form-data" class="row g-2">
+                        <div class="col-12 col-md-8">
+                            <input type="file" name="file" class="form-control" accept=".xlsx" required>
+                        </div>
+                        <div class="col-12 col-md-4 d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-upload me-1"></i>Subir archivo
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -114,80 +95,37 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4 d-flex flex-column">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="rounded-circle bg-warning bg-opacity-10 text-warning d-flex align-items-center justify-content-center me-3"
-                         style="width: 48px; height: 48px;">
+                    <div class="rounded-circle bg-warning bg-opacity-10 text-warning d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
                         <i class="bi bi-tags fs-5"></i>
                     </div>
                     <div>
                         <h5 class="mb-1 fw-bold">Categorías</h5>
-                        <p class="text-muted mb-0 small">
-                            Organice artículos por categorías operativas.
-                        </p>
+                        <p class="text-muted mb-0 small">Crea o actualiza categorías de artículos.</p>
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <div class="small text-muted mb-1">Columnas esperadas</div>
-                    <div class="small">
-                        <span class="badge text-bg-light border">codigo*</span>
-                        <span class="badge text-bg-light border">nombre*</span>
-                        <span class="badge text-bg-light border">descripcion</span>
+                <div class="small text-muted mb-2">Columnas esperadas</div>
+                <div class="small mb-3">
+                    <span class="badge text-bg-light border">codigo*</span>
+                    <span class="badge text-bg-light border">nombre*</span>
+                    <span class="badge text-bg-light border">descripcion</span>
+                </div>
+                <div class="alert alert-light border small">Cada fila representa una categoría como ferretería, repuestos o lubricantes.</div>
+                <div class="mt-auto">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a href="{{ url_for('bulk.download_categories_template') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-download me-1"></i>Descargar plantilla
+                        </a>
                     </div>
-                </div>
-
-                <div class="alert alert-light border small">
-                    Cada fila representa una categoría de artículos como ferretería, lubricantes o repuestos.
-                </div>
-
-                <div class="mt-auto d-flex flex-wrap gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" disabled>
-                        <i class="bi bi-download me-1"></i>Descargar plantilla
-                    </button>
-                    <button class="btn btn-secondary btn-sm" disabled>
-                        <i class="bi bi-upload me-1"></i>Próximamente
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- PREDIOS -->
-    <div class="col-12 col-lg-6">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body p-4 d-flex flex-column">
-                <div class="d-flex align-items-center mb-3">
-                    <div class="rounded-circle bg-info bg-opacity-10 text-info d-flex align-items-center justify-content-center me-3"
-                         style="width: 48px; height: 48px;">
-                        <i class="bi bi-building fs-5"></i>
-                    </div>
-                    <div>
-                        <h5 class="mb-1 fw-bold">Predios</h5>
-                        <p class="text-muted mb-0 small">
-                            Cree o actualice predios para operación multi-sitio.
-                        </p>
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <div class="small text-muted mb-1">Columnas esperadas</div>
-                    <div class="small">
-                        <span class="badge text-bg-light border">codigo*</span>
-                        <span class="badge text-bg-light border">nombre*</span>
-                        <span class="badge text-bg-light border">descripcion</span>
-                    </div>
-                </div>
-
-                <div class="alert alert-light border small">
-                    Cada fila representa un predio o sitio del sistema, como Coyol, Caldera o Limón.
-                </div>
-
-                <div class="mt-auto d-flex flex-wrap gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" disabled>
-                        <i class="bi bi-download me-1"></i>Descargar plantilla
-                    </button>
-                    <button class="btn btn-secondary btn-sm" disabled>
-                        <i class="bi bi-upload me-1"></i>Próximamente
-                    </button>
+                    <form method="POST" action="{{ url_for('bulk.upload_categories') }}" enctype="multipart/form-data" class="row g-2">
+                        <div class="col-12 col-md-8">
+                            <input type="file" name="file" class="form-control" accept=".xlsx" required>
+                        </div>
+                        <div class="col-12 col-md-4 d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-upload me-1"></i>Subir archivo
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -198,40 +136,38 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4 d-flex flex-column">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="rounded-circle bg-dark bg-opacity-10 text-dark d-flex align-items-center justify-content-center me-3"
-                         style="width: 48px; height: 48px;">
+                    <div class="rounded-circle bg-dark bg-opacity-10 text-dark d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
                         <i class="bi bi-house-gear fs-5"></i>
                     </div>
                     <div>
                         <h5 class="mb-1 fw-bold">Bodegas</h5>
-                        <p class="text-muted mb-0 small">
-                            Gestione bodegas, minibodegas y cajas de herramientas.
-                        </p>
+                        <p class="text-muted mb-0 small">Crea o actualiza bodegas del predio activo.</p>
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <div class="small text-muted mb-1">Columnas esperadas</div>
-                    <div class="small">
-                        <span class="badge text-bg-light border">codigo*</span>
-                        <span class="badge text-bg-light border">nombre*</span>
-                        <span class="badge text-bg-light border">codigo_predio*</span>
-                        <span class="badge text-bg-light border">tipo_bodega*</span>
-                        <span class="badge text-bg-light border">activo</span>
+                <div class="small text-muted mb-2">Columnas esperadas</div>
+                <div class="small mb-3">
+                    <span class="badge text-bg-light border">codigo*</span>
+                    <span class="badge text-bg-light border">nombre*</span>
+                    <span class="badge text-bg-light border">tipo_bodega*</span>
+                    <span class="badge text-bg-light border">activo</span>
+                </div>
+                <div class="alert alert-light border small">Tipos válidos: BODEGA, MINIBODEGA, CAJA_HERRAMIENTAS.</div>
+                <div class="mt-auto">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a href="{{ url_for('bulk.download_warehouses_template') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-download me-1"></i>Descargar plantilla
+                        </a>
                     </div>
-                </div>
-
-                <div class="alert alert-light border small">
-                    Cada fila representa una bodega o estructura de almacenamiento asociada a un predio.
-                </div>
-
-                <div class="mt-auto d-flex flex-wrap gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" disabled>
-                        <i class="bi bi-download me-1"></i>Descargar plantilla
-                    </button>
-                    <button class="btn btn-secondary btn-sm" disabled>
-                        <i class="bi bi-upload me-1"></i>Próximamente
-                    </button>
+                    <form method="POST" action="{{ url_for('bulk.upload_warehouses') }}" enctype="multipart/form-data" class="row g-2">
+                        <div class="col-12 col-md-8">
+                            <input type="file" name="file" class="form-control" accept=".xlsx" required>
+                        </div>
+                        <div class="col-12 col-md-4 d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-upload me-1"></i>Subir archivo
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -242,42 +178,42 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4 d-flex flex-column">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="rounded-circle bg-secondary bg-opacity-10 text-secondary d-flex align-items-center justify-content-center me-3"
-                         style="width: 48px; height: 48px;">
+                    <div class="rounded-circle bg-secondary bg-opacity-10 text-secondary d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
                         <i class="bi bi-geo-alt fs-5"></i>
                     </div>
                     <div>
                         <h5 class="mb-1 fw-bold">Ubicaciones</h5>
-                        <p class="text-muted mb-0 small">
-                            Defina ubicaciones internas dentro de cada bodega.
-                        </p>
+                        <p class="text-muted mb-0 small">Crea o actualiza ubicaciones de bodegas del predio activo.</p>
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <div class="small text-muted mb-1">Columnas esperadas</div>
-                    <div class="small">
-                        <span class="badge text-bg-light border">codigo_bodega*</span>
-                        <span class="badge text-bg-light border">codigo*</span>
-                        <span class="badge text-bg-light border">pasillo</span>
-                        <span class="badge text-bg-light border">estante</span>
-                        <span class="badge text-bg-light border">nivel</span>
-                        <span class="badge text-bg-light border">posicion</span>
-                        <span class="badge text-bg-light border">descripcion</span>
+                <div class="small text-muted mb-2">Columnas esperadas</div>
+                <div class="small mb-3">
+                    <span class="badge text-bg-light border">codigo_bodega*</span>
+                    <span class="badge text-bg-light border">codigo*</span>
+                    <span class="badge text-bg-light border">pasillo</span>
+                    <span class="badge text-bg-light border">estante</span>
+                    <span class="badge text-bg-light border">nivel</span>
+                    <span class="badge text-bg-light border">posicion</span>
+                    <span class="badge text-bg-light border">descripcion</span>
+                    <span class="badge text-bg-light border">activo</span>
+                </div>
+                <div class="alert alert-light border small">Cada fila representa una ubicación dentro de una bodega del predio activo.</div>
+                <div class="mt-auto">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a href="{{ url_for('bulk.download_locations_template') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-download me-1"></i>Descargar plantilla
+                        </a>
                     </div>
-                </div>
-
-                <div class="alert alert-light border small">
-                    Cada fila representa una ubicación física dentro de una bodega.
-                </div>
-
-                <div class="mt-auto d-flex flex-wrap gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" disabled>
-                        <i class="bi bi-download me-1"></i>Descargar plantilla
-                    </button>
-                    <button class="btn btn-secondary btn-sm" disabled>
-                        <i class="bi bi-upload me-1"></i>Próximamente
-                    </button>
+                    <form method="POST" action="{{ url_for('bulk.upload_locations') }}" enctype="multipart/form-data" class="row g-2">
+                        <div class="col-12 col-md-8">
+                            <input type="file" name="file" class="form-control" accept=".xlsx" required>
+                        </div>
+                        <div class="col-12 col-md-4 d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-upload me-1"></i>Subir archivo
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -288,45 +224,44 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4 d-flex flex-column">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center me-3"
-                         style="width: 48px; height: 48px;">
+                    <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
                         <i class="bi bi-boxes fs-5"></i>
                     </div>
                     <div>
                         <h5 class="mb-1 fw-bold">Artículos</h5>
-                        <p class="text-muted mb-0 small">
-                            Cree o actualice el catálogo principal de artículos.
-                        </p>
+                        <p class="text-muted mb-0 small">Crea o actualiza el catálogo global de artículos.</p>
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <div class="small text-muted mb-1">Columnas esperadas</div>
-                    <div class="small">
-                        <span class="badge text-bg-light border">codigo*</span>
-                        <span class="badge text-bg-light border">nombre*</span>
-                        <span class="badge text-bg-light border">codigo_unidad*</span>
-                        <span class="badge text-bg-light border">codigo_categoria</span>
-                        <span class="badge text-bg-light border">descripcion</span>
-                        <span class="badge text-bg-light border">codigo_familia</span>
-                        <span class="badge text-bg-light border">codigo_barras</span>
-                        <span class="badge text-bg-light border">codigo_sap</span>
-                        <span class="badge text-bg-light border">es_herramienta</span>
-                        <span class="badge text-bg-light border">activo</span>
+                <div class="small text-muted mb-2">Columnas esperadas</div>
+                <div class="small mb-3">
+                    <span class="badge text-bg-light border">codigo*</span>
+                    <span class="badge text-bg-light border">nombre*</span>
+                    <span class="badge text-bg-light border">codigo_unidad*</span>
+                    <span class="badge text-bg-light border">codigo_categoria</span>
+                    <span class="badge text-bg-light border">descripcion</span>
+                    <span class="badge text-bg-light border">codigo_familia</span>
+                    <span class="badge text-bg-light border">codigo_barras</span>
+                    <span class="badge text-bg-light border">codigo_sap</span>
+                    <span class="badge text-bg-light border">es_herramienta</span>
+                    <span class="badge text-bg-light border">activo</span>
+                </div>
+                <div class="alert alert-light border small">Si el código existe, se actualiza. `codigo_sap` y `codigo_barras` pueden ir vacíos.</div>
+                <div class="mt-auto">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a href="{{ url_for('bulk.download_articles_template') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-download me-1"></i>Descargar plantilla
+                        </a>
                     </div>
-                </div>
-
-                <div class="alert alert-light border small">
-                    Cada fila representa un artículo del inventario. Si el código ya existe, se actualiza.
-                </div>
-
-                <div class="mt-auto d-flex flex-wrap gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" disabled>
-                        <i class="bi bi-download me-1"></i>Descargar plantilla
-                    </button>
-                    <button class="btn btn-secondary btn-sm" disabled>
-                        <i class="bi bi-upload me-1"></i>Próximamente
-                    </button>
+                    <form method="POST" action="{{ url_for('bulk.upload_articles') }}" enctype="multipart/form-data" class="row g-2">
+                        <div class="col-12 col-md-8">
+                            <input type="file" name="file" class="form-control" accept=".xlsx" required>
+                        </div>
+                        <div class="col-12 col-md-4 d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-upload me-1"></i>Subir archivo
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -337,46 +272,45 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4 d-flex flex-column">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="rounded-circle bg-success bg-opacity-10 text-success d-flex align-items-center justify-content-center me-3"
-                         style="width: 48px; height: 48px;">
+                    <div class="rounded-circle bg-success bg-opacity-10 text-success d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
                         <i class="bi bi-truck fs-5"></i>
                     </div>
                     <div>
                         <h5 class="mb-1 fw-bold">Proveedores</h5>
-                        <p class="text-muted mb-0 small">
-                            Registre o actualice proveedores para compras y entradas.
-                        </p>
+                        <p class="text-muted mb-0 small">Crea o actualiza proveedores globales.</p>
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <div class="small text-muted mb-1">Columnas esperadas</div>
-                    <div class="small">
-                        <span class="badge text-bg-light border">codigo</span>
-                        <span class="badge text-bg-light border">nombre_comercial*</span>
-                        <span class="badge text-bg-light border">nombre_legal</span>
-                        <span class="badge text-bg-light border">cedula_juridica</span>
-                        <span class="badge text-bg-light border">contacto</span>
-                        <span class="badge text-bg-light border">correo</span>
-                        <span class="badge text-bg-light border">telefono</span>
-                        <span class="badge text-bg-light border">direccion</span>
-                        <span class="badge text-bg-light border">condiciones_pago</span>
-                        <span class="badge text-bg-light border">moneda</span>
-                        <span class="badge text-bg-light border">activo</span>
+                <div class="small text-muted mb-2">Columnas esperadas</div>
+                <div class="small mb-3">
+                    <span class="badge text-bg-light border">codigo</span>
+                    <span class="badge text-bg-light border">nombre_comercial*</span>
+                    <span class="badge text-bg-light border">nombre_legal</span>
+                    <span class="badge text-bg-light border">cedula_juridica</span>
+                    <span class="badge text-bg-light border">contacto</span>
+                    <span class="badge text-bg-light border">correo</span>
+                    <span class="badge text-bg-light border">telefono</span>
+                    <span class="badge text-bg-light border">direccion</span>
+                    <span class="badge text-bg-light border">condiciones_pago</span>
+                    <span class="badge text-bg-light border">moneda</span>
+                    <span class="badge text-bg-light border">activo</span>
+                </div>
+                <div class="alert alert-light border small">Si todavía no tienes `supplier.py`, esta carga no funcionará hasta crear ese modelo.</div>
+                <div class="mt-auto">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a href="{{ url_for('bulk.download_suppliers_template') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-download me-1"></i>Descargar plantilla
+                        </a>
                     </div>
-                </div>
-
-                <div class="alert alert-light border small">
-                    Cada fila representa un proveedor. Si el código existe, se actualiza; si no, se crea.
-                </div>
-
-                <div class="mt-auto d-flex flex-wrap gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" disabled>
-                        <i class="bi bi-download me-1"></i>Descargar plantilla
-                    </button>
-                    <button class="btn btn-secondary btn-sm" disabled>
-                        <i class="bi bi-upload me-1"></i>Próximamente
-                    </button>
+                    <form method="POST" action="{{ url_for('bulk.upload_suppliers') }}" enctype="multipart/form-data" class="row g-2">
+                        <div class="col-12 col-md-8">
+                            <input type="file" name="file" class="form-control" accept=".xlsx" required>
+                        </div>
+                        <div class="col-12 col-md-4 d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-upload me-1"></i>Subir archivo
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -387,41 +321,40 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4 d-flex flex-column">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="rounded-circle bg-danger bg-opacity-10 text-danger d-flex align-items-center justify-content-center me-3"
-                         style="width: 48px; height: 48px;">
+                    <div class="rounded-circle bg-danger bg-opacity-10 text-danger d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
                         <i class="bi bi-truck-front fs-5"></i>
                     </div>
                     <div>
                         <h5 class="mb-1 fw-bold">Equipos</h5>
-                        <p class="text-muted mb-0 small">
-                            Cargue equipos que luego podrán asociarse a órdenes de trabajo.
-                        </p>
+                        <p class="text-muted mb-0 small">Crea o actualiza equipos globales.</p>
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <div class="small text-muted mb-1">Columnas esperadas</div>
-                    <div class="small">
-                        <span class="badge text-bg-light border">codigo*</span>
-                        <span class="badge text-bg-light border">tipo*</span>
-                        <span class="badge text-bg-light border">descripcion</span>
-                        <span class="badge text-bg-light border">cantidad_ejes</span>
-                        <span class="badge text-bg-light border">tamano</span>
-                        <span class="badge text-bg-light border">activo</span>
+                <div class="small text-muted mb-2">Columnas esperadas</div>
+                <div class="small mb-3">
+                    <span class="badge text-bg-light border">codigo*</span>
+                    <span class="badge text-bg-light border">tipo*</span>
+                    <span class="badge text-bg-light border">descripcion</span>
+                    <span class="badge text-bg-light border">cantidad_ejes</span>
+                    <span class="badge text-bg-light border">tamano</span>
+                    <span class="badge text-bg-light border">activo</span>
+                </div>
+                <div class="alert alert-light border small">Tipos válidos: CHASIS, CABEZAL, OTRO.</div>
+                <div class="mt-auto">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a href="{{ url_for('bulk.download_equipment_template') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-download me-1"></i>Descargar plantilla
+                        </a>
                     </div>
-                </div>
-
-                <div class="alert alert-light border small">
-                    Cada fila representa un equipo. Tipos válidos: CHASIS, CABEZAL u OTRO.
-                </div>
-
-                <div class="mt-auto d-flex flex-wrap gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" disabled>
-                        <i class="bi bi-download me-1"></i>Descargar plantilla
-                    </button>
-                    <button class="btn btn-secondary btn-sm" disabled>
-                        <i class="bi bi-upload me-1"></i>Próximamente
-                    </button>
+                    <form method="POST" action="{{ url_for('bulk.upload_equipment') }}" enctype="multipart/form-data" class="row g-2">
+                        <div class="col-12 col-md-8">
+                            <input type="file" name="file" class="form-control" accept=".xlsx" required>
+                        </div>
+                        <div class="col-12 col-md-4 d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-upload me-1"></i>Subir archivo
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -432,38 +365,37 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4 d-flex flex-column">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="rounded-circle bg-dark bg-opacity-10 text-dark d-flex align-items-center justify-content-center me-3"
-                         style="width: 48px; height: 48px;">
+                    <div class="rounded-circle bg-dark bg-opacity-10 text-dark d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
                         <i class="bi bi-box-seam fs-5"></i>
                     </div>
                     <div>
                         <h5 class="mb-1 fw-bold">Stock por bodega</h5>
-                        <p class="text-muted mb-0 small">
-                            Defina la cantidad final de artículos por bodega.
-                        </p>
+                        <p class="text-muted mb-0 small">Define la cantidad final de artículos por bodega del predio activo.</p>
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <div class="small text-muted mb-1">Columnas esperadas</div>
-                    <div class="small">
-                        <span class="badge text-bg-light border">codigo_bodega*</span>
-                        <span class="badge text-bg-light border">codigo_articulo*</span>
-                        <span class="badge text-bg-light border">cantidad*</span>
+                <div class="small text-muted mb-2">Columnas esperadas</div>
+                <div class="small mb-3">
+                    <span class="badge text-bg-light border">codigo_bodega*</span>
+                    <span class="badge text-bg-light border">codigo_articulo*</span>
+                    <span class="badge text-bg-light border">cantidad*</span>
+                </div>
+                <div class="alert alert-light border small">No suma: deja la cantidad final del artículo en esa bodega.</div>
+                <div class="mt-auto">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a href="{{ url_for('bulk.download_warehouse_stock_template') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-download me-1"></i>Descargar plantilla
+                        </a>
                     </div>
-                </div>
-
-                <div class="alert alert-light border small">
-                    Cada fila representa la cantidad final de un artículo dentro de una bodega. No suma, reemplaza.
-                </div>
-
-                <div class="mt-auto d-flex flex-wrap gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" disabled>
-                        <i class="bi bi-download me-1"></i>Descargar plantilla
-                    </button>
-                    <button class="btn btn-secondary btn-sm" disabled>
-                        <i class="bi bi-upload me-1"></i>Próximamente
-                    </button>
+                    <form method="POST" action="{{ url_for('bulk.upload_warehouse_stock') }}" enctype="multipart/form-data" class="row g-2">
+                        <div class="col-12 col-md-8">
+                            <input type="file" name="file" class="form-control" accept=".xlsx" required>
+                        </div>
+                        <div class="col-12 col-md-4 d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-upload me-1"></i>Subir archivo
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -474,39 +406,38 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4 d-flex flex-column">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="rounded-circle bg-secondary bg-opacity-10 text-secondary d-flex align-items-center justify-content-center me-3"
-                         style="width: 48px; height: 48px;">
+                    <div class="rounded-circle bg-secondary bg-opacity-10 text-secondary d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
                         <i class="bi bi-pin-map fs-5"></i>
                     </div>
                     <div>
                         <h5 class="mb-1 fw-bold">Stock por ubicación</h5>
-                        <p class="text-muted mb-0 small">
-                            Defina la cantidad final de artículos en cada ubicación específica.
-                        </p>
+                        <p class="text-muted mb-0 small">Define la cantidad final de artículos por ubicación del predio activo.</p>
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <div class="small text-muted mb-1">Columnas esperadas</div>
-                    <div class="small">
-                        <span class="badge text-bg-light border">codigo_bodega*</span>
-                        <span class="badge text-bg-light border">codigo_ubicacion*</span>
-                        <span class="badge text-bg-light border">codigo_articulo*</span>
-                        <span class="badge text-bg-light border">cantidad*</span>
+                <div class="small text-muted mb-2">Columnas esperadas</div>
+                <div class="small mb-3">
+                    <span class="badge text-bg-light border">codigo_bodega*</span>
+                    <span class="badge text-bg-light border">codigo_ubicacion*</span>
+                    <span class="badge text-bg-light border">codigo_articulo*</span>
+                    <span class="badge text-bg-light border">cantidad*</span>
+                </div>
+                <div class="alert alert-light border small">No suma: deja la cantidad final del artículo en esa ubicación.</div>
+                <div class="mt-auto">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a href="{{ url_for('bulk.download_location_stock_template') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-download me-1"></i>Descargar plantilla
+                        </a>
                     </div>
-                </div>
-
-                <div class="alert alert-light border small">
-                    Cada fila representa la cantidad final de un artículo en una ubicación física concreta.
-                </div>
-
-                <div class="mt-auto d-flex flex-wrap gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" disabled>
-                        <i class="bi bi-download me-1"></i>Descargar plantilla
-                    </button>
-                    <button class="btn btn-secondary btn-sm" disabled>
-                        <i class="bi bi-upload me-1"></i>Próximamente
-                    </button>
+                    <form method="POST" action="{{ url_for('bulk.upload_location_stock') }}" enctype="multipart/form-data" class="row g-2">
+                        <div class="col-12 col-md-8">
+                            <input type="file" name="file" class="form-control" accept=".xlsx" required>
+                        </div>
+                        <div class="col-12 col-md-4 d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-upload me-1"></i>Subir archivo
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

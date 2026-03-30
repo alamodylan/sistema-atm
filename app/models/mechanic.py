@@ -9,7 +9,14 @@ class Mechanic(db.Model):
 
     id = db.Column(db.BigInteger, primary_key=True)
 
-    code = db.Column(db.String(50), nullable=False, unique=True, index=True)
+    site_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("atm.sites.id"),
+        nullable=False,
+        index=True,
+    )
+
+    code = db.Column(db.String(50), nullable=False, index=True)
     name = db.Column(db.String(150), nullable=False, index=True)
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
@@ -27,6 +34,8 @@ class Mechanic(db.Model):
         onupdate=lambda: datetime.now(UTC),
     )
 
+    site = db.relationship("Site")
+
     work_orders = db.relationship(
         "WorkOrder",
         secondary="atm.work_order_mechanics",
@@ -35,4 +44,4 @@ class Mechanic(db.Model):
     )
 
     def __repr__(self) -> str:
-        return f"<Mechanic {self.code} - {self.name}>"
+        return f"<Mechanic site={self.site_id} code={self.code} - {self.name}>"

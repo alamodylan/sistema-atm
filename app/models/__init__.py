@@ -35,6 +35,7 @@ from .work_order_line import WorkOrderLine
 from .work_order_request import WorkOrderRequest
 from .work_order_request_line import WorkOrderRequestLine
 from .work_order_service import WorkOrderService
+from .supplier import Supplier
 
 __all__ = [
     "Role",
@@ -77,4 +78,5 @@ __all__ = [
     "PurchaseOrder",
     "PurchaseRequest",
     "ServiceCatalog",
+    "Supplier",
 ]
