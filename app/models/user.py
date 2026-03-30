@@ -109,14 +109,6 @@ class User(UserMixin, db.Model):
         lazy="dynamic",
     )
 
-    assigned_work_orders = db.relationship(
-        "WorkOrder",
-        secondary="atm.work_order_mechanics",
-        back_populates="mechanics",
-        lazy="dynamic",
-        overlaps="mechanics",
-    )
-
     work_order_requests = db.relationship(
         "WorkOrderRequest",
         foreign_keys="WorkOrderRequest.requested_by_user_id",

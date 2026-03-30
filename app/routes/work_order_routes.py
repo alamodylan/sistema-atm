@@ -5,6 +5,10 @@ from flask_login import current_user, login_required
 from app.models.deletion_request import WorkOrderLineDeleteRequest
 from app.models.article import Article
 from app.models.work_order import WorkOrder
+from app.models.mechanic import Mechanic
+from app.models.site import Site
+from app.models.warehouse import Warehouse
+from app.models.user import User
 from app.services.work_order_service import (
     WorkOrderServiceError,
     add_work_order_line,
@@ -55,12 +59,38 @@ def list_work_orders():
 @work_order_bp.route("/create", methods=["GET"])
 @login_required
 def create_work_order_page():
+    sites = Site.query.filter_by(is_active=True).order_by(Site.name).all()
+
+    warehouses = (
+        Warehouse.query
+        .filter(Warehouse.is_active.is_(True))
+        .order_by(Warehouse.name)
+        .all()
+    )
+
+    responsible_users = (
+        User.query
+        .filter(User.is_active.is_(True))
+        .order_by(User.full_name)
+        .all()
+    )
+
+    mechanics = (
+        Mechanic.query
+        .filter(Mechanic.is_active.is_(True))
+        .order_by(Mechanic.name)
+        .all()
+    )
+
     return render_template(
         "work_orders/create.html",
         title="Nueva Orden de Trabajo",
         subtitle="Cree una orden con responsable, predio, bodega y mecánicos asignados.",
+        sites=sites,
+        warehouses=warehouses,
+        responsible_users=responsible_users,
+        mechanics=mechanics,
     )
-
 
 # =========================================================
 # CREAR OT

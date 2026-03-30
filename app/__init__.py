@@ -5,6 +5,7 @@ from .config import Config
 from .extensions import db, jwt, login_manager, migrate
 from .models.user import User
 from .models.site import Site
+from app.routes.bulk_routes import bulk_bp
 
 
 def create_app():
@@ -37,6 +38,7 @@ def create_app():
     app.register_blueprint(deletion_bp, url_prefix="/deletions")
     app.register_blueprint(waste_bp, url_prefix="/waste")
     app.register_blueprint(report_bp, url_prefix="/reports")
+    app.register_blueprint(bulk_bp)
 
     @app.errorhandler(403)
     def forbidden_error(error):

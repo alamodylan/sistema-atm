@@ -3,11 +3,17 @@ from .audit_log import AuditLog
 from .deletion_request import WorkOrderLineDeleteRequest
 from .equipment import Equipment
 from .inventory import InventoryLedger, WarehouseStock, WarehouseLocationStock
+from .inventory_entry import InventoryEntry
+from .inventory_entry_line import InventoryEntryLine
 from .item_category import ItemCategory
+from .mechanic import Mechanic
 from .notification import Notification
 from .physical_inventory import PhysicalInventory
 from .physical_inventory_line import PhysicalInventoryLine
+from .purchase_order import PurchaseOrder
+from .purchase_request import PurchaseRequest
 from .role import Role
+from .service_catalog import ServiceCatalog
 from .site import Site
 from .tool_loan import ToolLoan
 from .toolbox import Toolbox
@@ -29,11 +35,6 @@ from .work_order_line import WorkOrderLine
 from .work_order_request import WorkOrderRequest
 from .work_order_request_line import WorkOrderRequestLine
 from .work_order_service import WorkOrderService
-from .inventory_entry import InventoryEntry
-from .inventory_entry_line import InventoryEntryLine
-from .purchase_order import PurchaseOrder
-from .purchase_request import PurchaseRequest
-from .service_catalog import ServiceCatalog
 
 __all__ = [
     "Role",
@@ -55,25 +56,20 @@ __all__ = [
     "Unit",
     "WorkOrderRequest",
     "WorkOrderRequestLine",
-
-    # nuevos
     "Site",
     "Equipment",
+    "Mechanic",
     "ToolLoan",
     "Toolbox",
     "WorkOrderService",
-
     "TransferRequest",
     "TransferRequestLine",
     "Transfer",
     "TransferLine",
     "TransferEvent",
-
     "PhysicalInventory",
     "PhysicalInventoryLine",
-
     "Notification",
-
     "UserSiteAccess",
     "UserWarehouseAccess",
     "InventoryEntry",

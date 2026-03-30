@@ -1,3 +1,4 @@
+#routes/ inventory_routes.py
 from flask import Blueprint, flash, render_template, request
 from flask_login import login_required
 

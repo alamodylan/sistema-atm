@@ -12,9 +12,9 @@ work_order_mechanics = db.Table(
         primary_key=True,
     ),
     db.Column(
-        "user_id",
+        "mechanic_id",
         db.BigInteger,
-        db.ForeignKey("atm.users.id"),
+        db.ForeignKey("atm.mechanics.id", ondelete="CASCADE"),
         primary_key=True,
     ),
     schema="atm",
@@ -133,11 +133,10 @@ class WorkOrder(db.Model):
     )
 
     mechanics = db.relationship(
-        "User",
+        "Mechanic",
         secondary=work_order_mechanics,
-        back_populates="assigned_work_orders",
+        back_populates="work_orders",
         lazy="subquery",
-        overlaps="assigned_work_orders",
     )
 
     def __repr__(self) -> str:

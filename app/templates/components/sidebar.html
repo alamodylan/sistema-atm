@@ -66,6 +66,10 @@
             <span class="nav-link sidebar-link disabled">
                 <i class="bi bi-people me-2"></i>Usuarios
             </span>
+            <a href="{{ url_for('bulk.bulk_home') }}"
+               class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('bulk.') %}active{% endif %}">
+                <i class="bi bi-upload me-2"></i>Carga masiva
+            </a>
         </nav>
 
         <div class="mt-auto px-3 py-3 border-top bg-light">
