@@ -8,3 +8,5 @@ Flask-Login==0.6.3
 pg8000==1.31.2
 
 gunicorn==21.2.0
+pandas==2.2.2
+openpyxl==3.1.2
