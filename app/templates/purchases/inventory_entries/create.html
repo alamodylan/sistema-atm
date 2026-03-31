@@ -1,0 +1,500 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="mb-4">
+        <h2 class="fw-bold mb-1">Nueva entrada a inventario</h2>
+        <p class="text-muted mb-0">
+            Registra la recepción de compra, factura y destino real de inventario.
+        </p>
+    </div>
+
+    <form method="post" id="inventory-entry-form">
+        <div class="row g-4">
+            <div class="col-12 col-xl-4">
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3">Datos generales</h5>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Orden de compra</label>
+                            <select name="purchase_order_id" id="purchase_order_id" class="form-select rounded-3" required>
+                                <option value="">Seleccione</option>
+                                {% for item in purchase_orders %}
+                                    <option value="{{ item.id }}">
+                                        {{ item.number }} | {{ item.supplier.commercial_name if item.supplier else 'Sin proveedor' }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">
+                                Solo deben aparecer órdenes aprobadas o parcialmente recibidas.
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Proveedor</label>
+                            <select name="supplier_id" id="supplier_id" class="form-select rounded-3" required>
+                                <option value="">Seleccione</option>
+                                {% for item in suppliers %}
+                                    <option value="{{ item.id }}">{{ item.commercial_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Bodega destino</label>
+                            <select name="warehouse_id" id="warehouse_id" class="form-select rounded-3" required>
+                                <option value="">Seleccione</option>
+                                {% for item in warehouses %}
+                                    <option value="{{ item.id }}">{{ item.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">
+                                Las ubicaciones disponibles se cargarán según la bodega seleccionada.
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Número de factura</label>
+                            <input type="text"
+                                   name="invoice_number"
+                                   class="form-control rounded-3"
+                                   placeholder="Factura del proveedor"
+                                   required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Fecha de factura</label>
+                            <input type="date"
+                                   name="invoice_date"
+                                   class="form-control rounded-3">
+                        </div>
+
+                        <div class="mb-0">
+                            <label class="form-label fw-semibold">Notas</label>
+                            <textarea name="notes"
+                                      rows="4"
+                                      class="form-control rounded-3"
+                                      placeholder="Observaciones generales"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-8">
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h5 class="fw-bold mb-1">Líneas de recepción</h5>
+                                <p class="text-muted mb-0">
+                                    Selecciona líneas de la orden, cantidades y ubicación destino.
+                                </p>
+                            </div>
+                            <button type="button" class="btn btn-outline-dark rounded-3" id="add-line-btn">
+                                <i class="bi bi-plus-lg me-2"></i>Agregar línea
+                            </button>
+                        </div>
+
+                        <div id="entry-lines-container" class="d-flex flex-column gap-3"></div>
+
+                        <div class="d-flex justify-content-end gap-2 mt-4">
+                            <a href="{{ url_for('purchases.list_entries') }}" class="btn btn-light rounded-3">
+                                Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-dark rounded-3">
+                                <i class="bi bi-save me-2"></i>Guardar entrada
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4 mt-4">
+                    <div class="card-body p-4">
+                        <h6 class="fw-bold mb-2">Regla importante</h6>
+                        <p class="text-muted mb-0">
+                            Un artículo pendiente solo puede afectar inventario real si ya está codificado y vinculado a un artículo oficial.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script id="purchase-order-lines-data" type="application/json">
+{
+{% for po in purchase_orders %}
+    "{{ po.id }}": [
+        {% for line in purchase_order_lines_map.get(po.id, []) %}
+        {
+            "id": {{ line.id }},
+            "item_name": {{ (line.item_name or 'Sin artículo')|tojson }},
+            "item_code": {{ (line.item_code or '')|tojson }},
+            "article_id": {{ line.article_id if line.article_id else 'null' }},
+            "pending_article_id": {{ line.pending_article_id if line.pending_article_id else 'null' }},
+            "quantity_ordered": {{ (line.quantity_ordered|string)|tojson }},
+            "quantity_received": {{ (line.quantity_received|string)|tojson }},
+            "pending_quantity": {{ (line.pending_quantity|string)|tojson }},
+            "unit_id": {{ line.unit_id if line.unit_id else 'null' }},
+            "unit_name": {{ (line.unit.name if line.unit else '')|tojson }},
+            "unit_cost": {{ (line.unit_cost|string)|tojson }},
+            "discount_pct": {{ (line.discount_pct|string)|tojson }},
+            "tax_pct": {{ (line.tax_pct|string)|tojson }}
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ]{% if not loop.last %},{% endif %}
+{% endfor %}
+}
+</script>
+
+<script id="warehouse-locations-data" type="application/json">
+{
+{% for wh in warehouses %}
+    "{{ wh.id }}": [
+        {% for loc in warehouse_locations_map.get(wh.id, []) %}
+        {
+            "id": {{ loc.id }},
+            "code": {{ (loc.code or '')|tojson }},
+            "description": {{ (loc.description or '')|tojson }}
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ]{% if not loop.last %},{% endif %}
+{% endfor %}
+}
+</script>
+
+<template id="entry-line-template">
+    <div class="border rounded-4 p-3 bg-light-subtle entry-line-item">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold mb-0">Línea <span class="line-number"></span></h6>
+            <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
+                <i class="bi bi-trash3 me-1"></i>Eliminar
+            </button>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-12 col-lg-6">
+                <label class="form-label fw-semibold">Línea de orden</label>
+                <select name="line_purchase_order_line_id[]" class="form-select rounded-3 line-po-line-select">
+                    <option value="">Seleccione</option>
+                </select>
+                <div class="form-text line-po-line-help">
+                    Selecciona una orden arriba para cargar sus líneas.
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-6">
+                <label class="form-label fw-semibold">Ubicación de bodega</label>
+                <select name="line_warehouse_location_id[]" class="form-select rounded-3 line-location-select">
+                    <option value="">Sin ubicación</option>
+                </select>
+                <div class="form-text line-location-help">
+                    Selecciona una bodega arriba para cargar ubicaciones.
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-6">
+                <label class="form-label fw-semibold">Artículo codificado</label>
+                <select name="line_article_id[]" class="form-select rounded-3 line-article-select">
+                    <option value="">Seleccione</option>
+                    {% for item in articles %}
+                        <option value="{{ item.id }}">{{ item.code }} - {{ item.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-12 col-lg-6">
+                <label class="form-label fw-semibold">Artículo pendiente</label>
+                <select name="line_pending_article_id[]" class="form-select rounded-3 line-pending-select">
+                    <option value="">Seleccione</option>
+                    {% for item in pending_articles %}
+                        <option value="{{ item.id }}">
+                            {{ item.provisional_code or 'SIN-CODIGO' }} - {{ item.provisional_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">
+                    Solo aparecen pendientes ya codificados.
+                </div>
+            </div>
+
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-semibold">Cantidad recibida</label>
+                <input type="number"
+                       step="0.01"
+                       min="0.01"
+                       name="line_quantity_received[]"
+                       class="form-control rounded-3 line-quantity-input"
+                       required>
+            </div>
+
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-semibold">Unidad</label>
+                <select name="line_unit_id[]" class="form-select rounded-3 line-unit-select">
+                    <option value="">Seleccione</option>
+                    {% for item in units %}
+                        <option value="{{ item.id }}">{{ item.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-semibold">Costo sin impuesto</label>
+                <input type="number"
+                       step="0.0001"
+                       min="0"
+                       name="line_unit_cost_without_tax[]"
+                       class="form-control rounded-3 line-cost-wo-tax-input"
+                       value="0">
+            </div>
+
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-semibold">Costo con impuesto</label>
+                <input type="number"
+                       step="0.0001"
+                       min="0"
+                       name="line_unit_cost_with_tax[]"
+                       class="form-control rounded-3 line-cost-w-tax-input"
+                       value="0">
+            </div>
+
+            <div class="col-12 col-md-6">
+                <label class="form-label fw-semibold">Descuento %</label>
+                <input type="number"
+                       step="0.0001"
+                       min="0"
+                       name="line_discount_pct[]"
+                       class="form-control rounded-3 line-discount-input"
+                       value="0">
+            </div>
+
+            <div class="col-12 col-md-6">
+                <label class="form-label fw-semibold">Impuesto %</label>
+                <input type="number"
+                       step="0.0001"
+                       min="0"
+                       name="line_tax_pct[]"
+                       class="form-control rounded-3 line-tax-input"
+                       value="0">
+            </div>
+
+            <div class="col-12">
+                <label class="form-label fw-semibold">Notas de línea</label>
+                <textarea name="line_notes[]" rows="2" class="form-control rounded-3"></textarea>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script>
+(function () {
+    const container = document.getElementById("entry-lines-container");
+    const template = document.getElementById("entry-line-template");
+    const addLineBtn = document.getElementById("add-line-btn");
+    const purchaseOrderSelect = document.getElementById("purchase_order_id");
+    const warehouseSelect = document.getElementById("warehouse_id");
+
+    const purchaseOrderLinesData = JSON.parse(
+        document.getElementById("purchase-order-lines-data").textContent || "{}"
+    );
+    const warehouseLocationsData = JSON.parse(
+        document.getElementById("warehouse-locations-data").textContent || "{}"
+    );
+
+    function updateLineNumbers() {
+        const items = container.querySelectorAll(".entry-line-item");
+        items.forEach((item, index) => {
+            const numberSpan = item.querySelector(".line-number");
+            if (numberSpan) numberSpan.textContent = index + 1;
+        });
+    }
+
+    function getSelectedOrderLines() {
+        const orderId = purchaseOrderSelect.value;
+        if (!orderId || !purchaseOrderLinesData[orderId]) return [];
+        return purchaseOrderLinesData[orderId];
+    }
+
+    function getSelectedWarehouseLocations() {
+        const warehouseId = warehouseSelect.value;
+        if (!warehouseId || !warehouseLocationsData[warehouseId]) return [];
+        return warehouseLocationsData[warehouseId];
+    }
+
+    function populateOrderLineSelect(
+        selectElement,
+        helpElement,
+        articleSelect,
+        pendingSelect,
+        quantityInput,
+        unitSelect,
+        costWoTaxInput,
+        costWTaxInput,
+        discountInput,
+        taxInput
+    ) {
+        const lines = getSelectedOrderLines();
+        const previousValue = selectElement.value;
+
+        selectElement.innerHTML = '<option value="">Seleccione</option>';
+
+        if (!lines.length) {
+            helpElement.textContent = "No hay líneas disponibles para la orden seleccionada.";
+            return;
+        }
+
+        helpElement.textContent = "Selecciona una línea para autocompletar datos.";
+
+        lines.forEach(line => {
+            const option = document.createElement("option");
+            option.value = line.id;
+            option.textContent = `${line.item_code ? line.item_code + " - " : ""}${line.item_name} | Pendiente: ${line.pending_quantity}${line.unit_name ? " " + line.unit_name : ""}`;
+            option.dataset.articleId = line.article_id ?? "";
+            option.dataset.pendingArticleId = line.pending_article_id ?? "";
+            option.dataset.pendingQuantity = line.pending_quantity ?? "";
+            option.dataset.unitId = line.unit_id ?? "";
+            option.dataset.unitCost = line.unit_cost ?? "0";
+            option.dataset.discountPct = line.discount_pct ?? "0";
+            option.dataset.taxPct = line.tax_pct ?? "0";
+            selectElement.appendChild(option);
+        });
+
+        if ([...selectElement.options].some(option => option.value === previousValue)) {
+            selectElement.value = previousValue;
+        }
+
+        selectElement.onchange = function () {
+            const selected = this.options[this.selectedIndex];
+            const articleId = selected.dataset.articleId || "";
+            const pendingArticleId = selected.dataset.pendingArticleId || "";
+            const pendingQuantity = selected.dataset.pendingQuantity || "";
+            const unitId = selected.dataset.unitId || "";
+            const unitCost = selected.dataset.unitCost || "0";
+            const discountPct = selected.dataset.discountPct || "0";
+            const taxPct = selected.dataset.taxPct || "0";
+
+            if (articleId) {
+                articleSelect.value = articleId;
+                pendingSelect.value = "";
+            } else if (pendingArticleId) {
+                pendingSelect.value = pendingArticleId;
+                articleSelect.value = "";
+            }
+
+            if (pendingQuantity) quantityInput.value = pendingQuantity;
+            if (unitId) unitSelect.value = unitId;
+
+            costWoTaxInput.value = unitCost;
+            costWTaxInput.value = unitCost;
+            discountInput.value = discountPct;
+            taxInput.value = taxPct;
+        };
+    }
+
+    function populateLocationSelect(selectElement, helpElement) {
+        const locations = getSelectedWarehouseLocations();
+        const previousValue = selectElement.value;
+
+        selectElement.innerHTML = '<option value="">Sin ubicación</option>';
+
+        if (!locations.length) {
+            helpElement.textContent = "No hay ubicaciones disponibles para la bodega seleccionada.";
+            return;
+        }
+
+        helpElement.textContent = "Selecciona la ubicación real donde entrará el inventario.";
+
+        locations.forEach(loc => {
+            const option = document.createElement("option");
+            option.value = loc.id;
+            option.textContent = loc.description ? `${loc.code} - ${loc.description}` : loc.code;
+            selectElement.appendChild(option);
+        });
+
+        if ([...selectElement.options].some(option => option.value === previousValue)) {
+            selectElement.value = previousValue;
+        }
+    }
+
+    function createLine() {
+        const fragment = template.content.cloneNode(true);
+        const wrapper = fragment.querySelector(".entry-line-item");
+
+        const removeBtn = wrapper.querySelector(".remove-line-btn");
+        const poLineSelect = wrapper.querySelector(".line-po-line-select");
+        const poLineHelp = wrapper.querySelector(".line-po-line-help");
+        const locationSelect = wrapper.querySelector(".line-location-select");
+        const locationHelp = wrapper.querySelector(".line-location-help");
+        const articleSelect = wrapper.querySelector(".line-article-select");
+        const pendingSelect = wrapper.querySelector(".line-pending-select");
+        const quantityInput = wrapper.querySelector(".line-quantity-input");
+        const unitSelect = wrapper.querySelector(".line-unit-select");
+        const costWoTaxInput = wrapper.querySelector(".line-cost-wo-tax-input");
+        const costWTaxInput = wrapper.querySelector(".line-cost-w-tax-input");
+        const discountInput = wrapper.querySelector(".line-discount-input");
+        const taxInput = wrapper.querySelector(".line-tax-input");
+
+        removeBtn.addEventListener("click", function () {
+            wrapper.remove();
+            updateLineNumbers();
+        });
+
+        articleSelect.addEventListener("change", function () {
+            if (this.value) pendingSelect.value = "";
+        });
+
+        pendingSelect.addEventListener("change", function () {
+            if (this.value) articleSelect.value = "";
+        });
+
+        populateOrderLineSelect(
+            poLineSelect,
+            poLineHelp,
+            articleSelect,
+            pendingSelect,
+            quantityInput,
+            unitSelect,
+            costWoTaxInput,
+            costWTaxInput,
+            discountInput,
+            taxInput
+        );
+
+        populateLocationSelect(locationSelect, locationHelp);
+
+        container.appendChild(fragment);
+        updateLineNumbers();
+    }
+
+    function refreshAllLineSelectors() {
+        const lineItems = container.querySelectorAll(".entry-line-item");
+        lineItems.forEach(item => {
+            populateOrderLineSelect(
+                item.querySelector(".line-po-line-select"),
+                item.querySelector(".line-po-line-help"),
+                item.querySelector(".line-article-select"),
+                item.querySelector(".line-pending-select"),
+                item.querySelector(".line-quantity-input"),
+                item.querySelector(".line-unit-select"),
+                item.querySelector(".line-cost-wo-tax-input"),
+                item.querySelector(".line-cost-w-tax-input"),
+                item.querySelector(".line-discount-input"),
+                item.querySelector(".line-tax-input")
+            );
+
+            populateLocationSelect(
+                item.querySelector(".line-location-select"),
+                item.querySelector(".line-location-help")
+            );
+        });
+    }
+
+    addLineBtn.addEventListener("click", createLine);
+    purchaseOrderSelect.addEventListener("change", refreshAllLineSelectors);
+    warehouseSelect.addEventListener("change", refreshAllLineSelectors);
+
+    createLine();
+})();
+</script>
+{% endblock %}

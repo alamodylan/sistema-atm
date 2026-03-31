@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">Detalle de solicitud</h2>
+            <p class="text-muted mb-0">{{ purchase_request.number }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('purchases.list_requests') }}" class="btn btn-light rounded-3">
+                <i class="bi bi-arrow-left me-2"></i>Volver
+            </a>
+            <a href="{{ url_for('purchases.create_quotation') }}" class="btn btn-dark rounded-3">
+                <i class="bi bi-cash-stack me-2"></i>Crear cotización
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12 col-xl-4">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3">Encabezado</h5>
+
+                    <dl class="row mb-0">
+                        <dt class="col-5 text-muted">Número</dt>
+                        <dd class="col-7 fw-semibold">{{ purchase_request.number }}</dd>
+
+                        <dt class="col-5 text-muted">Estado</dt>
+                        <dd class="col-7">
+                            <span class="badge text-bg-secondary">{{ purchase_request.status }}</span>
+                        </dd>
+
+                        <dt class="col-5 text-muted">Prioridad</dt>
+                        <dd class="col-7">{{ purchase_request.priority }}</dd>
+
+                        <dt class="col-5 text-muted">Solicitante</dt>
+                        <dd class="col-7">
+                            {{ purchase_request.requested_by_user.name if purchase_request.requested_by_user and purchase_request.requested_by_user.name else purchase_request.requested_by_user.username if purchase_request.requested_by_user else '-' }}
+                        </dd>
+
+                        <dt class="col-5 text-muted">Predio sugerido</dt>
+                        <dd class="col-7">{{ purchase_request.site.name if purchase_request.site else 'No definido' }}</dd>
+
+                        <dt class="col-5 text-muted">Bodega sugerida</dt>
+                        <dd class="col-7">{{ purchase_request.warehouse.name if purchase_request.warehouse else 'No definida' }}</dd>
+
+                        <dt class="col-5 text-muted">Fecha</dt>
+                        <dd class="col-7">{{ purchase_request.created_at.strftime('%d/%m/%Y %H:%M') if purchase_request.created_at else '-' }}</dd>
+                    </dl>
+
+                    {% if purchase_request.notes %}
+                        <hr>
+                        <h6 class="fw-bold">Notas</h6>
+                        <p class="mb-0 text-muted">{{ purchase_request.notes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-8">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-0">
+                    <div class="p-4 border-bottom">
+                        <h5 class="fw-bold mb-1">Líneas</h5>
+                        <p class="text-muted mb-0">Detalle de artículos solicitados.</p>
+                    </div>
+
+                    {% if purchase_request.lines %}
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-4">Artículo</th>
+                                        <th>Código</th>
+                                        <th>Cantidad</th>
+                                        <th>Unidad</th>
+                                        <th>Urgente</th>
+                                        <th>Estado</th>
+                                        <th class="pe-4">Notas</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for line in purchase_request.lines %}
+                                        <tr>
+                                            <td class="ps-4 fw-semibold">{{ line.item_name }}</td>
+                                            <td>{{ line.item_code or '-' }}</td>
+                                            <td>{{ line.quantity_requested }}</td>
+                                            <td>{{ line.unit.name if line.unit else '-' }}</td>
+                                            <td>
+                                                {% if line.is_urgent %}
+                                                    <span class="badge text-bg-warning">Sí</span>
+                                                {% else %}
+                                                    <span class="badge text-bg-light">No</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ line.line_status }}</td>
+                                            <td class="pe-4">{{ line.line_notes or '-' }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="p-5 text-center">
+                            <i class="bi bi-list-ul fs-1 text-muted"></i>
+                            <h6 class="fw-bold mt-3">Esta solicitud no tiene líneas</h6>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if purchase_request.quotation_batches %}
+                <div class="card border-0 shadow-sm rounded-4 mt-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3">Cotizaciones relacionadas</h5>
+                        <div class="d-flex flex-column gap-2">
+                            {% for item in purchase_request.quotation_batches %}
+                                <a href="{{ url_for('purchases.quotation_detail', batch_id=item.id) }}"
+                                   class="text-decoration-none border rounded-3 p-3 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="fw-semibold text-dark">{{ item.number }}</div>
+                                        <small class="text-muted">
+                                            {{ item.quote_date.strftime('%d/%m/%Y') if item.quote_date else '-' }}
+                                        </small>
+                                    </div>
+                                    <i class="bi bi-arrow-right text-dark"></i>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

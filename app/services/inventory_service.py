@@ -4,7 +4,7 @@ from decimal import Decimal, InvalidOperation
 
 from app.extensions import db
 from app.models.article import Article
-from app.models.inventory import InventoryLedger, WarehouseStock
+from app.models.inventory import InventoryLedger, WarehouseLocationStock, WarehouseStock
 from app.models.warehouse import Warehouse
 from app.services.audit_service import log_action
 
@@ -46,8 +46,32 @@ def get_or_create_warehouse_stock_record(article_id: int, warehouse_id: int) -> 
     record = WarehouseStock(
         article_id=article_id,
         warehouse_id=warehouse_id,
-        quantity=Decimal("0.00"),
+        quantity_on_hand=Decimal("0.00"),
         reserved_quantity=Decimal("0.00"),
+    )
+    db.session.add(record)
+    db.session.flush()
+
+    return record
+
+
+def get_location_stock_record(article_id: int, warehouse_location_id: int) -> WarehouseLocationStock | None:
+    return WarehouseLocationStock.query.filter_by(
+        article_id=article_id,
+        warehouse_location_id=warehouse_location_id,
+    ).first()
+
+
+def get_or_create_location_stock_record(article_id: int, warehouse_location_id: int) -> WarehouseLocationStock:
+    record = get_location_stock_record(article_id, warehouse_location_id)
+
+    if record:
+        return record
+
+    record = WarehouseLocationStock(
+        article_id=article_id,
+        warehouse_location_id=warehouse_location_id,
+        quantity=Decimal("0.00"),
     )
     db.session.add(record)
     db.session.flush()
@@ -118,7 +142,11 @@ def add_stock(
         raise InventoryServiceError("La bodega no existe.")
 
     record = get_or_create_warehouse_stock_record(article_id, warehouse_id)
-    record.quantity = Decimal(str(record.quantity or 0)) + qty
+    record.quantity_on_hand = Decimal(str(record.quantity_on_hand or 0)) + qty
+
+    if warehouse_location_id:
+        location_record = get_or_create_location_stock_record(article_id, warehouse_location_id)
+        location_record.quantity = Decimal(str(location_record.quantity or 0)) + qty
 
     unit_cost_decimal = None
     total_cost_decimal = None
@@ -155,8 +183,9 @@ def add_stock(
             "reference_type": reference_type,
             "reference_id": reference_id,
             "reference_number": reference_number,
+            "warehouse_location_id": warehouse_location_id,
             "ledger_entry_id": str(ledger_entry.id),
-            "new_quantity": str(record.quantity),
+            "new_quantity_on_hand": str(record.quantity_on_hand),
         },
         commit=False,
     )
@@ -192,7 +221,15 @@ def subtract_stock(
     if qty > available:
         raise InventoryServiceError("No hay suficiente inventario disponible.")
 
-    record.quantity = Decimal(str(record.quantity or 0)) - qty
+    record.quantity_on_hand = Decimal(str(record.quantity_on_hand or 0)) - qty
+
+    if warehouse_location_id:
+        location_record = get_location_stock_record(article_id, warehouse_location_id)
+        if not location_record:
+            raise InventoryServiceError("No existe stock por ubicación para ese artículo en esa ubicación.")
+        if Decimal(str(location_record.quantity or 0)) < qty:
+            raise InventoryServiceError("No hay suficiente inventario en la ubicación indicada.")
+        location_record.quantity = Decimal(str(location_record.quantity or 0)) - qty
 
     ledger_entry = create_inventory_ledger_entry(
         movement_type=movement_type,
@@ -221,8 +258,9 @@ def subtract_stock(
             "reference_type": reference_type,
             "reference_id": reference_id,
             "reference_number": reference_number,
+            "warehouse_location_id": warehouse_location_id,
             "ledger_entry_id": str(ledger_entry.id),
-            "new_quantity": str(record.quantity),
+            "new_quantity_on_hand": str(record.quantity_on_hand),
         },
         commit=False,
     )
@@ -350,8 +388,8 @@ def transfer_stock(
 
     destination_record = get_or_create_warehouse_stock_record(article_id, destination_warehouse_id)
 
-    origin_record.quantity = Decimal(str(origin_record.quantity or 0)) - qty
-    destination_record.quantity = Decimal(str(destination_record.quantity or 0)) + qty
+    origin_record.quantity_on_hand = Decimal(str(origin_record.quantity_on_hand or 0)) - qty
+    destination_record.quantity_on_hand = Decimal(str(destination_record.quantity_on_hand or 0)) + qty
 
     salida_entry = create_inventory_ledger_entry(
         movement_type="TRASLADO_SALIDA",
@@ -395,8 +433,8 @@ def transfer_stock(
             "reference_number": reference_number,
             "salida_ledger_entry_id": str(salida_entry.id),
             "entrada_ledger_entry_id": str(entrada_entry.id),
-            "origin_new_quantity": str(origin_record.quantity),
-            "destination_new_quantity": str(destination_record.quantity),
+            "origin_new_quantity_on_hand": str(origin_record.quantity_on_hand),
+            "destination_new_quantity_on_hand": str(destination_record.quantity_on_hand),
         },
         commit=False,
     )
@@ -429,7 +467,7 @@ def get_article_stock_summary(article_id: int) -> list[dict]:
                 "warehouse_code": warehouse.code,
                 "warehouse_type": warehouse.warehouse_type,
                 "site_id": warehouse.site_id,
-                "quantity": str(stock.quantity),
+                "quantity_on_hand": str(stock.quantity_on_hand),
                 "reserved_quantity": str(stock.reserved_quantity),
                 "available_quantity": str(stock.available_quantity),
             }

@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">Detalle de cotización</h2>
+            <p class="text-muted mb-0">{{ quotation_batch.number }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('purchases.list_quotations') }}" class="btn btn-light rounded-3">
+                <i class="bi bi-arrow-left me-2"></i>Volver
+            </a>
+            <a href="{{ url_for('purchases.create_order') }}" class="btn btn-dark rounded-3">
+                <i class="bi bi-file-earmark-text me-2"></i>Crear orden de compra
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12 col-xl-4">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3">Encabezado</h5>
+
+                    <dl class="row mb-0">
+                        <dt class="col-5 text-muted">Número</dt>
+                        <dd class="col-7 fw-semibold">{{ quotation_batch.number }}</dd>
+
+                        <dt class="col-5 text-muted">Solicitud</dt>
+                        <dd class="col-7">
+                            {% if quotation_batch.purchase_request %}
+                                {{ quotation_batch.purchase_request.number }}
+                            {% else %}
+                                Sin solicitud
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-5 text-muted">Fecha</dt>
+                        <dd class="col-7">
+                            {{ quotation_batch.quote_date.strftime('%d/%m/%Y') if quotation_batch.quote_date else '-' }}
+                        </dd>
+
+                        <dt class="col-5 text-muted">Creado por</dt>
+                        <dd class="col-7">
+                            {{ quotation_batch.created_by_user.name if quotation_batch.created_by_user and quotation_batch.created_by_user.name else quotation_batch.created_by_user.username if quotation_batch.created_by_user else '-' }}
+                        </dd>
+
+                        <dt class="col-5 text-muted">Líneas</dt>
+                        <dd class="col-7">{{ quotation_batch.lines|length }}</dd>
+                    </dl>
+
+                    {% if quotation_batch.notes %}
+                        <hr>
+                        <h6 class="fw-bold">Notas</h6>
+                        <p class="mb-0 text-muted">{{ quotation_batch.notes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-8">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-0">
+                    <div class="p-4 border-bottom">
+                        <h5 class="fw-bold mb-1">Líneas cotizadas</h5>
+                        <p class="text-muted mb-0">Detalle de ofertas registradas en este lote.</p>
+                    </div>
+
+                    {% if quotation_batch.lines %}
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-4">Proveedor</th>
+                                        <th>Artículo</th>
+                                        <th>Moneda</th>
+                                        <th>Precio</th>
+                                        <th>Desc. %</th>
+                                        <th>Imp. %</th>
+                                        <th>Lead time</th>
+                                        <th class="pe-4">Marca / Modelo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for line in quotation_batch.lines %}
+                                        <tr>
+                                            <td class="ps-4 fw-semibold">
+                                                {{ line.supplier.commercial_name if line.supplier else '-' }}
+                                            </td>
+                                            <td>
+                                                <div class="fw-semibold">{{ line.item_name }}</div>
+                                                <small class="text-muted">{{ line.item_code or '-' }}</small>
+                                            </td>
+                                            <td>{{ line.currency_code }}</td>
+                                            <td>{{ line.unit_price }}</td>
+                                            <td>{{ line.discount_pct }}</td>
+                                            <td>{{ line.tax_pct }}</td>
+                                            <td>
+                                                {% if line.lead_time_days is not none %}
+                                                    {{ line.lead_time_days }} días
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </td>
+                                            <td class="pe-4">
+                                                <div>{{ line.brand_model or '-' }}</div>
+                                                {% if line.tax_included %}
+                                                    <small class="text-success">Impuesto incluido</small>
+                                                {% else %}
+                                                    <small class="text-muted">Impuesto no incluido</small>
+                                                {% endif %}
+                                                {% if line.notes %}
+                                                    <div class="small text-muted mt-1">{{ line.notes }}</div>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="p-5 text-center">
+                            <i class="bi bi-receipt fs-1 text-muted"></i>
+                            <h6 class="fw-bold mt-3">No hay líneas registradas</h6>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if quotation_batch.purchase_request %}
+                <div class="card border-0 shadow-sm rounded-4 mt-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3">Solicitud relacionada</h5>
+                        <a href="{{ url_for('purchases.request_detail', request_id=quotation_batch.purchase_request.id) }}"
+                           class="text-decoration-none border rounded-3 p-3 d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold text-dark">{{ quotation_batch.purchase_request.number }}</div>
+                                <small class="text-muted">Ver detalle de la solicitud origen</small>
+                            </div>
+                            <i class="bi bi-arrow-right text-dark"></i>
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

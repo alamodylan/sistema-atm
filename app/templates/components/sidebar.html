@@ -47,9 +47,10 @@
                 <i class="bi bi-bar-chart-line me-2"></i>Reportes
             </a>
 
-            <span class="nav-link sidebar-link disabled">
+            <a href="{{ url_for('purchases.home') }}"
+               class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('purchases.') %}active{% endif %}">
                 <i class="bi bi-cart3 me-2"></i>Compras
-            </span>
+            </a>
 
             <span class="nav-link sidebar-link disabled">
                 <i class="bi bi-arrow-left-right me-2"></i>Traslados

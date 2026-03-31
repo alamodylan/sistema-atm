@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="mb-4">
+        <h2 class="fw-bold mb-1">Compras</h2>
+        <p class="text-muted mb-0">
+            Gestión corporativa de solicitudes, cotizaciones, órdenes de compra, recepción y artículos pendientes.
+        </p>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12 col-md-6 col-xl-4">
+            <a href="{{ url_for('purchases.list_requests') }}" class="text-decoration-none">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
+                                 style="width: 52px; height: 52px;">
+                                <i class="bi bi-card-checklist fs-4 text-dark"></i>
+                            </div>
+                            <div>
+                                <h5 class="fw-bold mb-0 text-dark">Solicitudes</h5>
+                                <small class="text-muted">Inicio del flujo</small>
+                            </div>
+                        </div>
+                        <p class="text-muted mb-0">
+                            Crear y dar seguimiento a solicitudes de compra con artículos normales o pendientes.
+                        </p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-4">
+            <a href="{{ url_for('purchases.list_pending_articles_route') }}" class="text-decoration-none">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
+                                 style="width: 52px; height: 52px;">
+                                <i class="bi bi-tags fs-4 text-dark"></i>
+                            </div>
+                            <div>
+                                <h5 class="fw-bold mb-0 text-dark">Artículos pendientes</h5>
+                                <small class="text-muted">Sin código definitivo</small>
+                            </div>
+                        </div>
+                        <p class="text-muted mb-0">
+                            Registrar materiales provisionales y vincularlos luego al artículo oficial.
+                        </p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-4">
+            <a href="{{ url_for('purchases.list_quotations') }}" class="text-decoration-none">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
+                                 style="width: 52px; height: 52px;">
+                                <i class="bi bi-cash-coin fs-4 text-dark"></i>
+                            </div>
+                            <div>
+                                <h5 class="fw-bold mb-0 text-dark">Cotizaciones</h5>
+                                <small class="text-muted">Comparación de proveedores</small>
+                            </div>
+                        </div>
+                        <p class="text-muted mb-0">
+                            Registrar propuestas económicas por proveedor y preparar la orden de compra.
+                        </p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-4">
+            <a href="{{ url_for('purchases.list_orders') }}" class="text-decoration-none">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
+                                 style="width: 52px; height: 52px;">
+                                <i class="bi bi-file-earmark-text fs-4 text-dark"></i>
+                            </div>
+                            <div>
+                                <h5 class="fw-bold mb-0 text-dark">Órdenes de compra</h5>
+                                <small class="text-muted">Documento formal</small>
+                            </div>
+                        </div>
+                        <p class="text-muted mb-0">
+                            Crear órdenes, controlar aprobaciones y administrar recepción parcial o total.
+                        </p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-4">
+            <a href="{{ url_for('purchases.list_entries') }}" class="text-decoration-none">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
+                                 style="width: 52px; height: 52px;">
+                                <i class="bi bi-box-arrow-in-down fs-4 text-dark"></i>
+                            </div>
+                            <div>
+                                <h5 class="fw-bold mb-0 text-dark">Entrada a inventario</h5>
+                                <small class="text-muted">Recepción real</small>
+                            </div>
+                        </div>
+                        <p class="text-muted mb-0">
+                            Registrar facturas, recibir artículos y actualizar stock de bodega y ubicación.
+                        </p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

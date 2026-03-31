@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">Detalle de orden de compra</h2>
+            <p class="text-muted mb-0">{{ purchase_order.number }}</p>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{{ url_for('purchases.list_orders') }}" class="btn btn-light rounded-3">
+                <i class="bi bi-arrow-left me-2"></i>Volver
+            </a>
+
+            {% if purchase_order.approval_status == 'BORRADOR' %}
+                <form method="post" action="{{ url_for('purchases.approve_order', order_id=purchase_order.id) }}">
+                    <input type="hidden" name="reason" value="Aprobación directa desde detalle">
+                    <button type="submit" class="btn btn-success rounded-3">
+                        <i class="bi bi-check2-circle me-2"></i>Aprobar
+                    </button>
+                </form>
+
+                <form method="post" action="{{ url_for('purchases.reject_order', order_id=purchase_order.id) }}">
+                    <input type="hidden" name="reason" value="Rechazo directo desde detalle">
+                    <button type="submit" class="btn btn-danger rounded-3">
+                        <i class="bi bi-x-circle me-2"></i>Rechazar
+                    </button>
+                </form>
+            {% endif %}
+
+            {% if purchase_order.approval_status in ['APROBADA', 'RECIBIDA_PARCIAL'] %}
+                <a href="{{ url_for('purchases.create_entry') }}" class="btn btn-dark rounded-3">
+                    <i class="bi bi-box-arrow-in-down me-2"></i>Registrar entrada
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12 col-xl-4">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3">Encabezado</h5>
+
+                    <dl class="row mb-0">
+                        <dt class="col-5 text-muted">Número</dt>
+                        <dd class="col-7 fw-semibold">{{ purchase_order.number }}</dd>
+
+                        <dt class="col-5 text-muted">Proveedor</dt>
+                        <dd class="col-7">{{ purchase_order.supplier.commercial_name if purchase_order.supplier else '-' }}</dd>
+
+                        <dt class="col-5 text-muted">Solicitud</dt>
+                        <dd class="col-7">
+                            {% if purchase_order.purchase_request %}
+                                {{ purchase_order.purchase_request.number }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-5 text-muted">Estado</dt>
+                        <dd class="col-7">
+                            {% if purchase_order.approval_status == 'APROBADA' %}
+                                <span class="badge text-bg-success">{{ purchase_order.approval_status }}</span>
+                            {% elif purchase_order.approval_status in ['RECHAZADA', 'ANULADA'] %}
+                                <span class="badge text-bg-danger">{{ purchase_order.approval_status }}</span>
+                            {% elif purchase_order.approval_status in ['RECIBIDA_PARCIAL', 'RECIBIDA_TOTAL'] %}
+                                <span class="badge text-bg-info">{{ purchase_order.approval_status }}</span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">{{ purchase_order.approval_status }}</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-5 text-muted">Moneda</dt>
+                        <dd class="col-7">{{ purchase_order.currency_code }}</dd>
+
+                        <dt class="col-5 text-muted">Pago</dt>
+                        <dd class="col-7">{{ purchase_order.payment_terms or '-' }}</dd>
+
+                        <dt class="col-5 text-muted">Predio sugerido</dt>
+                        <dd class="col-7">{{ purchase_order.site.name if purchase_order.site else 'No definido' }}</dd>
+
+                        <dt class="col-5 text-muted">Bodega sugerida</dt>
+                        <dd class="col-7">{{ purchase_order.warehouse.name if purchase_order.warehouse else 'No definida' }}</dd>
+
+                        <dt class="col-5 text-muted">Creado por</dt>
+                        <dd class="col-7">
+                            {{ purchase_order.generated_by_user.name if purchase_order.generated_by_user and purchase_order.generated_by_user.name else purchase_order.generated_by_user.username if purchase_order.generated_by_user else '-' }}
+                        </dd>
+
+                        <dt class="col-5 text-muted">Fecha</dt>
+                        <dd class="col-7">
+                            {{ purchase_order.created_at.strftime('%d/%m/%Y %H:%M') if purchase_order.created_at else '-' }}
+                        </dd>
+                    </dl>
+
+                    {% if purchase_order.notes %}
+                        <hr>
+                        <h6 class="fw-bold">Notas</h6>
+                        <p class="mb-0 text-muted">{{ purchase_order.notes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if purchase_order.approvals %}
+                <div class="card border-0 shadow-sm rounded-4 mt-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3">Historial de aprobación</h5>
+
+                        <div class="d-flex flex-column gap-3">
+                            {% for item in purchase_order.approvals %}
+                                <div class="border rounded-3 p-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <div class="fw-semibold">{{ item.status }}</div>
+                                        <small class="text-muted">
+                                            {{ item.created_at.strftime('%d/%m/%Y %H:%M') if item.created_at else '-' }}
+                                        </small>
+                                    </div>
+                                    <div class="text-muted small mb-1">
+                                        {{ item.approved_by_user.name if item.approved_by_user and item.approved_by_user.name else item.approved_by_user.username if item.approved_by_user else 'Sin usuario' }}
+                                    </div>
+                                    <div class="small text-muted">{{ item.reason or 'Sin observación' }}</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="col-12 col-xl-8">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-0">
+                    <div class="p-4 border-bottom">
+                        <h5 class="fw-bold mb-1">Líneas de orden</h5>
+                        <p class="text-muted mb-0">
+                            Artículos, cantidades y costos incluidos en esta orden.
+                        </p>
+                    </div>
+
+                    {% if purchase_order.lines %}
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-4">Artículo</th>
+                                        <th>Código</th>
+                                        <th>Cant. ordenada</th>
+                                        <th>Cant. recibida</th>
+                                        <th>Unidad</th>
+                                        <th>Costo unitario</th>
+                                        <th>Total</th>
+                                        <th class="pe-4">Notas</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for line in purchase_order.lines %}
+                                        <tr>
+                                            <td class="ps-4 fw-semibold">{{ line.item_name }}</td>
+                                            <td>{{ line.item_code or '-' }}</td>
+                                            <td>{{ line.quantity_ordered }}</td>
+                                            <td>
+                                                {{ line.quantity_received }}
+                                                {% if line.is_fully_received %}
+                                                    <div><small class="text-success">Completada</small></div>
+                                                {% elif line.pending_quantity > 0 %}
+                                                    <div><small class="text-muted">Pendiente: {{ line.pending_quantity }}</small></div>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ line.unit.name if line.unit else '-' }}</td>
+                                            <td>{{ line.unit_cost }}</td>
+                                            <td>{{ line.line_total }}</td>
+                                            <td class="pe-4">{{ line.line_notes or '-' }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="p-5 text-center">
+                            <i class="bi bi-list-ul fs-1 text-muted"></i>
+                            <h6 class="fw-bold mt-3">No hay líneas registradas</h6>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if purchase_order.inventory_entries %}
+                <div class="card border-0 shadow-sm rounded-4 mt-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3">Entradas relacionadas</h5>
+                        <div class="d-flex flex-column gap-2">
+                            {% for item in purchase_order.inventory_entries %}
+                                <a href="{{ url_for('purchases.entry_detail', entry_id=item.id) }}"
+                                   class="text-decoration-none border rounded-3 p-3 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="fw-semibold text-dark">{{ item.number }}</div>
+                                        <small class="text-muted">
+                                            Factura: {{ item.invoice_number }} |
+                                            {{ item.created_at.strftime('%d/%m/%Y %H:%M') if item.created_at else '-' }}
+                                        </small>
+                                    </div>
+                                    <i class="bi bi-arrow-right text-dark"></i>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

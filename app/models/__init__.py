@@ -36,6 +36,12 @@ from .work_order_request import WorkOrderRequest
 from .work_order_request_line import WorkOrderRequestLine
 from .work_order_service import WorkOrderService
 from .supplier import Supplier
+from .purchase_request_line import PurchaseRequestLine
+from .purchase_order_line import PurchaseOrderLine
+from .purchase_order_approval import PurchaseOrderApproval
+from .quotation_batch import QuotationBatch
+from .quotation_line import QuotationLine
+from .pending_article import PendingArticle
 
 __all__ = [
     "Role",
@@ -79,4 +85,10 @@ __all__ = [
     "PurchaseRequest",
     "ServiceCatalog",
     "Supplier",
+    "PurchaseRequestLine",
+    "PurchaseOrderLine",
+    "PurchaseOrderApproval",
+    "QuotationBatch",
+    "QuotationLine",
+    "PendingArticle",
 ]

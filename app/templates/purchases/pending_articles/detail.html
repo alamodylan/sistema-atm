@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">Detalle de artículo pendiente</h2>
+            <p class="text-muted mb-0">
+                {{ pending_article.provisional_code or 'SIN-CODIGO' }}
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('purchases.list_pending_articles_route') }}" class="btn btn-light rounded-3">
+                <i class="bi bi-arrow-left me-2"></i>Volver
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12 col-xl-5">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3">Información general</h5>
+
+                    <dl class="row mb-0">
+                        <dt class="col-5 text-muted">Código</dt>
+                        <dd class="col-7 fw-semibold">
+                            {{ pending_article.provisional_code or 'SIN-CODIGO' }}
+                        </dd>
+
+                        <dt class="col-5 text-muted">Nombre</dt>
+                        <dd class="col-7">{{ pending_article.provisional_name }}</dd>
+
+                        <dt class="col-5 text-muted">Estado</dt>
+                        <dd class="col-7">
+                            {% if pending_article.status == 'CODIFICADO' %}
+                                <span class="badge text-bg-success">{{ pending_article.status }}</span>
+                            {% elif pending_article.status == 'CANCELADO' %}
+                                <span class="badge text-bg-danger">{{ pending_article.status }}</span>
+                            {% else %}
+                                <span class="badge text-bg-warning">{{ pending_article.status }}</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-5 text-muted">Categoría</dt>
+                        <dd class="col-7">{{ pending_article.category.name if pending_article.category else '-' }}</dd>
+
+                        <dt class="col-5 text-muted">Unidad</dt>
+                        <dd class="col-7">{{ pending_article.unit.name if pending_article.unit else '-' }}</dd>
+
+                        <dt class="col-5 text-muted">Solicitado por</dt>
+                        <dd class="col-7">
+                            {{ pending_article.requested_by_user.name if pending_article.requested_by_user and pending_article.requested_by_user.name else pending_article.requested_by_user.username if pending_article.requested_by_user else '-' }}
+                        </dd>
+
+                        <dt class="col-5 text-muted">Fecha</dt>
+                        <dd class="col-7">
+                            {{ pending_article.created_at.strftime('%d/%m/%Y %H:%M') if pending_article.created_at else '-' }}
+                        </dd>
+                    </dl>
+
+                    {% if pending_article.description %}
+                        <hr>
+                        <h6 class="fw-bold">Descripción</h6>
+                        <p class="mb-0 text-muted">{{ pending_article.description }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if pending_article.linked_article %}
+                <div class="card border-0 shadow-sm rounded-4 mt-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3">Artículo vinculado</h5>
+                        <div class="border rounded-3 p-3 bg-light">
+                            <div class="fw-semibold">{{ pending_article.linked_article.code }}</div>
+                            <div class="text-muted">{{ pending_article.linked_article.name }}</div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="col-12 col-xl-7">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3">Resolver codificación</h5>
+
+                    {% if pending_article.status == 'CODIFICADO' %}
+                        <div class="alert alert-success rounded-3 mb-0">
+                            Este artículo pendiente ya fue resuelto y vinculado a un artículo real.
+                        </div>
+                    {% elif pending_article.status == 'CANCELADO' %}
+                        <div class="alert alert-danger rounded-3 mb-0">
+                            Este artículo pendiente está cancelado y no puede resolverse.
+                        </div>
+                    {% else %}
+                        <form method="post"
+                              action="{{ url_for('purchases.resolve_pending_article_route', pending_article_id=pending_article.id) }}">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Artículo definitivo</label>
+                                <select name="linked_article_id" class="form-select rounded-3" required>
+                                    <option value="">Seleccione un artículo real</option>
+                                    {% for item in articles %}
+                                        <option value="{{ item.id }}">
+                                            {{ item.code }} - {{ item.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">
+                                    Al resolverlo, este pendiente quedará vinculado al artículo oficial.
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end">
+                                <button type="submit" class="btn btn-dark rounded-3">
+                                    <i class="bi bi-check2-circle me-2"></i>Resolver pendiente
+                                </button>
+                            </div>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm rounded-4 mt-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3">Impacto en Compras</h5>
+                    <ul class="mb-0 text-muted">
+                        <li>Puede usarse en solicitudes de compra.</li>
+                        <li>Puede cotizarse mientras aún no existe como artículo oficial.</li>
+                        <li>Puede llegar a orden de compra.</li>
+                        <li>Para afectar inventario real, debe quedar resuelto contra un artículo codificado.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

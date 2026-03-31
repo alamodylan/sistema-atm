@@ -1,4 +1,5 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
 from app.extensions import db
 
 
@@ -25,7 +26,7 @@ class InventoryEntry(db.Model):
     site_id = db.Column(
         db.BigInteger,
         db.ForeignKey("atm.sites.id"),
-        nullable=False,
+        nullable=True,
     )
 
     warehouse_id = db.Column(
@@ -51,15 +52,15 @@ class InventoryEntry(db.Model):
         default=lambda: datetime.now(UTC),
     )
 
-    # relaciones
     site = db.relationship("Site", back_populates="inventory_entries")
     warehouse = db.relationship("Warehouse")
-    purchase_order = db.relationship("PurchaseOrder")
+    purchase_order = db.relationship("PurchaseOrder", back_populates="inventory_entries")
+    supplier = db.relationship("Supplier")
     entered_by_user = db.relationship("User")
 
     lines = db.relationship(
         "InventoryEntryLine",
         back_populates="inventory_entry",
         cascade="all, delete-orphan",
-        lazy="dynamic",
+        lazy="selectin",
     )
