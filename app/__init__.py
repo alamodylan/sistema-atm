@@ -31,6 +31,7 @@ def create_app():
     from .routes.deletion_routes import deletion_bp
     from .routes.waste_routes import waste_bp
     from .routes.report_routes import report_bp
+    from .routes.purchases_routes import purchases_bp
 
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(dashboard_bp, url_prefix="/")
