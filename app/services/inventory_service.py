@@ -71,7 +71,7 @@ def get_or_create_location_stock_record(article_id: int, warehouse_location_id: 
     record = WarehouseLocationStock(
         article_id=article_id,
         warehouse_location_id=warehouse_location_id,
-        quantity=Decimal("0.00"),
+        quantity_on_hand=Decimal("0.00"),
     )
     db.session.add(record)
     db.session.flush()
@@ -146,7 +146,7 @@ def add_stock(
 
     if warehouse_location_id:
         location_record = get_or_create_location_stock_record(article_id, warehouse_location_id)
-        location_record.quantity = Decimal(str(location_record.quantity or 0)) + qty
+        location_record.quantity_on_hand = Decimal(str(location_record.quantity_on_hand or 0)) + qty
 
     unit_cost_decimal = None
     total_cost_decimal = None
@@ -229,7 +229,7 @@ def subtract_stock(
             raise InventoryServiceError("No existe stock por ubicación para ese artículo en esa ubicación.")
         if Decimal(str(location_record.quantity or 0)) < qty:
             raise InventoryServiceError("No hay suficiente inventario en la ubicación indicada.")
-        location_record.quantity = Decimal(str(location_record.quantity or 0)) - qty
+        location_record.quantity_on_hand = Decimal(str(location_record.quantity or 0)) - qty
 
     ledger_entry = create_inventory_ledger_entry(
         movement_type=movement_type,
@@ -474,3 +474,58 @@ def get_article_stock_summary(article_id: int) -> list[dict]:
         )
 
     return summary
+
+def get_inventory_by_warehouse(warehouse_id: int) -> list[dict]:
+    warehouse = Warehouse.query.get(warehouse_id)
+    if not warehouse:
+        raise InventoryServiceError("La bodega no existe.")
+
+    rows = (
+        db.session.query(WarehouseStock, Article)
+        .join(Article, Article.id == WarehouseStock.article_id)
+        .filter(WarehouseStock.warehouse_id == warehouse_id)
+        .order_by(Article.name.asc())
+        .all()
+    )
+
+    result = []
+    for stock, article in rows:
+        result.append(
+            {
+                "article_id": article.id,
+                "code": article.code,
+                "name": article.name,
+                "quantity_on_hand": str(stock.quantity_on_hand),
+                "last_unit_cost": str(stock.last_unit_cost or 0),
+                "avg_unit_cost": str(stock.avg_unit_cost or 0),
+            }
+        )
+
+    return result
+def get_structures_by_site_and_type(site_id: int, warehouse_type: str) -> list[Warehouse]:
+    return (
+        Warehouse.query
+        .filter(
+            Warehouse.site_id == site_id,
+            Warehouse.warehouse_type == warehouse_type
+        )
+        .order_by(Warehouse.name.asc())
+        .all()
+    )
+def get_inventory_with_warehouse_info(warehouse_id: int) -> dict:
+    warehouse = Warehouse.query.get(warehouse_id)
+    if not warehouse:
+        raise InventoryServiceError("La bodega no existe.")
+
+    items = get_inventory_by_warehouse(warehouse_id)
+
+    return {
+        "warehouse": {
+            "id": warehouse.id,
+            "name": warehouse.name,
+            "code": warehouse.code,
+            "type": warehouse.warehouse_type,
+            "site_id": warehouse.site_id,
+        },
+        "items": items,
+    }

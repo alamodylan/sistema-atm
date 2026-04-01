@@ -1,77 +1,72 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
-{% block title %}Inventario | Sistema de Bodega{% endblock %}
+{% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-{% include 'components/page_header.html' with context %}
-
-<div class="row g-4">
-    <div class="col-12 col-lg-4">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body">
-                <h5 class="fw-bold mb-3">Consulta rápida</h5>
-                <form method="GET" action="{{ url_for('inventory.search_articles') }}">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Código o nombre</label>
-                        <input
-                            type="text"
-                            class="form-control"
-                            name="q"
-                            placeholder="Buscar artículo..."
-                        >
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100">Buscar</button>
-                </form>
-            </div>
-        </div>
+<div class="container py-4">
+    <div class="mb-4">
+        <h2 class="mb-1">{{ title }}</h2>
+        <p class="text-muted mb-0">{{ subtitle }}</p>
     </div>
 
-    <div class="col-12 col-lg-8">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body">
-                <h5 class="fw-bold mb-3">Artículos recientes / activos</h5>
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <a class="nav-link {% if active_type == 'BODEGA' %}active{% endif %}"
+               href="{{ url_for('inventory.inventory_type', warehouse_type='BODEGA') }}">
+                Bodegas
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if active_type == 'MINIBODEGA' %}active{% endif %}"
+               href="{{ url_for('inventory.inventory_type', warehouse_type='MINIBODEGA') }}">
+                Mini bodegas
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if active_type == 'CAJA_HERRAMIENTAS' %}active{% endif %}"
+               href="{{ url_for('inventory.inventory_type', warehouse_type='CAJA_HERRAMIENTAS') }}">
+                Cajas de herramientas
+            </a>
+        </li>
+    </ul>
 
+    {% set visible_structures = selected_structures if selected_structures is defined else structures_by_type.get(active_type, []) %}
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+            {% if visible_structures %}
                 <div class="table-responsive">
-                    <table class="table align-middle">
-                        <thead class="table-light">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
                             <tr>
                                 <th>Código</th>
-                                <th>Artículo</th>
-                                <th>Familia</th>
-                                <th>Unidad</th>
-                                <th>Acción</th>
+                                <th>Nombre</th>
+                                <th>Tipo</th>
+                                <th class="text-end">Acción</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% if articles %}
-                                {% for article in articles %}
-                                    <tr>
-                                        <td>{{ article.code }}</td>
-                                        <td>{{ article.name }}</td>
-                                        <td>{{ article.family_code or "-" }}</td>
-                                        <td>{{ article.unit.name if article.unit else "-" }}</td>
-                                        <td>
-                                            <a
-                                                href="{{ url_for('inventory.article_summary', article_id=article.id) }}"
-                                                class="btn btn-sm btn-outline-primary"
-                                            >
-                                                Ver resumen
-                                            </a>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">
-                                        No hay artículos para mostrar.
-                                    </td>
-                                </tr>
-                            {% endif %}
+                            {% for item in visible_structures %}
+                            <tr>
+                                <td>{{ item.code }}</td>
+                                <td>{{ item.name }}</td>
+                                <td>{{ item.warehouse_type }}</td>
+                                <td class="text-end">
+                                    <a href="{{ url_for('inventory.warehouse_inventory_detail', warehouse_id=item.id) }}"
+                                       class="btn btn-sm btn-primary">
+                                        Ver inventario
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
-
-            </div>
+            {% else %}
+                <div class="alert alert-light border mb-0">
+                    No existen estructuras registradas para este tipo en el predio activo.
+                </div>
+            {% endif %}
         </div>
     </div>
 </div>

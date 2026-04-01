@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">{{ warehouse.name }}</h2>
+            <p class="text-muted mb-0">
+                {{ warehouse.code }} · {{ warehouse_type_label }}
+            </p>
+        </div>
+
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('inventory.inventory_type', warehouse_type=warehouse.warehouse_type) }}"
+               class="btn btn-outline-secondary">
+                Volver
+            </a>
+            <a href="{{ url_for('inventory.export_warehouse_inventory', warehouse_id=warehouse.id) }}"
+               class="btn btn-success">
+                Exportar a Excel
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+            {% if items %}
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Artículo</th>
+                                <th class="text-end">Existencia</th>
+                                <th class="text-end">Costo último</th>
+                                <th class="text-end">Costo promedio</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td>{{ item.code }}</td>
+                                <td>{{ item.name }}</td>
+                                <td class="text-end">{{ item.quantity_on_hand }}</td>
+                                <td class="text-end">{{ item.last_unit_cost }}</td>
+                                <td class="text-end">{{ item.avg_unit_cost }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-light border mb-0">
+                    Esta estructura no tiene inventario registrado.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

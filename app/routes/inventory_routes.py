@@ -1,16 +1,50 @@
-#routes/ inventory_routes.py
-from flask import Blueprint, flash, render_template, request
-from flask_login import login_required
+from __future__ import annotations
 
-from app.models.article import Article
-from app.models.inventory import InventoryLedger, WarehouseStock
+from io import BytesIO
+
+from flask import (
+    Blueprint,
+    flash,
+    redirect,
+    render_template,
+    send_file,
+    session,
+    url_for,
+)
+from flask_login import login_required
+from openpyxl import Workbook
+from openpyxl.styles import Font
+
 from app.models.warehouse import Warehouse
 from app.services.inventory_service import (
     InventoryServiceError,
-    get_article_stock_summary,
+    get_inventory_by_warehouse,
+    get_structures_by_site_and_type,
 )
 
 inventory_bp = Blueprint("inventory", __name__)
+
+WAREHOUSE_TYPE_LABELS = {
+    "BODEGA": "Bodegas",
+    "MINIBODEGA": "Mini bodegas",
+    "CAJA_HERRAMIENTAS": "Cajas de herramientas",
+}
+
+
+def _get_active_site_id() -> int:
+    active_site_id = session.get("active_site_id")
+    if not active_site_id:
+        raise InventoryServiceError(
+            "Debe seleccionar un predio antes de ingresar al inventario."
+        )
+    return int(active_site_id)
+
+
+def _get_valid_warehouse_type(warehouse_type: str) -> str:
+    warehouse_type = (warehouse_type or "").strip().upper()
+    if warehouse_type not in WAREHOUSE_TYPE_LABELS:
+        raise InventoryServiceError("El tipo de inventario solicitado no es válido.")
+    return warehouse_type
 
 
 # =========================================================
@@ -19,183 +53,180 @@ inventory_bp = Blueprint("inventory", __name__)
 @inventory_bp.route("/", methods=["GET"])
 @login_required
 def inventory_home():
-    query = (
-        db_query_articles()
-        .order_by(Article.name.asc())
-        .limit(100)
-        .all()
-    )
-
-    return render_template(
-        "inventory/index.html",
-        title="Inventario",
-        subtitle="Consulta rápida y resumen general del inventario por artículo y bodega.",
-        articles=query,
-    )
-
-
-# =========================================================
-# BÚSQUEDA DE ARTÍCULOS
-# =========================================================
-@inventory_bp.route("/articles/search", methods=["GET"])
-@login_required
-def search_articles():
-    q = (request.args.get("q") or "").strip()
-    code = (request.args.get("code") or "").strip()
-
     try:
-        query = db_query_articles()
+        active_site_id = _get_active_site_id()
 
-        if q:
-            like_value = f"%{q}%"
-            query = query.filter(
-                (Article.name.ilike(like_value))
-                | (Article.code.ilike(like_value))
-                | (Article.barcode.ilike(like_value))
+        bodegas = get_structures_by_site_and_type(active_site_id, "BODEGA")
+        minibodegas = get_structures_by_site_and_type(active_site_id, "MINIBODEGA")
+        cajas = get_structures_by_site_and_type(active_site_id, "CAJA_HERRAMIENTAS")
+
+        return render_template(
+            "inventory/index.html",
+            title="Inventario",
+            subtitle="Seleccione el tipo de estructura para consultar el inventario del predio activo.",
+            active_site_id=active_site_id,
+            active_type="BODEGA",
+            structures_by_type={
+                "BODEGA": bodegas,
+                "MINIBODEGA": minibodegas,
+                "CAJA_HERRAMIENTAS": cajas,
+            },
+            type_labels=WAREHOUSE_TYPE_LABELS,
+        )
+
+    except InventoryServiceError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("dashboard.home"))
+
+    except Exception:
+        flash("Error al cargar la pantalla principal de inventario.", "danger")
+        return redirect(url_for("dashboard.home"))
+
+
+# =========================================================
+# INVENTARIO - ESTRUCTURAS POR TIPO
+# =========================================================
+@inventory_bp.route("/type/<string:warehouse_type>", methods=["GET"])
+@login_required
+def inventory_type(warehouse_type: str):
+    try:
+        active_site_id = _get_active_site_id()
+        warehouse_type = _get_valid_warehouse_type(warehouse_type)
+
+        structures = get_structures_by_site_and_type(active_site_id, warehouse_type)
+
+        return render_template(
+            "inventory/index.html",
+            title="Inventario",
+            subtitle="Seleccione la estructura que desea consultar dentro del predio activo.",
+            active_site_id=active_site_id,
+            active_type=warehouse_type,
+            structures_by_type={
+                "BODEGA": get_structures_by_site_and_type(active_site_id, "BODEGA"),
+                "MINIBODEGA": get_structures_by_site_and_type(active_site_id, "MINIBODEGA"),
+                "CAJA_HERRAMIENTAS": get_structures_by_site_and_type(active_site_id, "CAJA_HERRAMIENTAS"),
+            },
+            selected_structures=structures,
+            type_labels=WAREHOUSE_TYPE_LABELS,
+        )
+
+    except InventoryServiceError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("inventory.inventory_home"))
+
+    except Exception:
+        flash("Error al cargar las estructuras del inventario.", "danger")
+        return redirect(url_for("inventory.inventory_home"))
+
+
+# =========================================================
+# INVENTARIO - DETALLE DE UNA ESTRUCTURA
+# =========================================================
+@inventory_bp.route("/warehouse/<int:warehouse_id>", methods=["GET"])
+@login_required
+def warehouse_inventory_detail(warehouse_id: int):
+    try:
+        active_site_id = _get_active_site_id()
+
+        warehouse = Warehouse.query.get(warehouse_id)
+        if not warehouse:
+            raise InventoryServiceError("La estructura solicitada no existe.")
+
+        if int(warehouse.site_id) != active_site_id:
+            raise InventoryServiceError("La estructura solicitada no pertenece al predio activo.")
+
+        items = get_inventory_by_warehouse(warehouse_id)
+
+        return render_template(
+            "inventory/detail.html",
+            title="Inventario de estructura",
+            subtitle="Consulte el inventario real de la estructura seleccionada.",
+            warehouse=warehouse,
+            items=items,
+            active_site_id=active_site_id,
+            warehouse_type_label=WAREHOUSE_TYPE_LABELS.get(
+                warehouse.warehouse_type, warehouse.warehouse_type
+            ),
+        )
+
+    except InventoryServiceError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("inventory.inventory_home"))
+
+    except Exception:
+        flash("Error al cargar el detalle del inventario.", "danger")
+        return redirect(url_for("inventory.inventory_home"))
+
+
+# =========================================================
+# INVENTARIO - EXPORTAR A EXCEL
+# =========================================================
+@inventory_bp.route("/warehouse/<int:warehouse_id>/export", methods=["GET"])
+@login_required
+def export_warehouse_inventory(warehouse_id: int):
+    try:
+        active_site_id = _get_active_site_id()
+
+        warehouse = Warehouse.query.get(warehouse_id)
+        if not warehouse:
+            raise InventoryServiceError("La estructura solicitada no existe.")
+
+        if int(warehouse.site_id) != active_site_id:
+            raise InventoryServiceError("La estructura solicitada no pertenece al predio activo.")
+
+        items = get_inventory_by_warehouse(warehouse_id)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Inventario"
+
+        headers = [
+            "Código",
+            "Artículo",
+            "Existencia",
+            "Costo último",
+            "Costo promedio",
+        ]
+        ws.append(headers)
+
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+
+        for item in items:
+            ws.append(
+                [
+                    item["code"],
+                    item["name"],
+                    float(item["quantity_on_hand"]),
+                    float(item["last_unit_cost"]),
+                    float(item["avg_unit_cost"]),
+                ]
             )
 
-        if code:
-            query = query.filter(Article.code.ilike(f"%{code}%"))
+        ws["G1"] = "Estructura"
+        ws["G2"] = warehouse.name
+        ws["H1"] = "Código estructura"
+        ws["H2"] = warehouse.code
+        ws["I1"] = "Tipo"
+        ws["I2"] = warehouse.warehouse_type
 
-        articles = query.order_by(Article.name.asc()).all()
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
 
-        return render_template(
-            "inventory/article_search.html",
-            title="Buscar artículo",
-            subtitle="Consulte artículos por código, nombre o código de barras.",
-            query=q,
-            code=code,
-            articles=articles,
+        filename = f"inventario_{warehouse.code}.xlsx"
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    except Exception:
-        flash("Error al buscar artículos.", "danger")
-        return render_template(
-            "inventory/article_search.html",
-            title="Buscar artículo",
-            subtitle="Consulte artículos por código, nombre o código de barras.",
-            query=q,
-            code=code,
-            articles=[],
-        )
-
-
-# =========================================================
-# RESUMEN DE STOCK POR ARTÍCULO
-# =========================================================
-@inventory_bp.route("/article/<int:article_id>/summary", methods=["GET"])
-@login_required
-def article_summary(article_id: int):
-    try:
-        article = Article.query.get(article_id)
-        if not article:
-            raise ValueError("El artículo no existe.")
-
-        summary = get_article_stock_summary(article_id)
-
-        return render_template(
-            "inventory/article_summary.html",
-            title="Resumen de artículo",
-            subtitle="Visualice cantidades por bodega, minibodega o caja de herramientas.",
-            article=article,
-            summary=summary,
-        )
-
-    except (InventoryServiceError, ValueError) as exc:
+    except InventoryServiceError as exc:
         flash(str(exc), "danger")
-        return render_template(
-            "inventory/article_summary.html",
-            title="Resumen de artículo",
-            subtitle="Visualice cantidades por bodega, minibodega o caja de herramientas.",
-            article=None,
-            summary=[],
-        )
+        return redirect(url_for("inventory.inventory_home"))
 
     except Exception:
-        flash("Error al cargar el resumen del artículo.", "danger")
-        return render_template(
-            "inventory/article_summary.html",
-            title="Resumen de artículo",
-            subtitle="Visualice cantidades por bodega, minibodega o caja de herramientas.",
-            article=None,
-            summary=[],
-        )
-
-
-# =========================================================
-# REPORTE DE MOVIMIENTOS DE INVENTARIO
-# =========================================================
-@inventory_bp.route("/stock/report", methods=["GET"])
-@login_required
-def stock_report():
-    date_from = (request.args.get("date_from") or "").strip()
-    date_to = (request.args.get("date_to") or "").strip()
-    article_code = (request.args.get("article_code") or "").strip()
-    warehouse_id = (request.args.get("warehouse_id") or "").strip()
-    movement_type = (request.args.get("movement_type") or "").strip()
-
-    try:
-        query = (
-            InventoryLedger.query
-            .join(Article, Article.id == InventoryLedger.article_id)
-            .join(Warehouse, Warehouse.id == InventoryLedger.warehouse_id)
-        )
-
-        if date_from:
-            query = query.filter(InventoryLedger.created_at >= date_from)
-
-        if date_to:
-            query = query.filter(InventoryLedger.created_at <= date_to)
-
-        if article_code:
-            query = query.filter(Article.code.ilike(f"%{article_code}%"))
-
-        if warehouse_id:
-            query = query.filter(InventoryLedger.warehouse_id == int(warehouse_id))
-
-        if movement_type:
-            query = query.filter(InventoryLedger.movement_type == movement_type)
-
-        movements = query.order_by(InventoryLedger.created_at.desc()).limit(300).all()
-
-        warehouses = Warehouse.query.order_by(Warehouse.name.asc()).all()
-
-        return render_template(
-            "inventory/stock_report.html",
-            title="Reporte de entradas y salidas",
-            subtitle="Consulte movimientos por rango de fechas, artículo o bodega.",
-            date_from=date_from,
-            date_to=date_to,
-            article_code=article_code,
-            warehouse_id=warehouse_id,
-            movement_type=movement_type,
-            movements=movements,
-            warehouses=warehouses,
-        )
-
-    except Exception:
-        flash("Error al cargar el reporte de inventario.", "danger")
-        return render_template(
-            "inventory/stock_report.html",
-            title="Reporte de entradas y salidas",
-            subtitle="Consulte movimientos por rango de fechas, artículo o bodega.",
-            date_from=date_from,
-            date_to=date_to,
-            article_code=article_code,
-            warehouse_id=warehouse_id,
-            movement_type=movement_type,
-            movements=[],
-            warehouses=[],
-        )
-
-
-# =========================================================
-# HELPER INTERNO DE CONSULTA BASE DE ARTÍCULOS
-# =========================================================
-def db_query_articles():
-    return (
-        Article.query
-        .outerjoin(WarehouseStock, WarehouseStock.article_id == Article.id)
-        .filter(Article.is_active.is_(True))
-        .distinct()
-    )
+        flash("Error al exportar el inventario a Excel.", "danger")
+        return redirect(url_for("inventory.inventory_home"))
