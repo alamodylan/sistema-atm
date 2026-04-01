@@ -138,11 +138,13 @@ def create_request():
         urgent_flags = request.form.getlist("line_is_urgent[]")
 
         max_len = max(
-            len(article_ids),
-            len(pending_article_ids),
-            len(quantities),
-            len(unit_ids),
-            len(line_notes_list),
+            [
+                len(article_ids),
+                len(pending_article_ids),
+                len(quantities),
+                len(unit_ids),
+                len(line_notes_list),
+            ],
             default=0,
         )
 
@@ -376,13 +378,14 @@ def create_quotation():
         notes_list = request.form.getlist("line_notes[]")
 
         max_len = max(
-            len(supplier_ids),
-            len(article_ids),
-            len(pending_article_ids),
-            len(prices),
+            [
+                len(article_ids),
+                len(pending_article_ids),
+                len(supplier_ids),
+                len(prices),
+            ],
             default=0,
         )
-
         lines: list[QuotationLinePayload] = []
 
         for index in range(max_len):
@@ -576,13 +579,16 @@ def create_order():
         line_notes_list = request.form.getlist("line_notes[]")
 
         max_len = max(
-            len(quantities),
-            len(article_ids),
-            len(pending_article_ids),
-            len(pr_line_ids),
-            len(q_line_ids),
+            [
+                len(article_ids),
+                len(pending_article_ids),
+                len(quantities),
+                len(pr_line_ids),
+                len(q_line_ids),
+            ],
             default=0,
         )
+
 
         lines: list[PurchaseOrderLinePayload] = []
 
@@ -826,7 +832,15 @@ def create_entry():
         taxes = request.form.getlist("line_tax_pct[]")
         line_notes_list = request.form.getlist("line_notes[]")
 
-        max_len = max(len(quantities), len(article_ids), len(pending_ids), default=0)
+        max_len = max(
+            [
+                len(article_ids),
+                len(pending_ids),
+                len(quantities),
+            ],
+            default=0,
+        )
+
 
         lines: list[InventoryEntryLinePayload] = []
 
