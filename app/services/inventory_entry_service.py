@@ -139,10 +139,19 @@ def create_inventory_entry(
     entered_by_user_id: int,
     invoice_number: str,
     invoice_date,
-    site_id: int | None,
     notes: str | None,
     lines: list[InventoryEntryLinePayload],
+    site_id: int | None = None,
 ) -> InventoryEntry:
+    if not purchase_order_id:
+        raise InventoryEntryServiceError("La orden de compra es obligatoria.")
+
+    if not supplier_id:
+        raise InventoryEntryServiceError("El proveedor es obligatorio.")
+
+    if not warehouse_id:
+        raise InventoryEntryServiceError("La bodega destino es obligatoria.")
+
     if not lines:
         raise InventoryEntryServiceError(
             "La entrada a inventario debe incluir al menos una línea."
