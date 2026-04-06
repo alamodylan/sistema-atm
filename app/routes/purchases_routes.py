@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import UTC
 from decimal import Decimal, InvalidOperation
+from zoneinfo import ZoneInfo
 
 from flask import (
     Blueprint,
@@ -62,6 +64,8 @@ from app.services.quotation_service import (
 
 purchases_bp = Blueprint("purchases", __name__, template_folder="../templates")
 
+CR_TZ = ZoneInfo("America/Costa_Rica")
+
 
 def _to_int(value: str | None) -> int | None:
     value = (value or "").strip()
@@ -83,6 +87,18 @@ def _get_valid_purchase_orders_for_receiving():
         )
         .order_by(PurchaseOrder.created_at.desc())
     )
+
+
+def _cr_datetime(value, fmt: str = "%d/%m/%Y %H:%M") -> str:
+    if not value:
+        return "-"
+
+    try:
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value.astimezone(CR_TZ).strftime(fmt)
+    except Exception:
+        return "-"
 
 
 @purchases_bp.route("/")
@@ -740,7 +756,7 @@ def create_order():
             )
 
         flash("Orden de compra creada correctamente.", "success")
-        return redirect(url_for("purchases.order_detail", order_id=purchase_order.id))
+        return redirect(url_for("purchases.order_print", order_id=purchase_order.id))
 
     return render_template(
         "purchases/orders/create.html",
@@ -764,6 +780,18 @@ def order_detail(order_id: int):
     return render_template(
         "purchases/orders/detail.html",
         purchase_order=purchase_order,
+        cr_datetime=_cr_datetime,
+    )
+
+
+@purchases_bp.route("/orders/<int:order_id>/print")
+@login_required
+def order_print(order_id: int):
+    purchase_order = get_purchase_order_or_404(order_id)
+    return render_template(
+        "purchases/orders/print.html",
+        purchase_order=purchase_order,
+        cr_datetime=_cr_datetime,
     )
 
 

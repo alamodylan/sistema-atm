@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Orden de compra {{ purchase_order.number }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 16mm;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #111827;
+            margin: 0;
+            background: #ffffff;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-bottom: 16px;
+        }
+
+        .btn {
+            border: 1px solid #111827;
+            background: #111827;
+            color: #ffffff;
+            padding: 10px 14px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .btn-light {
+            background: #ffffff;
+            color: #111827;
+        }
+
+        .sheet {
+            width: 100%;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            border-bottom: 2px solid #111827;
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+
+        .title h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .title p {
+            margin: 4px 0 0 0;
+            color: #4b5563;
+            font-size: 14px;
+        }
+
+        .meta {
+            text-align: right;
+            font-size: 13px;
+        }
+
+        .section {
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px 20px;
+            font-size: 14px;
+        }
+
+        .field strong {
+            display: inline-block;
+            min-width: 140px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th, td {
+            border: 1px solid #d1d5db;
+            padding: 8px;
+            vertical-align: top;
+        }
+
+        th {
+            background: #f3f4f6;
+            text-align: left;
+        }
+
+        .totals {
+            margin-top: 12px;
+            width: 320px;
+            margin-left: auto;
+            font-size: 14px;
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .notes {
+            min-height: 70px;
+            border: 1px solid #d1d5db;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+
+        .signatures {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-top: 40px;
+        }
+
+        .signature-box {
+            text-align: center;
+            font-size: 13px;
+        }
+
+        .signature-line {
+            border-top: 1px solid #111827;
+            margin-top: 42px;
+            padding-top: 8px;
+        }
+
+        @media print {
+            .toolbar {
+                display: none;
+            }
+
+            body {
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <a href="{{ url_for('purchases.order_detail', order_id=purchase_order.id) }}" class="btn btn-light">Volver al detalle</a>
+        <button type="button" class="btn" onclick="window.print()">Imprimir / Guardar PDF</button>
+    </div>
+
+    <div class="sheet">
+        <div class="header">
+            <div class="title">
+                <h1>Orden de Compra</h1>
+                <p>{{ purchase_order.number }}</p>
+            </div>
+            <div class="meta">
+                <div><strong>Fecha:</strong> {{ cr_datetime(purchase_order.created_at) }}</div>
+                <div><strong>Estado:</strong> {{ purchase_order.approval_status }}</div>
+                <div><strong>Moneda:</strong> {{ purchase_order.currency_code }}</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Datos generales</div>
+            <div class="grid">
+                <div class="field"><strong>Proveedor:</strong> {{ purchase_order.supplier.commercial_name if purchase_order.supplier else '-' }}</div>
+                <div class="field"><strong>Solicitud:</strong> {{ purchase_order.purchase_request.number if purchase_order.purchase_request else '-' }}</div>
+                <div class="field"><strong>Predio sugerido:</strong> {{ purchase_order.site.name if purchase_order.site else 'No definido' }}</div>
+                <div class="field"><strong>Bodega sugerida:</strong> {{ purchase_order.warehouse.name if purchase_order.warehouse else 'No definida' }}</div>
+                <div class="field"><strong>Condiciones de pago:</strong> {{ purchase_order.payment_terms or '-' }}</div>
+                <div class="field"><strong>Creado por:</strong> {{ purchase_order.generated_by_user.name if purchase_order.generated_by_user and purchase_order.generated_by_user.name else purchase_order.generated_by_user.username if purchase_order.generated_by_user else '-' }}</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Líneas de la orden</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 24%;">Artículo</th>
+                        <th style="width: 10%;">Código</th>
+                        <th style="width: 10%;">Cantidad</th>
+                        <th style="width: 10%;">Unidad</th>
+                        <th style="width: 12%;">Costo unitario</th>
+                        <th style="width: 8%;">Desc. %</th>
+                        <th style="width: 8%;">Imp. %</th>
+                        <th style="width: 9%;">Subtotal</th>
+                        <th style="width: 9%;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set ns = namespace(subtotal=0, total=0) %}
+                    {% for line in purchase_order.lines %}
+                        {% set ns.subtotal = ns.subtotal + (line.line_subtotal or 0) %}
+                        {% set ns.total = ns.total + (line.line_total or 0) %}
+                        <tr>
+                            <td>{{ line.item_name }}</td>
+                            <td>{{ line.item_code or '-' }}</td>
+                            <td>{{ line.quantity_ordered }}</td>
+                            <td>{{ line.unit.name if line.unit else '-' }}</td>
+                            <td>{{ line.unit_cost }}</td>
+                            <td>{{ line.discount_pct }}</td>
+                            <td>{{ line.tax_pct }}</td>
+                            <td>{{ line.line_subtotal }}</td>
+                            <td>{{ line.line_total }}</td>
+                        </tr>
+                    {% endfor %}
+                    {% if not purchase_order.lines %}
+                        <tr>
+                            <td colspan="9" style="text-align:center;">No hay líneas registradas.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+
+            <div class="totals">
+                <div class="totals-row">
+                    <strong>Subtotal general</strong>
+                    <span>{{ ns.subtotal }}</span>
+                </div>
+                <div class="totals-row">
+                    <strong>Total general</strong>
+                    <span>{{ ns.total }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Notas</div>
+            <div class="notes">{{ purchase_order.notes or 'Sin notas.' }}</div>
+        </div>
+
+        <div class="signatures">
+            <div class="signature-box">
+                <div class="signature-line">Solicitado por</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-line">Revisado por</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-line">Aprobado por</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.addEventListener("load", function () {
+            setTimeout(function () {
+                window.print();
+            }, 350);
+        });
+    </script>
+</body>
+</html>

@@ -244,7 +244,7 @@
             </div>
 
             <div class="col-12 col-md-3">
-                <label class="form-label fw-semibold">Costo sin impuesto</label>
+                <label class="form-label fw-semibold">Costo unitario sin impuesto</label>
                 <input type="number"
                        step="0.0001"
                        min="0"
@@ -254,7 +254,7 @@
             </div>
 
             <div class="col-12 col-md-3">
-                <label class="form-label fw-semibold">Costo con impuesto</label>
+                <label class="form-label fw-semibold">Costo unitario con impuesto</label>
                 <input type="number"
                        step="0.0001"
                        min="0"
@@ -283,6 +283,26 @@
                        value="0">
             </div>
 
+            <div class="col-12 col-md-6">
+                <label class="form-label fw-semibold">Subtotal línea</label>
+                <input type="number"
+                       step="0.0001"
+                       min="0"
+                       class="form-control rounded-3 line-subtotal-input"
+                       value="0"
+                       readonly>
+            </div>
+
+            <div class="col-12 col-md-6">
+                <label class="form-label fw-semibold">Total línea</label>
+                <input type="number"
+                       step="0.0001"
+                       min="0"
+                       class="form-control rounded-3 line-total-input"
+                       value="0"
+                       readonly>
+            </div>
+
             <div class="col-12">
                 <label class="form-label fw-semibold">Notas de línea</label>
                 <textarea name="line_notes[]" rows="2" class="form-control rounded-3"></textarea>
@@ -307,6 +327,11 @@
     const warehouseLocationsData = JSON.parse(
         document.getElementById("warehouse-locations-data").textContent || "{}"
     );
+
+    function toNumber(value) {
+        const n = parseFloat(value);
+        return Number.isFinite(n) ? n : 0;
+    }
 
     function updateLineNumbers() {
         const items = container.querySelectorAll(".entry-line-item");
@@ -353,6 +378,51 @@
         selectElement.appendChild(option);
     }
 
+    function calculateFromWithoutTax(lineElement) {
+        const costWo = toNumber(lineElement.querySelector(".line-cost-wo-tax-input").value);
+        const discount = toNumber(lineElement.querySelector(".line-discount-input").value);
+        const tax = toNumber(lineElement.querySelector(".line-tax-input").value);
+
+        const netUnitWithoutTax = costWo * (1 - (discount / 100));
+        const unitWithTax = netUnitWithoutTax * (1 + (tax / 100));
+
+        lineElement.querySelector(".line-cost-w-tax-input").value = Math.max(unitWithTax, 0).toFixed(4);
+    }
+
+    function calculateFromWithTax(lineElement) {
+        const costW = toNumber(lineElement.querySelector(".line-cost-w-tax-input").value);
+        const discount = toNumber(lineElement.querySelector(".line-discount-input").value);
+        const tax = toNumber(lineElement.querySelector(".line-tax-input").value);
+
+        const denominator = (1 - (discount / 100)) * (1 + (tax / 100));
+        const costWo = denominator > 0 ? costW / denominator : 0;
+
+        lineElement.querySelector(".line-cost-wo-tax-input").value = Math.max(costWo, 0).toFixed(4);
+    }
+
+    function calculateTotals(lineElement) {
+        const qty = toNumber(lineElement.querySelector(".line-quantity-input").value);
+        const costWo = toNumber(lineElement.querySelector(".line-cost-wo-tax-input").value);
+        const discount = toNumber(lineElement.querySelector(".line-discount-input").value);
+        const tax = toNumber(lineElement.querySelector(".line-tax-input").value);
+
+        const netUnitWithoutTax = costWo * (1 - (discount / 100));
+        const subtotal = qty * netUnitWithoutTax;
+        const total = subtotal * (1 + (tax / 100));
+
+        lineElement.querySelector(".line-subtotal-input").value = Math.max(subtotal, 0).toFixed(4);
+        lineElement.querySelector(".line-total-input").value = Math.max(total, 0).toFixed(4);
+    }
+
+    function recalculateLine(lineElement, source = "without_tax") {
+        if (source === "with_tax") {
+            calculateFromWithTax(lineElement);
+        } else {
+            calculateFromWithoutTax(lineElement);
+        }
+        calculateTotals(lineElement);
+    }
+
     function populateOrderLineSelect(
         selectElement,
         helpElement,
@@ -364,6 +434,8 @@
         costWTaxInput,
         discountInput,
         taxInput,
+        subtotalInput,
+        totalInput,
         selectedLineId = ""
     ) {
         const lines = getSelectedOrderLines();
@@ -424,9 +496,14 @@
             if (unitId) unitSelect.value = unitId;
 
             costWoTaxInput.value = unitCost;
-            costWTaxInput.value = unitCost;
             discountInput.value = discountPct;
             taxInput.value = taxPct;
+
+            recalculateLine(selectElement.closest(".entry-line-item"), "without_tax");
+
+            if (!costWTaxInput.value) costWTaxInput.value = "0.0000";
+            if (!subtotalInput.value) subtotalInput.value = "0.0000";
+            if (!totalInput.value) totalInput.value = "0.0000";
         };
 
         if (selectElement.value) {
@@ -476,6 +553,8 @@
         const costWTaxInput = wrapper.querySelector(".line-cost-w-tax-input");
         const discountInput = wrapper.querySelector(".line-discount-input");
         const taxInput = wrapper.querySelector(".line-tax-input");
+        const subtotalInput = wrapper.querySelector(".line-subtotal-input");
+        const totalInput = wrapper.querySelector(".line-total-input");
 
         removeBtn.addEventListener("click", function () {
             wrapper.remove();
@@ -490,6 +569,26 @@
             if (this.value) articleSelect.value = "";
         });
 
+        costWoTaxInput.addEventListener("input", function () {
+            recalculateLine(wrapper, "without_tax");
+        });
+
+        costWTaxInput.addEventListener("input", function () {
+            recalculateLine(wrapper, "with_tax");
+        });
+
+        quantityInput.addEventListener("input", function () {
+            calculateTotals(wrapper);
+        });
+
+        discountInput.addEventListener("input", function () {
+            recalculateLine(wrapper, "without_tax");
+        });
+
+        taxInput.addEventListener("input", function () {
+            recalculateLine(wrapper, "without_tax");
+        });
+
         populateOrderLineSelect(
             poLineSelect,
             poLineHelp,
@@ -501,6 +600,8 @@
             costWTaxInput,
             discountInput,
             taxInput,
+            subtotalInput,
+            totalInput,
             prefillLine ? String(prefillLine.id) : ""
         );
 
@@ -512,6 +613,8 @@
         if (prefillLine) {
             poLineSelect.value = String(prefillLine.id);
             poLineSelect.dispatchEvent(new Event("change"));
+        } else {
+            recalculateLine(wrapper, "without_tax");
         }
     }
 

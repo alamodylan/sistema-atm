@@ -65,18 +65,51 @@ def _validate_entry_line(line: InventoryEntryLinePayload) -> None:
             "Cada línea de entrada debe tener un artículo normal o un artículo pendiente, pero no ambos."
         )
 
+    if not line.purchase_order_line_id:
+        raise InventoryEntryServiceError(
+            "Cada línea de entrada debe estar ligada a una línea de la orden de compra."
+        )
+
     if _normalize_decimal(line.quantity_received, "cantidad recibida") <= 0:
         raise InventoryEntryServiceError("La cantidad recibida debe ser mayor que cero.")
 
 
 def _validate_purchase_order_line_pending_quantity(
     *,
+    purchase_order_id: int,
     purchase_order_line_id: int,
     quantity_received: Decimal,
+    article_id: int | None,
+    pending_article_id: int | None,
 ) -> PurchaseOrderLine:
     po_line = PurchaseOrderLine.query.get(purchase_order_line_id)
     if not po_line:
         raise InventoryEntryServiceError("La línea de orden de compra indicada no existe.")
+
+    if int(po_line.purchase_order_id) != int(purchase_order_id):
+        raise InventoryEntryServiceError(
+            "La línea seleccionada no pertenece a la orden de compra indicada."
+        )
+
+    if bool(po_line.article_id) != bool(article_id):
+        raise InventoryEntryServiceError(
+            "El tipo de artículo de la línea no coincide con la línea de la orden de compra."
+        )
+
+    if bool(po_line.pending_article_id) != bool(pending_article_id):
+        raise InventoryEntryServiceError(
+            "El tipo de artículo pendiente de la línea no coincide con la línea de la orden de compra."
+        )
+
+    if po_line.article_id and int(po_line.article_id) != int(article_id):
+        raise InventoryEntryServiceError(
+            "El artículo de la entrada no coincide con el artículo de la línea de la orden."
+        )
+
+    if po_line.pending_article_id and int(po_line.pending_article_id) != int(pending_article_id):
+        raise InventoryEntryServiceError(
+            "El artículo pendiente de la entrada no coincide con el de la línea de la orden."
+        )
 
     ordered = Decimal(str(po_line.quantity_ordered or 0))
     already_received = Decimal(str(po_line.quantity_received or 0))
@@ -93,6 +126,34 @@ def _validate_purchase_order_line_pending_quantity(
         )
 
     return po_line
+
+
+def _validate_line_cost_consistency(
+    *,
+    unit_cost_without_tax: Decimal,
+    unit_cost_with_tax: Decimal,
+    discount_pct: Decimal,
+    tax_pct: Decimal,
+) -> None:
+    if unit_cost_without_tax < 0:
+        raise InventoryEntryServiceError("El costo unitario sin impuesto no puede ser negativo.")
+
+    if unit_cost_with_tax < 0:
+        raise InventoryEntryServiceError("El costo unitario con impuesto no puede ser negativo.")
+
+    if discount_pct < 0:
+        raise InventoryEntryServiceError("El descuento no puede ser negativo.")
+
+    if tax_pct < 0:
+        raise InventoryEntryServiceError("El impuesto no puede ser negativo.")
+
+    net_without_tax = unit_cost_without_tax * (Decimal("1") - (discount_pct / Decimal("100")))
+    expected_with_tax = net_without_tax * (Decimal("1") + (tax_pct / Decimal("100")))
+
+    if abs(expected_with_tax - unit_cost_with_tax) > Decimal("0.01"):
+        raise InventoryEntryServiceError(
+            "El costo con impuesto no coincide con el porcentaje de impuesto y descuento indicado."
+        )
 
 
 def _refresh_purchase_order_receipt_status(purchase_order_id: int) -> None:
@@ -215,12 +276,20 @@ def create_inventory_entry(
         discount_pct = _normalize_decimal(line.discount_pct, "descuento")
         tax_pct = _normalize_decimal(line.tax_pct, "impuesto")
 
-        po_line = None
-        if line.purchase_order_line_id:
-            po_line = _validate_purchase_order_line_pending_quantity(
-                purchase_order_line_id=line.purchase_order_line_id,
-                quantity_received=quantity_received,
-            )
+        _validate_line_cost_consistency(
+            unit_cost_without_tax=unit_cost_without_tax,
+            unit_cost_with_tax=unit_cost_with_tax,
+            discount_pct=discount_pct,
+            tax_pct=tax_pct,
+        )
+
+        po_line = _validate_purchase_order_line_pending_quantity(
+            purchase_order_id=purchase_order_id,
+            purchase_order_line_id=line.purchase_order_line_id,
+            quantity_received=quantity_received,
+            article_id=line.article_id,
+            pending_article_id=line.pending_article_id,
+        )
 
         entry_line = InventoryEntryLine(
             inventory_entry_id=inventory_entry.id,
@@ -238,10 +307,9 @@ def create_inventory_entry(
         )
         db.session.add(entry_line)
 
-        if po_line:
-            po_line.quantity_received = Decimal(
-                str(po_line.quantity_received or 0)
-            ) + quantity_received
+        po_line.quantity_received = Decimal(
+            str(po_line.quantity_received or 0)
+        ) + quantity_received
 
         resolved_article_id = None
 
@@ -255,8 +323,6 @@ def create_inventory_entry(
                     "El artículo pendiente indicado no existe."
                 )
 
-            # Si todavía no tiene artículo real enlazado, la línea se registra
-            # pero no afecta el inventario real hasta que el pendiente sea codificado.
             if pending_article.linked_article_id:
                 resolved_article_id = pending_article.linked_article_id
 

@@ -13,6 +13,12 @@
                 <i class="bi bi-arrow-left me-2"></i>Volver
             </a>
 
+            <a href="{{ url_for('purchases.order_print', order_id=purchase_order.id) }}"
+               target="_blank"
+               class="btn btn-outline-dark rounded-3">
+                <i class="bi bi-printer me-2"></i>Imprimir / PDF
+            </a>
+
             {% if purchase_order.approval_status == 'BORRADOR' %}
                 <form method="post" action="{{ url_for('purchases.approve_order', order_id=purchase_order.id) }}">
                     <input type="hidden" name="reason" value="Aprobación directa desde detalle">
@@ -91,7 +97,7 @@
 
                         <dt class="col-5 text-muted">Fecha</dt>
                         <dd class="col-7">
-                            {{ purchase_order.created_at.strftime('%d/%m/%Y %H:%M') if purchase_order.created_at else '-' }}
+                            {{ cr_datetime(purchase_order.created_at) }}
                         </dd>
                     </dl>
 
@@ -114,7 +120,7 @@
                                     <div class="d-flex justify-content-between align-items-center mb-1">
                                         <div class="fw-semibold">{{ item.status }}</div>
                                         <small class="text-muted">
-                                            {{ item.created_at.strftime('%d/%m/%Y %H:%M') if item.created_at else '-' }}
+                                            {{ cr_datetime(item.created_at) }}
                                         </small>
                                     </div>
                                     <div class="text-muted small mb-1">
@@ -198,7 +204,7 @@
                                         <div class="fw-semibold text-dark">{{ item.number }}</div>
                                         <small class="text-muted">
                                             Factura: {{ item.invoice_number }} |
-                                            {{ item.created_at.strftime('%d/%m/%Y %H:%M') if item.created_at else '-' }}
+                                            {{ cr_datetime(item.created_at) }}
                                         </small>
                                     </div>
                                     <i class="bi bi-arrow-right text-dark"></i>
