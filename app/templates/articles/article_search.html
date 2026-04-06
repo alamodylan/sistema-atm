@@ -9,7 +9,7 @@
 
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body">
-        <form method="GET" action="{{ url_for('inventory.search_articles') }}" class="row g-3 mb-4">
+        <form method="GET" action="{{ url_for('articles.search_articles') }}" class="row g-3 mb-4">
             <div class="col-12 col-lg-5">
                 <label class="form-label fw-semibold">Código</label>
                 <input
@@ -57,7 +57,7 @@
                                 <td>{{ article.unit.code if article.unit else "-" }}</td>
                                 <td>{{ article.family_code or "-" }}</td>
                                 <td>
-                                    <a href="{{ url_for('inventory.article_summary', article_id=article.id) }}"
+                                    <a href="{{ url_for('articles.article_summary', article_id=article.id) }}"
                                        class="btn btn-sm btn-outline-primary">
                                         Ver resumen
                                     </a>

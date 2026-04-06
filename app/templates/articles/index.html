@@ -10,7 +10,7 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body">
                 <h5 class="fw-bold mb-3">Consulta rápida</h5>
-                <form method="GET" action="{{ url_for('inventory.search_articles') }}">
+                <form method="GET" action="{{ url_for('articles.search_articles') }}">
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Código o nombre</label>
                         <input
@@ -52,7 +52,7 @@
                                         <td>{{ article.unit.name if article.unit else "-" }}</td>
                                         <td>
                                             <a
-                                                href="{{ url_for('inventory.article_summary', article_id=article.id) }}"
+                                                href="{{ url_for('articles.article_summary', article_id=article.id) }}"
                                                 class="btn btn-sm btn-outline-primary"
                                             >
                                                 Ver resumen
