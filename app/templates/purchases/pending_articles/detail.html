@@ -23,12 +23,12 @@
                     <h5 class="fw-bold mb-3">Información general</h5>
 
                     <dl class="row mb-0">
-                        <dt class="col-5 text-muted">Código</dt>
+                        <dt class="col-5 text-muted">Código provisional</dt>
                         <dd class="col-7 fw-semibold">
                             {{ pending_article.provisional_code or 'SIN-CODIGO' }}
                         </dd>
 
-                        <dt class="col-5 text-muted">Nombre</dt>
+                        <dt class="col-5 text-muted">Nombre provisional</dt>
                         <dd class="col-7">{{ pending_article.provisional_name }}</dd>
 
                         <dt class="col-5 text-muted">Estado</dt>
@@ -70,10 +70,26 @@
             {% if pending_article.linked_article %}
                 <div class="card border-0 shadow-sm rounded-4 mt-4">
                     <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3">Artículo vinculado</h5>
+                        <h5 class="fw-bold mb-3">Artículo provisional enlazado</h5>
                         <div class="border rounded-3 p-3 bg-light">
-                            <div class="fw-semibold">{{ pending_article.linked_article.code }}</div>
-                            <div class="text-muted">{{ pending_article.linked_article.name }}</div>
+                            <div class="fw-semibold">
+                                {{ pending_article.linked_article.code }}
+                            </div>
+                            <div class="text-muted">
+                                {{ pending_article.linked_article.name }}
+                            </div>
+                        </div>
+                        <div class="form-text mt-2">
+                            Este es el artículo real del sistema que será actualizado con el código y nombre definitivos.
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="card border-0 shadow-sm rounded-4 mt-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3">Artículo provisional enlazado</h5>
+                        <div class="alert alert-warning rounded-3 mb-0">
+                            Este pendiente todavía no tiene un artículo real enlazado.
                         </div>
                     </div>
                 </div>
@@ -87,27 +103,44 @@
 
                     {% if pending_article.status == 'CODIFICADO' %}
                         <div class="alert alert-success rounded-3 mb-0">
-                            Este artículo pendiente ya fue resuelto y vinculado a un artículo real.
+                            Este artículo pendiente ya fue resuelto. El artículo real ya quedó actualizado con su código definitivo.
                         </div>
                     {% elif pending_article.status == 'CANCELADO' %}
                         <div class="alert alert-danger rounded-3 mb-0">
                             Este artículo pendiente está cancelado y no puede resolverse.
                         </div>
+                    {% elif not pending_article.linked_article %}
+                        <div class="alert alert-warning rounded-3 mb-0">
+                            No se puede resolver todavía porque este pendiente no tiene un artículo real enlazado.
+                        </div>
                     {% else %}
                         <form method="post"
                               action="{{ url_for('purchases.resolve_pending_article_route', pending_article_id=pending_article.id) }}">
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">Artículo definitivo</label>
-                                <select name="linked_article_id" class="form-select rounded-3" required>
-                                    <option value="">Seleccione un artículo real</option>
-                                    {% for item in articles %}
-                                        <option value="{{ item.id }}">
-                                            {{ item.code }} - {{ item.name }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
+                                <label class="form-label fw-semibold">Código definitivo</label>
+                                <input type="text"
+                                       name="final_code"
+                                       class="form-control rounded-3"
+                                       maxlength="5"
+                                       pattern="\d{5}"
+                                       inputmode="numeric"
+                                       placeholder="Ej: 12345"
+                                       required>
                                 <div class="form-text">
-                                    Al resolverlo, este pendiente quedará vinculado al artículo oficial.
+                                    Debe ser un código numérico único de 5 dígitos.
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Nombre definitivo</label>
+                                <input type="text"
+                                       name="final_name"
+                                       class="form-control rounded-3"
+                                       value="{{ pending_article.provisional_name or '' }}"
+                                       placeholder="Nombre definitivo del artículo"
+                                       required>
+                                <div class="form-text">
+                                    Puedes corregir aquí el nombre final que tendrá el artículo en el sistema.
                                 </div>
                             </div>
 
@@ -123,12 +156,12 @@
 
             <div class="card border-0 shadow-sm rounded-4 mt-4">
                 <div class="card-body p-4">
-                    <h5 class="fw-bold mb-3">Impacto en Compras</h5>
+                    <h5 class="fw-bold mb-3">Impacto en el sistema</h5>
                     <ul class="mb-0 text-muted">
-                        <li>Puede usarse en solicitudes de compra.</li>
-                        <li>Puede cotizarse mientras aún no existe como artículo oficial.</li>
-                        <li>Puede llegar a orden de compra.</li>
-                        <li>Para afectar inventario real, debe quedar resuelto contra un artículo codificado.</li>
+                        <li>El artículo pendiente ya puede haber sido utilizado en solicitudes, cotizaciones, órdenes de compra y entradas a inventario.</li>
+                        <li>El inventario real no se mueve al resolver este pendiente, porque el artículo provisional ya existe dentro del sistema.</li>
+                        <li>Al resolverlo, solo se actualizan los datos maestros del artículo real enlazado.</li>
+                        <li>No se crea un segundo artículo ni se duplican existencias.</li>
                     </ul>
                 </div>
             </div>

@@ -22,6 +22,7 @@ from app.models.unit import Unit
 from app.models.warehouse import Warehouse
 from app.models.purchase_order import PurchaseOrder
 from app.models.quotation_batch import QuotationBatch
+from app.models.purchase_order_line import PurchaseOrderLine
 from app.services.inventory_entry_service import (
     InventoryEntryLinePayload,
     InventoryEntryServiceError,
@@ -73,7 +74,8 @@ def _to_decimal(value: str | None, default: str = "0") -> Decimal:
         return Decimal(raw if raw else default)
     except (InvalidOperation, TypeError):
         raise ValueError("Valor decimal inválido.")
-    
+
+
 def _get_valid_purchase_orders_for_receiving():
     return (
         PurchaseOrder.query.filter(
@@ -132,6 +134,7 @@ def create_request():
 
         article_ids = request.form.getlist("line_article_id[]")
         pending_article_ids = request.form.getlist("line_pending_article_id[]")
+        manual_names = request.form.getlist("line_manual_name[]")
         quantities = request.form.getlist("line_quantity[]")
         unit_ids = request.form.getlist("line_unit_id[]")
         line_notes_list = request.form.getlist("line_notes[]")
@@ -141,6 +144,7 @@ def create_request():
             [
                 len(article_ids),
                 len(pending_article_ids),
+                len(manual_names),
                 len(quantities),
                 len(unit_ids),
                 len(line_notes_list),
@@ -153,11 +157,12 @@ def create_request():
         for index in range(max_len):
             article_id_raw = article_ids[index].strip() if index < len(article_ids) else ""
             pending_article_id_raw = pending_article_ids[index].strip() if index < len(pending_article_ids) else ""
+            manual_name_raw = manual_names[index].strip() if index < len(manual_names) else ""
             quantity_raw = quantities[index].strip() if index < len(quantities) else ""
             unit_id_raw = unit_ids[index].strip() if index < len(unit_ids) else ""
             line_notes = line_notes_list[index].strip() if index < len(line_notes_list) else None
 
-            if not any([article_id_raw, pending_article_id_raw, quantity_raw, unit_id_raw, line_notes]):
+            if not any([article_id_raw, pending_article_id_raw, manual_name_raw, quantity_raw, unit_id_raw, line_notes]):
                 continue
 
             try:
@@ -173,10 +178,40 @@ def create_request():
                     warehouses=warehouses,
                 )
 
+            article_id: int | None = None
+            pending_article_id: int | None = None
+
+            if manual_name_raw:
+                try:
+                    pending = create_pending_article(
+                        provisional_name=manual_name_raw,
+                        description=line_notes,
+                        category_id=None,
+                        unit_id=int(unit_id_raw) if unit_id_raw else None,
+                        requested_by_user_id=current_user.id,
+                    )
+                    pending_article_id = pending.id
+                except PendingArticleServiceError as exc:
+                    flash(f"Error en la línea {index + 1}: {str(exc)}", "danger")
+                    return render_template(
+                        "purchases/requests/create.html",
+                        articles=articles,
+                        pending_articles=pending_articles,
+                        units=units,
+                        sites=sites,
+                        warehouses=warehouses,
+                    )
+
+            elif article_id_raw:
+                article_id = int(article_id_raw)
+
+            elif pending_article_id_raw:
+                pending_article_id = int(pending_article_id_raw)
+
             lines.append(
                 PurchaseRequestLinePayload(
-                    article_id=int(article_id_raw) if article_id_raw else None,
-                    pending_article_id=int(pending_article_id_raw) if pending_article_id_raw else None,
+                    article_id=article_id,
+                    pending_article_id=pending_article_id,
                     quantity_requested=quantity_value,
                     unit_id=int(unit_id_raw) if unit_id_raw else None,
                     line_notes=line_notes,
@@ -283,28 +318,32 @@ def create_pending_article_route():
 @login_required
 def pending_article_detail(pending_article_id: int):
     pending_article = get_pending_article_or_404(pending_article_id)
-    articles = Article.query.filter_by(is_active=True).order_by(Article.code.asc()).all()
 
     return render_template(
         "purchases/pending_articles/detail.html",
         pending_article=pending_article,
-        articles=articles,
     )
 
 
 @purchases_bp.route("/pending-articles/<int:pending_article_id>/resolve", methods=["POST"])
 @login_required
 def resolve_pending_article_route(pending_article_id: int):
-    linked_article_id = _to_int(request.form.get("linked_article_id"))
+    final_code = (request.form.get("final_code") or "").strip()
+    final_name = (request.form.get("final_name") or "").strip()
 
-    if not linked_article_id:
-        flash("Debes seleccionar el artículo definitivo.", "danger")
+    if not final_code:
+        flash("Debes indicar el código definitivo de 5 dígitos.", "danger")
+        return redirect(url_for("purchases.pending_article_detail", pending_article_id=pending_article_id))
+
+    if not final_name:
+        flash("Debes indicar el nombre definitivo del artículo.", "danger")
         return redirect(url_for("purchases.pending_article_detail", pending_article_id=pending_article_id))
 
     try:
         resolve_pending_article(
             pending_article_id=pending_article_id,
-            linked_article_id=linked_article_id,
+            final_code=final_code,
+            final_name=final_name,
         )
     except PendingArticleServiceError as exc:
         flash(str(exc), "danger")
@@ -354,7 +393,6 @@ def create_quotation():
         .all()
     )
 
-    # Mapa simple para mostrar líneas de solicitud en la vista
     purchase_request_lines_map: dict[int, list] = {}
     for pr in purchase_requests:
         purchase_request_lines_map[pr.id] = list(pr.lines) if pr.lines else []
@@ -475,6 +513,7 @@ def create_quotation():
         pending_articles=pending_articles,
     )
 
+
 @purchases_bp.route("/quotations/<int:batch_id>")
 @login_required
 def quotation_detail(batch_id: int):
@@ -546,15 +585,34 @@ def create_order():
         .all()
     )
 
-    # Mapa de líneas por solicitud
     purchase_request_lines_map: dict[int, list] = {}
     for pr in purchase_requests:
         purchase_request_lines_map[pr.id] = list(pr.lines) if pr.lines else []
 
-    # Mapa de líneas por lote de cotización
     quotation_lines_map: dict[int, list] = {}
     for batch in quotation_batches:
-        quotation_lines_map[batch.id] = list(batch.lines) if batch.lines else []
+        batch_lines = []
+        if batch.lines:
+            for line in batch.lines:
+                is_used = PurchaseOrderLine.query.filter(
+                    PurchaseOrderLine.quotation_line_id == line.id
+                ).first() is not None
+
+                batch_lines.append({
+                    "id": line.id,
+                    "item_name": line.item_name or "Sin artículo",
+                    "item_code": line.item_code or "",
+                    "article_id": line.article_id,
+                    "pending_article_id": line.pending_article_id,
+                    "supplier_id": line.supplier_id,
+                    "currency_code": line.currency_code or "CRC",
+                    "unit_price": str(line.unit_price or 0),
+                    "discount_pct": str(line.discount_pct or 0),
+                    "tax_pct": str(line.tax_pct or 0),
+                    "purchase_request_line_id": line.purchase_request_line_id,
+                    "is_used": is_used,
+                })
+        quotation_lines_map[batch.id] = batch_lines
 
     if request.method == "POST":
         supplier_id = _to_int(request.form.get("supplier_id"))
@@ -588,7 +646,6 @@ def create_order():
             ],
             default=0,
         )
-
 
         lines: list[PurchaseOrderLinePayload] = []
 
@@ -787,18 +844,13 @@ def create_entry():
         .all()
     )
 
-    # SOLO pendientes utilizables (ya codificados)
     pending_articles = (
         PendingArticle.query.filter(
-            PendingArticle.status == "CODIFICADO"
+            PendingArticle.status.in_(["PENDIENTE_CODIFICACION", "CODIFICADO"])
         )
         .order_by(PendingArticle.created_at.desc())
         .all()
     )
-
-    # =========================
-    # MAPAS PARA UI INTELIGENTE
-    # =========================
 
     purchase_order_lines_map: dict[int, list] = {}
     for po in purchase_orders:
@@ -807,10 +859,6 @@ def create_entry():
     warehouse_locations_map: dict[int, list] = {}
     for wh in warehouses:
         warehouse_locations_map[wh.id] = list(wh.locations) if wh.locations else []
-
-    # =========================
-    # POST
-    # =========================
 
     if request.method == "POST":
         purchase_order_id = _to_int(request.form.get("purchase_order_id"))
@@ -840,7 +888,6 @@ def create_entry():
             ],
             default=0,
         )
-
 
         lines: list[InventoryEntryLinePayload] = []
 

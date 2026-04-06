@@ -69,31 +69,30 @@ def _validate_entry_line(line: InventoryEntryLinePayload) -> None:
         raise InventoryEntryServiceError("La cantidad recibida debe ser mayor que cero.")
 
 
-def _resolve_real_article_id(
+def _validate_purchase_order_line_pending_quantity(
     *,
-    article_id: int | None,
-    pending_article_id: int | None,
-) -> int:
-    if article_id:
-        return article_id
+    purchase_order_line_id: int,
+    quantity_received: Decimal,
+) -> PurchaseOrderLine:
+    po_line = PurchaseOrderLine.query.get(purchase_order_line_id)
+    if not po_line:
+        raise InventoryEntryServiceError("La línea de orden de compra indicada no existe.")
 
-    if not pending_article_id:
+    ordered = Decimal(str(po_line.quantity_ordered or 0))
+    already_received = Decimal(str(po_line.quantity_received or 0))
+    pending = ordered - already_received
+
+    if pending <= 0:
         raise InventoryEntryServiceError(
-            "La línea no tiene artículo ni artículo pendiente."
+            "La línea seleccionada ya no tiene cantidad pendiente por recibir."
         )
 
-    pending_article = PendingArticle.query.get(pending_article_id)
-    if not pending_article:
+    if quantity_received > pending:
         raise InventoryEntryServiceError(
-            "El artículo pendiente indicado no existe."
+            f"La cantidad recibida ({quantity_received}) excede lo pendiente ({pending}) en la línea de la orden."
         )
 
-    if not pending_article.linked_article_id:
-        raise InventoryEntryServiceError(
-            "No se puede registrar entrada real a inventario para un artículo pendiente sin codificar."
-        )
-
-    return pending_article.linked_article_id
+    return po_line
 
 
 def _refresh_purchase_order_receipt_status(purchase_order_id: int) -> None:
@@ -157,6 +156,25 @@ def create_inventory_entry(
             "La entrada a inventario debe incluir al menos una línea."
         )
 
+    purchase_order = PurchaseOrder.query.get(purchase_order_id)
+    if not purchase_order:
+        raise InventoryEntryServiceError("La orden de compra seleccionada no existe.")
+
+    if purchase_order.approval_status not in {"APROBADA", "RECIBIDA_PARCIAL"}:
+        raise InventoryEntryServiceError(
+            "Solo se pueden registrar entradas para órdenes aprobadas o parcialmente recibidas."
+        )
+
+    if not purchase_order.supplier_id:
+        raise InventoryEntryServiceError(
+            "La orden de compra seleccionada no tiene proveedor asociado."
+        )
+
+    if int(supplier_id) != int(purchase_order.supplier_id):
+        raise InventoryEntryServiceError(
+            "El proveedor de la entrada debe coincidir con el proveedor de la orden de compra."
+        )
+
     invoice_number = (invoice_number or "").strip()
     if not invoice_number:
         raise InventoryEntryServiceError("El número de factura es obligatorio.")
@@ -197,6 +215,13 @@ def create_inventory_entry(
         discount_pct = _normalize_decimal(line.discount_pct, "descuento")
         tax_pct = _normalize_decimal(line.tax_pct, "impuesto")
 
+        po_line = None
+        if line.purchase_order_line_id:
+            po_line = _validate_purchase_order_line_pending_quantity(
+                purchase_order_line_id=line.purchase_order_line_id,
+                quantity_received=quantity_received,
+            )
+
         entry_line = InventoryEntryLine(
             inventory_entry_id=inventory_entry.id,
             purchase_order_line_id=line.purchase_order_line_id,
@@ -213,32 +238,43 @@ def create_inventory_entry(
         )
         db.session.add(entry_line)
 
-        if line.purchase_order_line_id:
-            po_line = PurchaseOrderLine.query.get(line.purchase_order_line_id)
-            if po_line:
-                po_line.quantity_received = Decimal(
-                    str(po_line.quantity_received or 0)
-                ) + quantity_received
+        if po_line:
+            po_line.quantity_received = Decimal(
+                str(po_line.quantity_received or 0)
+            ) + quantity_received
 
-        resolved_article_id = _resolve_real_article_id(
-            article_id=line.article_id,
-            pending_article_id=line.pending_article_id,
-        )
+        resolved_article_id = None
 
-        add_stock(
-            article_id=resolved_article_id,
-            warehouse_id=warehouse_id,
-            quantity=quantity_received,
-            performed_by_user_id=entered_by_user_id,
-            movement_type="ENTRADA_COMPRA",
-            reason=f"Entrada por compra {inventory_entry.number}",
-            reference_type="INVENTORY_ENTRY",
-            reference_id=inventory_entry.id,
-            reference_number=inventory_entry.number,
-            unit_cost=unit_cost_without_tax,
-            warehouse_location_id=line.warehouse_location_id,
-            commit=False,
-        )
+        if line.article_id:
+            resolved_article_id = line.article_id
+
+        elif line.pending_article_id:
+            pending_article = PendingArticle.query.get(line.pending_article_id)
+            if not pending_article:
+                raise InventoryEntryServiceError(
+                    "El artículo pendiente indicado no existe."
+                )
+
+            # Si todavía no tiene artículo real enlazado, la línea se registra
+            # pero no afecta el inventario real hasta que el pendiente sea codificado.
+            if pending_article.linked_article_id:
+                resolved_article_id = pending_article.linked_article_id
+
+        if resolved_article_id:
+            add_stock(
+                article_id=resolved_article_id,
+                warehouse_id=warehouse_id,
+                quantity=quantity_received,
+                performed_by_user_id=entered_by_user_id,
+                movement_type="ENTRADA_COMPRA",
+                reason=f"Entrada por compra {inventory_entry.number}",
+                reference_type="INVENTORY_ENTRY",
+                reference_id=inventory_entry.id,
+                reference_number=inventory_entry.number,
+                unit_cost=unit_cost_without_tax,
+                warehouse_location_id=line.warehouse_location_id,
+                commit=False,
+            )
 
     _refresh_purchase_order_receipt_status(purchase_order_id)
     db.session.commit()

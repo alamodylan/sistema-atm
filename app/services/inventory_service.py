@@ -142,7 +142,9 @@ def add_stock(
         raise InventoryServiceError("La bodega no existe.")
 
     record = get_or_create_warehouse_stock_record(article_id, warehouse_id)
-    record.quantity_on_hand = Decimal(str(record.quantity_on_hand or 0)) + qty
+
+    previous_qty = Decimal(str(record.quantity_on_hand or 0))
+    record.quantity_on_hand = previous_qty + qty
 
     if warehouse_location_id:
         location_record = get_or_create_location_stock_record(article_id, warehouse_location_id)
@@ -153,6 +155,19 @@ def add_stock(
     if unit_cost is not None:
         unit_cost_decimal = _to_decimal(unit_cost, "costo unitario")
         total_cost_decimal = unit_cost_decimal * qty
+
+        record.last_unit_cost = unit_cost_decimal
+
+        if record.quantity_on_hand > 0:
+            previous_avg = Decimal(str(record.avg_unit_cost or 0))
+            new_total_qty = previous_qty + qty
+
+            if new_total_qty > 0:
+                previous_total_cost = previous_avg * previous_qty
+                incoming_total_cost = unit_cost_decimal * qty
+                record.avg_unit_cost = (previous_total_cost + incoming_total_cost) / new_total_qty
+        else:
+            record.avg_unit_cost = unit_cost_decimal
 
     ledger_entry = create_inventory_ledger_entry(
         movement_type=movement_type,
@@ -186,6 +201,8 @@ def add_stock(
             "warehouse_location_id": warehouse_location_id,
             "ledger_entry_id": str(ledger_entry.id),
             "new_quantity_on_hand": str(record.quantity_on_hand),
+            "last_unit_cost": str(record.last_unit_cost or 0),
+            "avg_unit_cost": str(record.avg_unit_cost or 0),
         },
         commit=False,
     )
@@ -475,6 +492,7 @@ def get_article_stock_summary(article_id: int) -> list[dict]:
 
     return summary
 
+
 def get_inventory_by_warehouse(warehouse_id: int) -> list[dict]:
     warehouse = Warehouse.query.get(warehouse_id)
     if not warehouse:
@@ -502,6 +520,8 @@ def get_inventory_by_warehouse(warehouse_id: int) -> list[dict]:
         )
 
     return result
+
+
 def get_structures_by_site_and_type(site_id: int, warehouse_type: str) -> list[Warehouse]:
     return (
         Warehouse.query
@@ -512,6 +532,8 @@ def get_structures_by_site_and_type(site_id: int, warehouse_type: str) -> list[W
         .order_by(Warehouse.name.asc())
         .all()
     )
+
+
 def get_inventory_with_warehouse_info(warehouse_id: int) -> dict:
     warehouse = Warehouse.query.get(warehouse_id)
     if not warehouse:

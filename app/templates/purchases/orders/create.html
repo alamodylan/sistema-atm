@@ -171,7 +171,8 @@
             "unit_price": {{ (line.unit_price|string)|tojson }},
             "discount_pct": {{ (line.discount_pct|string)|tojson }},
             "tax_pct": {{ (line.tax_pct|string)|tojson }},
-            "purchase_request_line_id": {{ line.purchase_request_line_id if line.purchase_request_line_id else 'null' }}
+            "purchase_request_line_id": {{ line.purchase_request_line_id if line.purchase_request_line_id else 'null' }},
+            "is_used": {{ line.is_used|tojson if line.is_used is defined else 'false' }}
         }{% if not loop.last %},{% endif %}
         {% endfor %}
     ]{% if not loop.last %},{% endif %}
@@ -409,9 +410,21 @@
             return;
         }
 
-        helpElement.textContent = "Puedes seleccionar una línea para autocompletar artículo y costo.";
+        const currentSelects = Array.from(
+            document.querySelectorAll(".line-quotation-line-select")
+        );
+
+        const usedIdsInForm = currentSelects
+            .filter(el => el !== selectElement)
+            .map(el => el.value)
+            .filter(v => v);
+
+        let validCount = 0;
 
         lines.forEach(line => {
+            if (line.is_used) return;
+            if (usedIdsInForm.includes(String(line.id))) return;
+
             const option = document.createElement("option");
             option.value = line.id;
             option.textContent = `${line.item_code ? line.item_code + " - " : ""}${line.item_name} | ${line.currency_code} ${line.unit_price}`;
@@ -422,7 +435,15 @@
             option.dataset.discountPct = line.discount_pct ?? "0";
             option.dataset.taxPct = line.tax_pct ?? "0";
             selectElement.appendChild(option);
+            validCount++;
         });
+
+        if (!validCount) {
+            helpElement.textContent = "Todas las líneas de este lote ya fueron utilizadas.";
+            return;
+        }
+
+        helpElement.textContent = "Puedes seleccionar una línea para autocompletar artículo y costo.";
 
         if ([...selectElement.options].some(option => option.value === previousValue)) {
             selectElement.value = previousValue;
@@ -452,6 +473,8 @@
             if (unitPrice) unitCostInput.value = unitPrice;
             discountInput.value = discountPct;
             taxInput.value = taxPct;
+
+            refreshAllLineSelectors();
         };
     }
 
@@ -475,6 +498,7 @@
         removeBtn.addEventListener("click", function () {
             wrapper.remove();
             updateLineNumbers();
+            refreshAllLineSelectors();
         });
 
         articleSelect.addEventListener("change", function () {

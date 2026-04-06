@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import func
 
 from app.extensions import db
+from app.models.article import Article
 from app.models.pending_article import PendingArticle
 
 
@@ -71,14 +72,49 @@ def get_pending_article_or_404(pending_article_id: int) -> PendingArticle:
 def resolve_pending_article(
     *,
     pending_article_id: int,
-    linked_article_id: int,
+    final_code: str,
+    final_name: str,
 ) -> PendingArticle:
     pending_article = get_pending_article_or_404(pending_article_id)
 
     if pending_article.status == "CANCELADO":
         raise PendingArticleServiceError("No se puede resolver un artículo pendiente cancelado.")
 
-    pending_article.linked_article_id = linked_article_id
+    final_code = (final_code or "").strip()
+    final_name = (final_name or "").strip()
+
+    if not final_code:
+        raise PendingArticleServiceError("Debes indicar el código definitivo de 5 dígitos.")
+
+    if not final_code.isdigit() or len(final_code) != 5:
+        raise PendingArticleServiceError("El código definitivo debe tener exactamente 5 dígitos.")
+
+    if not final_name:
+        raise PendingArticleServiceError("Debes indicar el nombre definitivo del artículo.")
+
+    if not pending_article.linked_article_id:
+        raise PendingArticleServiceError(
+            "El artículo pendiente no tiene un artículo provisional enlazado para actualizar."
+        )
+
+    linked_article = Article.query.get(pending_article.linked_article_id)
+    if not linked_article:
+        raise PendingArticleServiceError(
+            "El artículo enlazado del pendiente no existe."
+        )
+
+    existing_article = Article.query.filter(
+        Article.code == final_code,
+        Article.id != linked_article.id,
+    ).first()
+    if existing_article:
+        raise PendingArticleServiceError(
+            "Ya existe otro artículo con ese código definitivo."
+        )
+
+    linked_article.code = final_code
+    linked_article.name = final_name
+
     pending_article.status = "CODIFICADO"
 
     db.session.commit()

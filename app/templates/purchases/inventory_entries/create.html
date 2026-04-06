@@ -21,7 +21,9 @@
                             <select name="purchase_order_id" id="purchase_order_id" class="form-select rounded-3" required>
                                 <option value="">Seleccione</option>
                                 {% for item in purchase_orders %}
-                                    <option value="{{ item.id }}">
+                                    <option value="{{ item.id }}"
+                                            data-supplier-id="{{ item.supplier_id or '' }}"
+                                            data-supplier-name="{{ item.supplier.commercial_name if item.supplier else 'Sin proveedor' }}">
                                         {{ item.number }} | {{ item.supplier.commercial_name if item.supplier else 'Sin proveedor' }}
                                     </option>
                                 {% endfor %}
@@ -33,12 +35,12 @@
 
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Proveedor</label>
-                            <select name="supplier_id" id="supplier_id" class="form-select rounded-3" required>
-                                <option value="">Seleccione</option>
-                                {% for item in suppliers %}
-                                    <option value="{{ item.id }}">{{ item.commercial_name }}</option>
-                                {% endfor %}
-                            </select>
+                            <input type="text"
+                                   id="supplier_display"
+                                   class="form-control rounded-3"
+                                   placeholder="Se cargará automáticamente desde la OC"
+                                   readonly>
+                            <input type="hidden" name="supplier_id" id="supplier_id" required>
                         </div>
 
                         <div class="mb-3">
@@ -88,7 +90,7 @@
                             <div>
                                 <h5 class="fw-bold mb-1">Líneas de recepción</h5>
                                 <p class="text-muted mb-0">
-                                    Selecciona líneas de la orden, cantidades y ubicación destino.
+                                    Las líneas de la OC se cargarán automáticamente y quedarán editables.
                                 </p>
                             </div>
                             <button type="button" class="btn btn-outline-dark rounded-3" id="add-line-btn">
@@ -111,10 +113,12 @@
 
                 <div class="card border-0 shadow-sm rounded-4 mt-4">
                     <div class="card-body p-4">
-                        <h6 class="fw-bold mb-2">Regla importante</h6>
-                        <p class="text-muted mb-0">
-                            Un artículo pendiente solo puede afectar inventario real si ya está codificado y vinculado a un artículo oficial.
-                        </p>
+                        <h6 class="fw-bold mb-2">Reglas importantes</h6>
+                        <ul class="text-muted mb-0 ps-3">
+                            <li>El proveedor se toma automáticamente desde la orden de compra.</li>
+                            <li>La ubicación de bodega puede quedar en “Sin ubicación”.</li>
+                            <li>Si una línea corresponde a un artículo pendiente sin codificar, la recepción se registra, pero no afecta inventario real hasta que se le asigne un código oficial.</li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -215,7 +219,7 @@
                     {% endfor %}
                 </select>
                 <div class="form-text">
-                    Solo aparecen pendientes ya codificados.
+                    Puede mantenerse como pendiente aunque aún no tenga código final.
                 </div>
             </div>
 
@@ -293,6 +297,8 @@
     const template = document.getElementById("entry-line-template");
     const addLineBtn = document.getElementById("add-line-btn");
     const purchaseOrderSelect = document.getElementById("purchase_order_id");
+    const supplierDisplayInput = document.getElementById("supplier_display");
+    const supplierIdInput = document.getElementById("supplier_id");
     const warehouseSelect = document.getElementById("warehouse_id");
 
     const purchaseOrderLinesData = JSON.parse(
@@ -322,6 +328,31 @@
         return warehouseLocationsData[warehouseId];
     }
 
+    function syncSupplierFromPurchaseOrder() {
+        const selected = purchaseOrderSelect.options[purchaseOrderSelect.selectedIndex];
+
+        if (!purchaseOrderSelect.value || !selected) {
+            supplierDisplayInput.value = "";
+            supplierIdInput.value = "";
+            return;
+        }
+
+        supplierDisplayInput.value = selected.dataset.supplierName || "";
+        supplierIdInput.value = selected.dataset.supplierId || "";
+    }
+
+    function ensurePendingOption(selectElement, value) {
+        if (!value) return;
+
+        const exists = [...selectElement.options].some(opt => String(opt.value) === String(value));
+        if (exists) return;
+
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = `Pendiente #${value}`;
+        selectElement.appendChild(option);
+    }
+
     function populateOrderLineSelect(
         selectElement,
         helpElement,
@@ -332,10 +363,11 @@
         costWoTaxInput,
         costWTaxInput,
         discountInput,
-        taxInput
+        taxInput,
+        selectedLineId = ""
     ) {
         const lines = getSelectedOrderLines();
-        const previousValue = selectElement.value;
+        const previousValue = selectedLineId || selectElement.value;
 
         selectElement.innerHTML = '<option value="">Seleccione</option>';
 
@@ -349,7 +381,12 @@
         lines.forEach(line => {
             const option = document.createElement("option");
             option.value = line.id;
-            option.textContent = `${line.item_code ? line.item_code + " - " : ""}${line.item_name} | Pendiente: ${line.pending_quantity}${line.unit_name ? " " + line.unit_name : ""}`;
+            option.textContent =
+                `${line.item_code ? line.item_code + " - " : ""}${line.item_name}` +
+                ` | Pendiente: ${line.pending_quantity}` +
+                ` | Ordenado: ${line.quantity_ordered}` +
+                ` | Recibido: ${line.quantity_received}` +
+                `${line.unit_name ? " " + line.unit_name : ""}`;
             option.dataset.articleId = line.article_id ?? "";
             option.dataset.pendingArticleId = line.pending_article_id ?? "";
             option.dataset.pendingQuantity = line.pending_quantity ?? "";
@@ -360,7 +397,7 @@
             selectElement.appendChild(option);
         });
 
-        if ([...selectElement.options].some(option => option.value === previousValue)) {
+        if ([...selectElement.options].some(option => String(option.value) === String(previousValue))) {
             selectElement.value = previousValue;
         }
 
@@ -378,6 +415,7 @@
                 articleSelect.value = articleId;
                 pendingSelect.value = "";
             } else if (pendingArticleId) {
+                ensurePendingOption(pendingSelect, pendingArticleId);
                 pendingSelect.value = pendingArticleId;
                 articleSelect.value = "";
             }
@@ -390,6 +428,10 @@
             discountInput.value = discountPct;
             taxInput.value = taxPct;
         };
+
+        if (selectElement.value) {
+            selectElement.dispatchEvent(new Event("change"));
+        }
     }
 
     function populateLocationSelect(selectElement, helpElement) {
@@ -417,7 +459,7 @@
         }
     }
 
-    function createLine() {
+    function createLine(prefillLine = null) {
         const fragment = template.content.cloneNode(true);
         const wrapper = fragment.querySelector(".entry-line-item");
 
@@ -458,31 +500,45 @@
             costWoTaxInput,
             costWTaxInput,
             discountInput,
-            taxInput
+            taxInput,
+            prefillLine ? String(prefillLine.id) : ""
         );
 
         populateLocationSelect(locationSelect, locationHelp);
 
         container.appendChild(fragment);
         updateLineNumbers();
+
+        if (prefillLine) {
+            poLineSelect.value = String(prefillLine.id);
+            poLineSelect.dispatchEvent(new Event("change"));
+        }
     }
 
-    function refreshAllLineSelectors() {
+    function reloadLinesFromPurchaseOrder() {
+        container.innerHTML = "";
+
+        const lines = getSelectedOrderLines().filter(line => {
+            const pendingQty = Number(line.pending_quantity || 0);
+            return pendingQty > 0;
+        });
+
+        if (!purchaseOrderSelect.value) {
+            createLine();
+            return;
+        }
+
+        if (!lines.length) {
+            createLine();
+            return;
+        }
+
+        lines.forEach(line => createLine(line));
+    }
+
+    function refreshLocationsOnly() {
         const lineItems = container.querySelectorAll(".entry-line-item");
         lineItems.forEach(item => {
-            populateOrderLineSelect(
-                item.querySelector(".line-po-line-select"),
-                item.querySelector(".line-po-line-help"),
-                item.querySelector(".line-article-select"),
-                item.querySelector(".line-pending-select"),
-                item.querySelector(".line-quantity-input"),
-                item.querySelector(".line-unit-select"),
-                item.querySelector(".line-cost-wo-tax-input"),
-                item.querySelector(".line-cost-w-tax-input"),
-                item.querySelector(".line-discount-input"),
-                item.querySelector(".line-tax-input")
-            );
-
             populateLocationSelect(
                 item.querySelector(".line-location-select"),
                 item.querySelector(".line-location-help")
@@ -490,9 +546,18 @@
         });
     }
 
-    addLineBtn.addEventListener("click", createLine);
-    purchaseOrderSelect.addEventListener("change", refreshAllLineSelectors);
-    warehouseSelect.addEventListener("change", refreshAllLineSelectors);
+    addLineBtn.addEventListener("click", function () {
+        createLine();
+    });
+
+    purchaseOrderSelect.addEventListener("change", function () {
+        syncSupplierFromPurchaseOrder();
+        reloadLinesFromPurchaseOrder();
+    });
+
+    warehouseSelect.addEventListener("change", function () {
+        refreshLocationsOnly();
+    });
 
     createLine();
 })();

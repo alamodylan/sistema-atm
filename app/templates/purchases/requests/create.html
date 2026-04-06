@@ -66,26 +66,37 @@
                         <div id="lines-wrapper">
                             <div class="request-line border rounded-4 p-3 mb-3 bg-light-subtle">
                                 <div class="row g-3">
-                                    <div class="col-12 col-md-6">
-                                        <label class="form-label fw-semibold">Artículo</label>
-                                        <select name="line_article_id[]" class="form-select rounded-3">
-                                            <option value="">Seleccionar artículo</option>
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label fw-semibold">Artículo existente</label>
+                                        <select name="line_article_id[]" class="form-select rounded-3 line-article-select">
+                                            <option value="">Seleccionar</option>
                                             {% for article in articles %}
                                             <option value="{{ article.id }}">{{ article.code }} - {{ article.name }}</option>
                                             {% endfor %}
                                         </select>
                                     </div>
 
-                                    <div class="col-12 col-md-6">
+                                    <div class="col-12 col-md-4">
                                         <label class="form-label fw-semibold">Artículo pendiente</label>
-                                        <select name="line_pending_article_id[]" class="form-select rounded-3">
-                                            <option value="">Seleccionar pendiente</option>
+                                        <select name="line_pending_article_id[]" class="form-select rounded-3 line-pending-select">
+                                            <option value="">Seleccionar</option>
                                             {% for pending in pending_articles %}
                                             <option value="{{ pending.id }}">
                                                 {{ pending.provisional_code or 'SIN-CODIGO' }} - {{ pending.provisional_name }}
                                             </option>
                                             {% endfor %}
                                         </select>
+                                    </div>
+
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label fw-semibold">Nuevo artículo (manual)</label>
+                                        <input type="text"
+                                               name="line_manual_name[]"
+                                               class="form-control rounded-3 line-manual-input"
+                                               placeholder="Ej: Tornillo especial M8">
+                                        <div class="form-text">
+                                            Si escribes aquí, se creará como artículo pendiente automáticamente.
+                                        </div>
                                     </div>
 
                                     <div class="col-12 col-md-3">
@@ -105,7 +116,7 @@
 
                                     <div class="col-12 col-md-3 d-flex align-items-end">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="line_is_urgent[]" value="0">
+                                            <input class="form-check-input line-urgent-checkbox" type="checkbox" name="line_is_urgent[]" value="0">
                                             <label class="form-check-label fw-semibold">Urgente</label>
                                         </div>
                                     </div>
@@ -142,26 +153,37 @@
 <template id="request-line-template">
     <div class="request-line border rounded-4 p-3 mb-3 bg-light-subtle">
         <div class="row g-3">
-            <div class="col-12 col-md-6">
-                <label class="form-label fw-semibold">Artículo</label>
-                <select name="line_article_id[]" class="form-select rounded-3">
-                    <option value="">Seleccionar artículo</option>
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-semibold">Artículo existente</label>
+                <select name="line_article_id[]" class="form-select rounded-3 line-article-select">
+                    <option value="">Seleccionar</option>
                     {% for article in articles %}
                     <option value="{{ article.id }}">{{ article.code }} - {{ article.name }}</option>
                     {% endfor %}
                 </select>
             </div>
 
-            <div class="col-12 col-md-6">
+            <div class="col-12 col-md-4">
                 <label class="form-label fw-semibold">Artículo pendiente</label>
-                <select name="line_pending_article_id[]" class="form-select rounded-3">
-                    <option value="">Seleccionar pendiente</option>
+                <select name="line_pending_article_id[]" class="form-select rounded-3 line-pending-select">
+                    <option value="">Seleccionar</option>
                     {% for pending in pending_articles %}
                     <option value="{{ pending.id }}">
                         {{ pending.provisional_code or 'SIN-CODIGO' }} - {{ pending.provisional_name }}
                     </option>
                     {% endfor %}
                 </select>
+            </div>
+
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-semibold">Nuevo artículo (manual)</label>
+                <input type="text"
+                       name="line_manual_name[]"
+                       class="form-control rounded-3 line-manual-input"
+                       placeholder="Ej: Tornillo especial M8">
+                <div class="form-text">
+                    Si escribes aquí, se creará como artículo pendiente automáticamente.
+                </div>
             </div>
 
             <div class="col-12 col-md-3">
@@ -240,6 +262,44 @@ document.addEventListener("DOMContentLoaded", function () {
                 line.remove();
                 refreshUrgentCheckboxValues();
             }
+        }
+    });
+
+    document.addEventListener("change", function (event) {
+        const line = event.target.closest(".request-line");
+        if (!line) return;
+
+        const articleSelect = line.querySelector(".line-article-select");
+        const pendingSelect = line.querySelector(".line-pending-select");
+        const manualInput = line.querySelector(".line-manual-input");
+
+        if (event.target === manualInput && manualInput.value.trim() !== "") {
+            articleSelect.value = "";
+            pendingSelect.value = "";
+        }
+
+        if (event.target === articleSelect && articleSelect.value) {
+            pendingSelect.value = "";
+            manualInput.value = "";
+        }
+
+        if (event.target === pendingSelect && pendingSelect.value) {
+            articleSelect.value = "";
+            manualInput.value = "";
+        }
+    });
+
+    document.addEventListener("input", function (event) {
+        const line = event.target.closest(".request-line");
+        if (!line) return;
+
+        const articleSelect = line.querySelector(".line-article-select");
+        const pendingSelect = line.querySelector(".line-pending-select");
+        const manualInput = line.querySelector(".line-manual-input");
+
+        if (event.target === manualInput && manualInput.value.trim() !== "") {
+            articleSelect.value = "";
+            pendingSelect.value = "";
         }
     });
 

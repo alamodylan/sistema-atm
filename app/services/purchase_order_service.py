@@ -55,6 +55,34 @@ def _validate_po_line(line: PurchaseOrderLinePayload) -> None:
         raise PurchaseOrderServiceError("La cantidad ordenada debe ser mayor que cero.")
 
 
+def _validate_unique_quotation_usage(line: PurchaseOrderLinePayload) -> None:
+    if not line.quotation_line_id:
+        return
+
+    existing = PurchaseOrderLine.query.filter(
+        PurchaseOrderLine.quotation_line_id == line.quotation_line_id
+    ).first()
+
+    if existing:
+        raise PurchaseOrderServiceError(
+            "Una línea de cotización ya fue utilizada en otra orden de compra."
+        )
+
+
+def _validate_unique_request_usage(line: PurchaseOrderLinePayload) -> None:
+    if not line.purchase_request_line_id:
+        return
+
+    existing = PurchaseOrderLine.query.filter(
+        PurchaseOrderLine.purchase_request_line_id == line.purchase_request_line_id
+    ).first()
+
+    if existing:
+        raise PurchaseOrderServiceError(
+            "Esta línea de solicitud de compra ya fue utilizada en una orden."
+        )
+
+
 def create_purchase_order(
     *,
     supplier_id: int,
@@ -68,10 +96,16 @@ def create_purchase_order(
     lines: list[PurchaseOrderLinePayload],
 ) -> PurchaseOrder:
     if not lines:
-        raise PurchaseOrderServiceError("La orden de compra debe incluir al menos una línea.")
+        raise PurchaseOrderServiceError(
+            "La orden de compra debe incluir al menos una línea."
+        )
 
     for line in lines:
         _validate_po_line(line)
+
+        # 🔥 VALIDACIONES NUEVAS
+        _validate_unique_quotation_usage(line)
+        _validate_unique_request_usage(line)
 
     purchase_order = PurchaseOrder(
         number=_generate_purchase_order_number(),
@@ -130,7 +164,10 @@ def list_purchase_orders(
         like_value = f"%{search.strip()}%"
         query = query.filter(PurchaseOrder.number.ilike(like_value))
 
-    return query.order_by(PurchaseOrder.created_at.desc(), PurchaseOrder.id.desc()).all()
+    return query.order_by(
+        PurchaseOrder.created_at.desc(),
+        PurchaseOrder.id.desc()
+    ).all()
 
 
 def get_purchase_order_or_404(order_id: int) -> PurchaseOrder:
