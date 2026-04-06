@@ -132,6 +132,9 @@ class WarehouseStock(db.Model):
     quantity_on_hand = db.Column(db.Numeric(14, 2), nullable=False, default=0)
     reserved_quantity = db.Column(db.Numeric(14, 2), nullable=False, default=0)
 
+    last_unit_cost = db.Column(db.Numeric(14, 4))
+    avg_unit_cost = db.Column(db.Numeric(14, 4))
+
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
