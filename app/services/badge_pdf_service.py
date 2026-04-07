@@ -42,7 +42,7 @@ def build_mechanic_badge_pdf(mechanic) -> bytes:
     mechanic_code = (getattr(mechanic, "code", "") or "").strip()
 
     # =========================
-    # LOGO (FORMA CORRECTA)
+    # LOGO
     # =========================
     logo_path = os.path.join(
         current_app.root_path,
@@ -55,7 +55,7 @@ def build_mechanic_badge_pdf(mechanic) -> bytes:
         try:
             logo = ImageReader(logo_path)
 
-            logo_width = 22 * mm
+            logo_width = 24 * mm
             logo_height = 12 * mm
 
             pdf.drawImage(
@@ -68,45 +68,53 @@ def build_mechanic_badge_pdf(mechanic) -> bytes:
                 mask='auto'
             )
         except Exception:
-            pass  # no rompe el PDF si falla el logo
+            pass
 
     # =========================
-    # NOMBRE
+    # NOMBRE (AJUSTADO)
     # =========================
     name_font_size = _fit_text(
-        pdf=pdf,
-        text=mechanic_name or "SIN NOMBRE",
-        max_width=width - 16 * mm,
-        font_name="Helvetica-Bold",
-        max_size=12,
-        min_size=8,
+        pdf,
+        mechanic_name or "SIN NOMBRE",
+        width - 16 * mm,
+        "Helvetica-Bold",
+        12,
+        8,
     )
 
     pdf.setFont("Helvetica-Bold", name_font_size)
-    pdf.drawCentredString(width / 2, height - 24 * mm, mechanic_name or "SIN NOMBRE")
+    pdf.drawCentredString(
+        width / 2,
+        height - 20 * mm,   # 🔥 AJUSTE CLAVE (antes estaba muy arriba)
+        mechanic_name or "SIN NOMBRE"
+    )
 
     # =========================
-    # BARCODE
+    # BARCODE (CENTRADO MEJOR)
     # =========================
     if mechanic_code:
         barcode = createBarcodeDrawing(
             "Code128",
             value=mechanic_code,
-            barHeight=12 * mm,
+            barHeight=13 * mm,
             barWidth=0.42 * mm,
             humanReadable=False,
         )
 
         barcode_x = (width - barcode.width) / 2
-        barcode_y = 16 * mm
+        barcode_y = 18 * mm   # 🔥 SUBIDO UN POCO
 
         renderPDF.draw(barcode, pdf, barcode_x, barcode_y)
 
     # =========================
-    # CÓDIGO TEXTO
+    # CÓDIGO TEXTO (VISIBLE)
     # =========================
-    pdf.setFont("Helvetica", 10)
-    pdf.drawCentredString(width / 2, 11 * mm, mechanic_code or "SIN CÓDIGO")
+    pdf.setFont("Helvetica", 11)
+    pdf.drawCentredString(
+        width / 2,
+        12 * mm,   # 🔥 SUBIDO (antes muy abajo)
+        mechanic_code or "SIN CÓDIGO"
+    )
 
     pdf.showPage()
     pdf.save()
