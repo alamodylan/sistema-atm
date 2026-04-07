@@ -8,6 +8,12 @@
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body">
 
+        <div class="d-flex justify-content-end mb-3">
+            <a href="{{ url_for('work_orders.create_work_order_page') }}" class="btn btn-primary">
+                Nueva OT
+            </a>
+        </div>
+
         <form method="GET" action="{{ url_for('work_orders.list_work_orders') }}" class="row g-3 mb-4">
             <div class="col-12 col-md-10">
                 <select name="status" class="form-select">
