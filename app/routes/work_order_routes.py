@@ -13,7 +13,6 @@ from app.models.warehouse import Warehouse
 from app.models.user import User
 from app.services.work_order_service import (
     WorkOrderServiceError,
-    add_work_order_line,
     close_work_order,
     create_work_order,
     finalize_work_order,
@@ -167,11 +166,8 @@ def get_work_order(work_order_id: int):
         work_order = (
             WorkOrder.query
             .options(
-                joinedload(WorkOrder.requests)
-                .joinedload("lines")
-                .joinedload("article"),
-                joinedload(WorkOrder.lines)
-                .joinedload("article"),
+                joinedload(WorkOrder.requests).joinedload("lines").joinedload("article"),
+                joinedload(WorkOrder.lines).joinedload("article"),
             )
             .get(work_order_id)
         )
@@ -204,7 +200,7 @@ def get_work_order(work_order_id: int):
 
 
 # =========================================================
-# ❌ BLOQUEADO: AGREGAR LÍNEA DIRECTA
+# BLOQUEADO: AGREGAR LÍNEA DIRECTA
 # =========================================================
 @work_order_bp.route("/<int:work_order_id>/lines", methods=["POST"])
 @login_required
@@ -223,7 +219,6 @@ def finalize_work_order_action(work_order_id: int):
         finalize_work_order(
             work_order_id=work_order_id,
             performed_by_user_id=current_user.id,
-            has_loaned_tools=False,
             commit=True,
         )
         flash("Orden de trabajo finalizada correctamente.", "success")

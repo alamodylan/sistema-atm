@@ -27,10 +27,13 @@ def create_app():
     from .routes.auth_routes import auth_bp
     from .routes.dashboard_routes import dashboard_bp
     from .routes.work_order_routes import work_order_bp
+    from .routes.work_order_requests import work_order_request_bp
     from .routes.deletion_routes import deletion_bp
     from .routes.waste_routes import waste_bp
     from .routes.report_routes import report_bp
     from .routes.purchases_routes import purchases_bp
+    from .routes.mechanic_routes import mechanic_bp
+    from .routes.mechanic_terminal_routes import terminal_bp
     from app.routes.articles_routes import articles_bp
     from app.routes.inventory_routes import inventory_bp
 
@@ -38,12 +41,15 @@ def create_app():
     app.register_blueprint(dashboard_bp, url_prefix="/")
     app.register_blueprint(articles_bp, url_prefix="/articles")
     app.register_blueprint(work_order_bp, url_prefix="/work-orders")
+    app.register_blueprint(work_order_request_bp)
     app.register_blueprint(deletion_bp, url_prefix="/deletions")
     app.register_blueprint(waste_bp, url_prefix="/waste")
     app.register_blueprint(report_bp, url_prefix="/reports")
     app.register_blueprint(bulk_bp)
     app.register_blueprint(purchases_bp, url_prefix="/purchases")
     app.register_blueprint(inventory_bp, url_prefix="/inventory")
+    app.register_blueprint(mechanic_bp)
+    app.register_blueprint(terminal_bp)
 
     @app.errorhandler(403)
     def forbidden_error(error):
