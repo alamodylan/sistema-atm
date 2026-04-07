@@ -4,13 +4,15 @@ from flask import Blueprint, flash, redirect, render_template, request, session,
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
-from app.models.deletion_request import WorkOrderLineDeleteRequest
 from app.models.article import Article
-from app.models.work_order import WorkOrder
+from app.models.deletion_request import WorkOrderLineDeleteRequest
+from app.models.equipment import Equipment
 from app.models.mechanic import Mechanic
+from app.models.service_catalog import ServiceCatalog
 from app.models.site import Site
-from app.models.warehouse import Warehouse
 from app.models.user import User
+from app.models.warehouse import Warehouse
+from app.models.work_order import WorkOrder
 from app.services.work_order_service import (
     WorkOrderServiceError,
     close_work_order,
@@ -89,14 +91,30 @@ def create_work_order_page():
         mechanics_query = mechanics_query.filter(Mechanic.site_id == int(active_site_id))
     mechanics = mechanics_query.all()
 
+    equipments = (
+        Equipment.query
+        .filter(Equipment.is_active.is_(True))
+        .order_by(Equipment.code, Equipment.name)
+        .all()
+    )
+
+    services = (
+        ServiceCatalog.query
+        .filter(ServiceCatalog.is_active.is_(True))
+        .order_by(ServiceCatalog.name)
+        .all()
+    )
+
     return render_template(
         "work_orders/create.html",
         title="Nueva Orden de Trabajo",
-        subtitle="Cree una orden con responsable, predio, bodega y mecánicos asignados.",
+        subtitle="Cree una orden con responsable, bodega, equipo y mecánicos asignados.",
         sites=sites,
         warehouses=warehouses,
         responsible_users=responsible_users,
         mechanics=mechanics,
+        equipments=equipments,
+        services=services,
     )
 
 
@@ -107,20 +125,18 @@ def create_work_order_page():
 @login_required
 def create_work_order_action():
     try:
-        number = (request.form.get("number") or "").strip()
-        site_id = request.form.get("site_id")
+        site_id = session.get("active_site_id")
         warehouse_id = request.form.get("warehouse_id")
         responsible_user_id = request.form.get("responsible_user_id")
         mechanic_ids = request.form.getlist("mechanics")
+        service_id = request.form.get("service_id")
+        service_notes = request.form.get("service_notes")
         description = request.form.get("description")
         equipment_id = request.form.get("equipment_id")
         equipment_code_snapshot = request.form.get("equipment_code_snapshot")
 
-        if not number:
-            raise ValueError("El número de la OT es obligatorio.")
-
         if not site_id:
-            raise ValueError("El predio es obligatorio.")
+            raise ValueError("No hay un predio activo seleccionado.")
 
         if not warehouse_id:
             raise ValueError("La bodega es obligatoria.")
@@ -131,13 +147,18 @@ def create_work_order_action():
         if not mechanic_ids:
             raise ValueError("Debe seleccionar al menos un mecánico.")
 
+        if not service_id:
+            raise ValueError("Debe seleccionar un tipo de reparación.")
+
         work_order = create_work_order(
-            number=number,
+            number="",
             site_id=int(site_id),
             warehouse_id=int(warehouse_id),
             responsible_user_id=int(responsible_user_id),
             created_by_user_id=current_user.id,
             mechanic_ids=[int(m) for m in mechanic_ids],
+            service_id=int(service_id),
+            service_notes=service_notes,
             description=description,
             equipment_id=int(equipment_id) if equipment_id else None,
             equipment_code_snapshot=equipment_code_snapshot,

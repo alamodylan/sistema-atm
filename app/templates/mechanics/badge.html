@@ -13,10 +13,13 @@
     <p>{{ mechanic.code }}</p>
 
     <script>
-        JsBarcode("#barcode", "{{ mechanic.code }}", {
-            format: "CODE128",
-            width: 2,
-            height: 80
+        document.addEventListener("DOMContentLoaded", function () {
+            JsBarcode("#barcode", "{{ mechanic.code }}", {
+                format: "CODE128",
+                width: 2,
+                height: 80,
+                displayValue: false
+            });
         });
     </script>
 

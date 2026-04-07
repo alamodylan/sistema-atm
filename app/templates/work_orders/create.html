@@ -4,7 +4,7 @@
 
 {% block content %}
 {% set title = "Nueva Orden de Trabajo" %}
-{% set subtitle = "Cree una orden de trabajo con responsable, predio, bodega, equipo y mecánicos asignados." %}
+{% set subtitle = "Cree una orden de trabajo con responsable, bodega, equipo y mecánicos asignados." %}
 {% include 'components/page_header.html' with context %}
 
 <div class="card border-0 shadow-sm rounded-4">
@@ -12,30 +12,7 @@
         <form method="POST" action="{{ url_for('work_orders.create_work_order_action') }}">
             <div class="row g-4">
 
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Número de OT</label>
-                    <input
-                        type="text"
-                        class="form-control"
-                        name="number"
-                        placeholder="OT-00001"
-                        required
-                    >
-                </div>
-
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Predio</label>
-                    <select class="form-select" name="site_id" required>
-                        <option value="">Seleccione...</option>
-                        {% if sites %}
-                            {% for site in sites %}
-                                <option value="{{ site.id }}">{{ site.name }}</option>
-                            {% endfor %}
-                        {% endif %}
-                    </select>
-                </div>
-
-                <div class="col-12 col-md-4">
+                <div class="col-12 col-md-6">
                     <label class="form-label fw-semibold">Bodega</label>
                     <select class="form-select" name="warehouse_id" required>
                         <option value="">Seleccione...</option>
@@ -61,29 +38,64 @@
                     </select>
                 </div>
 
-                <!-- 🔥 AJUSTE AQUÍ -->
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold">Tipo de reparación</label>
+                    <select class="form-select" name="service_id" required>
+                        <option value="">Seleccione...</option>
+                        {% if services %}
+                            {% for service in services %}
+                                <option value="{{ service.id }}">
+                                    {{ service.name }}{% if service.category %} - {{ service.category }}{% endif %}
+                                </option>
+                            {% endfor %}
+                        {% endif %}
+                    </select>
+                </div>
+
                 <div class="col-12 col-md-6">
                     <label class="form-label fw-semibold">Equipo (opcional)</label>
-                    <input
-                        type="hidden"
-                        name="equipment_id"
-                        value=""
-                    >
+                    <input type="hidden" name="equipment_id" id="equipment_id" value="">
                     <input
                         type="text"
                         class="form-control"
                         name="equipment_code_snapshot"
-                        placeholder="40112 o código del equipo"
+                        id="equipment_search"
+                        list="equipment_list"
+                        placeholder="Busque por código o nombre del equipo"
+                        autocomplete="off"
                     >
+                    <datalist id="equipment_list">
+                        {% if equipments %}
+                            {% for equipment in equipments %}
+                                <option
+                                    value="{{ equipment.code }} - {{ equipment.name }}"
+                                    data-id="{{ equipment.id }}"
+                                ></option>
+                            {% endfor %}
+                        {% endif %}
+                    </datalist>
+                    <div class="form-text">
+                        Empiece a escribir el código o nombre del equipo y seleccione una coincidencia.
+                    </div>
                 </div>
 
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Descripción del trabajo</label>
+                    <label class="form-label fw-semibold">Notas del tipo de reparación (opcional)</label>
+                    <textarea
+                        class="form-control"
+                        name="service_notes"
+                        rows="2"
+                        placeholder="Notas adicionales para el tipo de reparación seleccionado..."
+                    ></textarea>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Observaciones generales (opcional)</label>
                     <textarea
                         class="form-control"
                         name="description"
                         rows="3"
-                        placeholder="Describa el trabajo a realizar..."
+                        placeholder="Observaciones generales de la orden..."
                     ></textarea>
                 </div>
 
@@ -127,4 +139,28 @@
         </form>
     </div>
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const equipmentInput = document.getElementById("equipment_search");
+        const equipmentIdInput = document.getElementById("equipment_id");
+        const equipmentOptions = document.querySelectorAll("#equipment_list option");
+
+        function syncEquipmentSelection() {
+            const selectedValue = equipmentInput.value.trim();
+            let selectedId = "";
+
+            equipmentOptions.forEach(function (option) {
+                if (option.value === selectedValue) {
+                    selectedId = option.dataset.id || "";
+                }
+            });
+
+            equipmentIdInput.value = selectedId;
+        }
+
+        equipmentInput.addEventListener("input", syncEquipmentSelection);
+        equipmentInput.addEventListener("change", syncEquipmentSelection);
+    });
+</script>
 {% endblock %}

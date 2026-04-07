@@ -1,4 +1,3 @@
-# services/work_order_service.py
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -7,16 +6,44 @@ from decimal import Decimal
 from app.extensions import db
 from app.models.article import Article
 from app.models.mechanic import Mechanic
-from app.models.tool_loan import ToolLoan  # 🔥 NUEVO
+from app.models.service_catalog import ServiceCatalog
+from app.models.tool_loan import ToolLoan
 from app.models.work_order import WorkOrder
 from app.models.work_order_line import WorkOrderLine
 from app.models.work_order_request_line import WorkOrderRequestLine
+from app.models.work_order_service import WorkOrderService
 from app.services.audit_service import log_action
 from app.services.inventory_service import InventoryServiceError, subtract_stock
 
 
 class WorkOrderServiceError(Exception):
     pass
+
+
+def _generate_next_work_order_number() -> str:
+    last_work_order = WorkOrder.query.order_by(WorkOrder.id.desc()).first()
+
+    if not last_work_order:
+        return "1"
+
+    last_number = (last_work_order.number or "").strip()
+
+    if last_number.isdigit():
+        return str(int(last_number) + 1)
+
+    numeric_orders = (
+        WorkOrder.query
+        .filter(WorkOrder.number.isnot(None))
+        .order_by(WorkOrder.id.desc())
+        .all()
+    )
+
+    for work_order in numeric_orders:
+        current_number = (work_order.number or "").strip()
+        if current_number.isdigit():
+            return str(int(current_number) + 1)
+
+    return "1"
 
 
 def create_work_order(
@@ -27,13 +54,14 @@ def create_work_order(
     responsible_user_id: int,
     created_by_user_id: int,
     mechanic_ids: list[int],
+    service_id: int,
+    service_notes: str | None = None,
     description: str | None = None,
     equipment_id: int | None = None,
     equipment_code_snapshot: str | None = None,
     commit: bool = True,
 ) -> WorkOrder:
-    if not number.strip():
-        raise WorkOrderServiceError("El número de OT es obligatorio.")
+    generated_number = _generate_next_work_order_number()
 
     if not site_id:
         raise WorkOrderServiceError("El predio es obligatorio.")
@@ -47,7 +75,10 @@ def create_work_order(
     if not mechanic_ids:
         raise WorkOrderServiceError("Debe seleccionar al menos un mecánico.")
 
-    existing = WorkOrder.query.filter_by(number=number.strip()).first()
+    if not service_id:
+        raise WorkOrderServiceError("Debe seleccionar un tipo de reparación.")
+
+    existing = WorkOrder.query.filter_by(number=generated_number).first()
     if existing:
         raise WorkOrderServiceError("Ya existe una orden de trabajo con ese número.")
 
@@ -55,8 +86,19 @@ def create_work_order(
     if len(mechanics) != len(set(mechanic_ids)):
         raise WorkOrderServiceError("Uno o más mecánicos seleccionados no existen.")
 
+    service = (
+        ServiceCatalog.query
+        .filter(
+            ServiceCatalog.id == service_id,
+            ServiceCatalog.is_active.is_(True),
+        )
+        .first()
+    )
+    if not service:
+        raise WorkOrderServiceError("El tipo de reparación seleccionado no existe o está inactivo.")
+
     work_order = WorkOrder(
-        number=number.strip(),
+        number=generated_number,
         status="EN_PROCESO",
         site_id=site_id,
         warehouse_id=warehouse_id,
@@ -70,6 +112,15 @@ def create_work_order(
     work_order.mechanics = mechanics
 
     db.session.add(work_order)
+    db.session.flush()
+
+    work_order_service = WorkOrderService(
+        work_order_id=work_order.id,
+        service_id=service_id,
+        notes=(service_notes or "").strip() or None,
+        created_by_user_id=created_by_user_id,
+    )
+    db.session.add(work_order_service)
 
     if commit:
         db.session.commit()
@@ -86,6 +137,7 @@ def create_work_order(
             "responsible_user_id": responsible_user_id,
             "mechanic_ids": mechanic_ids,
             "equipment_id": equipment_id,
+            "service_id": service_id,
         },
         commit=commit,
     )
@@ -93,7 +145,6 @@ def create_work_order(
     return work_order
 
 
-# 🔥 ENTREGA DESDE SOLICITUD
 def deliver_from_request_line(
     *,
     request_line_id: int,
@@ -177,7 +228,6 @@ def deliver_from_request_line(
     return line
 
 
-# 🔥 FINALIZAR OT (AUTOMÁTICO)
 def finalize_work_order(
     *,
     work_order_id: int,
@@ -192,7 +242,6 @@ def finalize_work_order(
     if work_order.status != "EN_PROCESO":
         raise WorkOrderServiceError("Solo se puede finalizar una OT en proceso.")
 
-    # 🔥 VALIDACIÓN REAL
     has_open_loans = ToolLoan.query.filter_by(
         work_order_id=work_order_id,
         loan_status="PRESTADA",
