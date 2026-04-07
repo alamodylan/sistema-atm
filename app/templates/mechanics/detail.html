@@ -7,7 +7,7 @@
 
     <p><strong>Código:</strong> {{ mechanic.code }}</p>
 
-    <a href="{{ url_for('mechanics.badge', mechanic_id=mechanic.id) }}" class="btn btn-primary">
+    <a href="{{ url_for('mechanics.mechanic_badge_pdf', mechanic_id=mechanic.id) }}" target="_blank" class="btn btn-sm btn-outline-primary">
         Ver gafete
     </a>
 

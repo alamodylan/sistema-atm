@@ -1,5 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from flask_login import login_required
+from flask import make_response
+from app.services.badge_pdf_service import build_mechanic_badge_pdf
 
 from app.extensions import db
 from app.models.mechanic import Mechanic
@@ -66,3 +68,15 @@ def toggle(mechanic_id):
 def badge(mechanic_id):
     mechanic = Mechanic.query.get_or_404(mechanic_id)
     return render_template("mechanics/badge.html", mechanic=mechanic)
+
+@mechanic_bp.route("/<int:mechanic_id>/badge.pdf", methods=["GET"])
+@login_required
+def mechanic_badge_pdf(mechanic_id: int):
+    mechanic = Mechanic.query.get_or_404(mechanic_id)
+
+    pdf_bytes = build_mechanic_badge_pdf(mechanic)
+
+    response = make_response(pdf_bytes)
+    response.headers["Content-Type"] = "application/pdf"
+    response.headers["Content-Disposition"] = f'inline; filename="gafete_{mechanic.code}.pdf"'
+    return response
