@@ -1,69 +1,112 @@
 from __future__ import annotations
 
 from io import BytesIO
+import os
 
+from flask import current_app
 from reportlab.graphics import renderPDF
 from reportlab.graphics.barcode import createBarcodeDrawing
 from reportlab.lib.colors import black, white
-from reportlab.lib.pagesizes import landscape
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+
+
+def _fit_text(pdf: canvas.Canvas, text: str, max_width: float, font_name: str, max_size: int, min_size: int) -> int:
+    size = max_size
+    while size >= min_size:
+        if pdf.stringWidth(text, font_name, size) <= max_width:
+            return size
+        size -= 1
+    return min_size
 
 
 def build_mechanic_badge_pdf(mechanic) -> bytes:
-    """
-    Genera un gafete en PDF con nombre, código alfanumérico y código de barras.
-    Retorna los bytes del PDF.
-    """
-
     buffer = BytesIO()
 
-    # Tamaño tipo credencial horizontal
     width = 90 * mm
     height = 55 * mm
 
     pdf = canvas.Canvas(buffer, pagesize=(width, height))
 
-    # Fondo blanco
+    # Fondo
     pdf.setFillColor(white)
     pdf.rect(0, 0, width, height, fill=1, stroke=0)
 
     # Borde
     pdf.setStrokeColor(black)
     pdf.setLineWidth(1)
-    pdf.rect(4, 4, width - 8, height - 8, fill=0, stroke=1)
+    pdf.rect(3 * mm, 3 * mm, width - 6 * mm, height - 6 * mm, fill=0, stroke=1)
 
-    # Título
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawCentredString(width / 2, height - 12 * mm, "GAFETE")
+    mechanic_name = (getattr(mechanic, "name", "") or "").strip()
+    mechanic_code = (getattr(mechanic, "code", "") or "").strip()
 
-    # Nombre del mecánico
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawCentredString(width / 2, height - 22 * mm, mechanic.name or "")
+    # =========================
+    # LOGO (FORMA CORRECTA)
+    # =========================
+    logo_path = os.path.join(
+        current_app.root_path,
+        "static",
+        "img",
+        "logo.png"
+    )
 
-    # Código de barras
-    barcode_value = (mechanic.code or "").strip()
+    if os.path.exists(logo_path):
+        try:
+            logo = ImageReader(logo_path)
 
-    if barcode_value:
+            logo_width = 22 * mm
+            logo_height = 12 * mm
+
+            pdf.drawImage(
+                logo,
+                (width - logo_width) / 2,
+                height - 14 * mm,
+                width=logo_width,
+                height=logo_height,
+                preserveAspectRatio=True,
+                mask='auto'
+            )
+        except Exception:
+            pass  # no rompe el PDF si falla el logo
+
+    # =========================
+    # NOMBRE
+    # =========================
+    name_font_size = _fit_text(
+        pdf=pdf,
+        text=mechanic_name or "SIN NOMBRE",
+        max_width=width - 16 * mm,
+        font_name="Helvetica-Bold",
+        max_size=12,
+        min_size=8,
+    )
+
+    pdf.setFont("Helvetica-Bold", name_font_size)
+    pdf.drawCentredString(width / 2, height - 24 * mm, mechanic_name or "SIN NOMBRE")
+
+    # =========================
+    # BARCODE
+    # =========================
+    if mechanic_code:
         barcode = createBarcodeDrawing(
             "Code128",
-            value=barcode_value,
-            barHeight=14 * mm,
-            barWidth=0.45 * mm,
+            value=mechanic_code,
+            barHeight=12 * mm,
+            barWidth=0.42 * mm,
             humanReadable=False,
         )
 
-        barcode_width = barcode.width
-        barcode_height = barcode.height
+        barcode_x = (width - barcode.width) / 2
+        barcode_y = 16 * mm
 
-        x = (width - barcode_width) / 2
-        y = 14 * mm
+        renderPDF.draw(barcode, pdf, barcode_x, barcode_y)
 
-        renderPDF.draw(barcode, pdf, x, y)
-
-    # Código alfanumérico visible
-    pdf.setFont("Helvetica", 11)
-    pdf.drawCentredString(width / 2, 8 * mm, barcode_value)
+    # =========================
+    # CÓDIGO TEXTO
+    # =========================
+    pdf.setFont("Helvetica", 10)
+    pdf.drawCentredString(width / 2, 11 * mm, mechanic_code or "SIN CÓDIGO")
 
     pdf.showPage()
     pdf.save()
