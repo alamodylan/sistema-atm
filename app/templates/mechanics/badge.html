@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gafete</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode"></script>
+</head>
+<body style="text-align:center; font-family:Arial;">
+
+    <h2>{{ mechanic.name }}</h2>
+
+    <svg id="barcode"></svg>
+
+    <p>{{ mechanic.code }}</p>
+
+    <script>
+        JsBarcode("#barcode", "{{ mechanic.code }}", {
+            format: "CODE128",
+            width: 2,
+            height: 80
+        });
+    </script>
+
+</body>
+</html>

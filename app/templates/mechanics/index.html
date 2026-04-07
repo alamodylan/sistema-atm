@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+
+    <h4 class="mb-3">Mecánicos</h4>
+
+    <form method="POST" action="{{ url_for('mechanics.create') }}" class="row g-2 mb-4">
+        <div class="col">
+            <input name="name" class="form-control" placeholder="Nombre">
+        </div>
+        <div class="col">
+            <input name="code" class="form-control" placeholder="Código">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary">Crear</button>
+        </div>
+    </form>
+
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Código</th>
+                <th>Estado</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in mechanics %}
+            <tr>
+                <td>{{ m.name }}</td>
+                <td>{{ m.code }}</td>
+                <td>
+                    {% if m.is_active %}
+                        <span class="badge bg-success">Activo</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Inactivo</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('mechanics.detail', mechanic_id=m.id) }}" class="btn btn-sm btn-outline-dark">Ver</a>
+                    <a href="{{ url_for('mechanics.toggle', mechanic_id=m.id) }}" class="btn btn-sm btn-outline-warning">Toggle</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+{% endblock %}

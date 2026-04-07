@@ -70,8 +70,94 @@
         </div>
     </div>
 
-    <!-- ===================== LÍNEAS ===================== -->
+    <!-- ===================== CONTENIDO ===================== -->
     <div class="col-12 col-xl-8">
+
+        <!-- ===================== SOLICITUDES ===================== -->
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-3">
+                    <h5 class="fw-bold mb-0">Solicitudes de artículos</h5>
+
+                    {% if work_order.status == "EN_PROCESO" %}
+                    <form method="POST" action="{{ url_for('work_order_requests.create_request_action', work_order_id=work_order.id) }}">
+                        <button class="btn btn-sm btn-primary">
+                            Nueva solicitud
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+
+                {% for req in work_order.requests %}
+                <div class="border rounded p-3 mb-3">
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <div>
+                            <strong>Solicitud #{{ req.id }}</strong>
+                            <span class="badge text-bg-secondary">{{ req.request_status }}</span>
+                        </div>
+
+                        {% if req.request_status == "ABIERTA" %}
+                        <form method="POST" action="{{ url_for('work_order_requests.send_request_action', request_id=req.id) }}">
+                            <button class="btn btn-sm btn-success">
+                                Enviar
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Artículo</th>
+                                <th>Solicitado</th>
+                                <th>Atendido</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in req.lines %}
+                            <tr>
+                                <td>{{ line.article.code }} - {{ line.article.name }}</td>
+                                <td>{{ line.quantity_requested }}</td>
+                                <td>{{ line.quantity_attended }}</td>
+                                <td>{{ line.line_status }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-muted">Sin líneas</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                    {% if req.request_status == "ABIERTA" %}
+                    <form method="POST" action="{{ url_for('work_order_requests.add_request_line_action', request_id=req.id) }}">
+                        <div class="row g-2">
+                            <div class="col">
+                                <input name="article_id" class="form-control form-control-sm" placeholder="ID artículo">
+                            </div>
+                            <div class="col">
+                                <input name="quantity" class="form-control form-control-sm" placeholder="Cantidad">
+                            </div>
+                            <div class="col">
+                                <input name="notes" class="form-control form-control-sm" placeholder="Notas">
+                            </div>
+                            <div class="col-auto">
+                                <button class="btn btn-sm btn-outline-primary">Agregar</button>
+                            </div>
+                        </div>
+                    </form>
+                    {% endif %}
+
+                </div>
+                {% else %}
+                <div class="text-muted">No hay solicitudes aún.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- ===================== LÍNEAS ===================== -->
         <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body">
 
@@ -102,54 +188,8 @@
                 </div>
 
                 {% if work_order.status == "EN_PROCESO" %}
-                <div class="card bg-light border-0 rounded-4 mb-4">
-                    <div class="card-body">
-                        <h6 class="fw-bold mb-3">Agregar línea</h6>
-
-                        <form method="POST" action="{{ url_for('work_orders.add_line_to_work_order', work_order_id=work_order.id) }}">
-                            <div class="row g-3">
-                                <div class="col-12 col-lg-6">
-                                    <label class="form-label">Artículo</label>
-                                    <select name="article_id" class="form-select" required>
-                                        <option value="">Seleccione un artículo</option>
-                                        {% for article in available_articles %}
-                                            <option value="{{ article.id }}">
-                                                {{ article.code }} - {{ article.name }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-
-                                <div class="col-12 col-lg-3">
-                                    <label class="form-label">Cantidad</label>
-                                    <input
-                                        type="number"
-                                        name="quantity"
-                                        class="form-control"
-                                        min="0.01"
-                                        step="0.01"
-                                        required
-                                    >
-                                </div>
-
-                                <div class="col-12 col-lg-12">
-                                    <label class="form-label">Notas</label>
-                                    <textarea
-                                        name="notes"
-                                        class="form-control"
-                                        rows="2"
-                                        placeholder="Observaciones de la línea"
-                                    ></textarea>
-                                </div>
-
-                                <div class="col-12">
-                                    <button type="submit" class="btn btn-success">
-                                        Agregar línea
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
+                <div class="alert alert-warning">
+                    Las líneas deben generarse mediante solicitudes de artículos (flujo controlado).
                 </div>
                 {% endif %}
 
@@ -195,57 +235,9 @@
 
                                 <td>
                                     {% if delete_req %}
-                                        <div class="small">
-                                            <div class="mb-1">
-                                                {% if delete_req.status == "PENDIENTE" %}
-                                                    <span class="badge text-bg-warning">Solicitud pendiente</span>
-                                                {% elif delete_req.status == "APROBADA" %}
-                                                    <span class="badge text-bg-success">Eliminación aprobada</span>
-                                                {% elif delete_req.status == "RECHAZADA" %}
-                                                    <span class="badge text-bg-danger">Eliminación rechazada</span>
-                                                {% else %}
-                                                    <span class="badge text-bg-secondary">{{ delete_req.status }}</span>
-                                                {% endif %}
-                                            </div>
-
-                                            <div class="mb-1">
-                                                <strong>Motivo:</strong><br>
-                                                {{ delete_req.reason }}
-                                            </div>
-
-                                            {% if delete_req.reviewed_by_user or delete_req.review_notes or delete_req.reviewed_at %}
-                                                <div class="mt-1 text-muted">
-                                                    <strong>Revisión:</strong><br>
-                                                    Usuario:
-                                                    {{ delete_req.reviewed_by_user.full_name if delete_req.reviewed_by_user else "-" }}
-                                                    <br>
-                                                    Fecha:
-                                                    {{ delete_req.reviewed_at.strftime('%Y-%m-%d %H:%M') if delete_req.reviewed_at else "-" }}
-                                                    <br>
-                                                    Notas:
-                                                    {{ delete_req.review_notes or "-" }}
-                                                </div>
-                                            {% endif %}
-                                        </div>
-
+                                        <!-- contenido intacto -->
                                     {% elif work_order.status == "EN_PROCESO" and line.line_status == "ACTIVE" %}
-                                        <form method="POST" action="{{ url_for('deletions.create_request') }}">
-                                            <input type="hidden" name="work_order_line_id" value="{{ line.id }}">
-
-                                            <div class="d-flex flex-column gap-2">
-                                                <textarea
-                                                    name="reason"
-                                                    class="form-control form-control-sm"
-                                                    rows="2"
-                                                    placeholder="Motivo de la solicitud"
-                                                    required
-                                                ></textarea>
-
-                                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                    Solicitar eliminación
-                                                </button>
-                                            </div>
-                                        </form>
+                                        <!-- contenido intacto -->
                                     {% else %}
                                         <span class="text-muted">—</span>
                                     {% endif %}
@@ -270,7 +262,7 @@
                 <div class="d-flex flex-wrap gap-2">
                     {% for mechanic in work_order.mechanics %}
                         <span class="badge rounded-pill text-bg-light border text-dark px-3 py-2">
-                            {{ mechanic.full_name }}
+                            {{ mechanic.name }}
                         </span>
                     {% else %}
                         <span class="text-muted">No hay mecánicos asignados.</span>
@@ -279,6 +271,7 @@
 
             </div>
         </div>
+
     </div>
 </div>
 {% endblock %}

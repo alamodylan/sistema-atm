@@ -1,7 +1,9 @@
 from flask import Blueprint, redirect, render_template, session, url_for
 from flask_login import current_user, login_required
+from sqlalchemy.orm import joinedload
 
 from app.models.inventory import WarehouseStock
+from app.models.tool_loan import ToolLoan
 from app.models.warehouse import Warehouse
 from app.models.waste_act import WasteAct
 from app.models.work_order import WorkOrder
@@ -77,6 +79,50 @@ def index():
                 .filter(Warehouse.site_id == active_site_id)
                 .count()
             )
+
+            work_orders_in_process_list = (
+                WorkOrder.query
+                .options(
+                    joinedload(WorkOrder.requests).joinedload("lines"),
+                    joinedload(WorkOrder.tool_loans),
+                    joinedload(WorkOrder.warehouse),
+                    joinedload(WorkOrder.responsible_user),
+                )
+                .filter_by(
+                    site_id=active_site_id,
+                    status="EN_PROCESO",
+                )
+                .order_by(WorkOrder.created_at.desc())
+                .all()
+            )
+
+            for ot in work_orders_in_process_list:
+                has_open_tool_loans = any(
+                    loan.loan_status == "PRESTADA"
+                    for loan in ot.tool_loans
+                )
+
+                has_pending_requests = False
+                for req in ot.requests:
+                    if req.request_status in ("ABIERTA", "ENVIADA"):
+                        has_pending_requests = True
+                        break
+
+                    for line in req.lines:
+                        if line.line_status in ("SOLICITADA", "ATENDIDA_PARCIAL", "PRESTADA"):
+                            has_pending_requests = True
+                            break
+
+                    if has_pending_requests:
+                        break
+
+                if has_open_tool_loans:
+                    ot.semaforo = "RED"
+                elif has_pending_requests:
+                    ot.semaforo = "YELLOW"
+                else:
+                    ot.semaforo = "GREEN"
+
         else:
             work_orders_in_process = 0
             work_orders_finalized = 0
@@ -87,6 +133,7 @@ def index():
             waste_cerrada = 0
             waste_cancelada = 0
             inventory_records = 0
+            work_orders_in_process_list = []
 
         return render_template(
             "dashboard/index.html",
@@ -101,6 +148,7 @@ def index():
             waste_cerrada=waste_cerrada,
             waste_cancelada=waste_cancelada,
             inventory_records=inventory_records,
+            work_orders_in_process_list=work_orders_in_process_list,
         )
 
     except Exception:
@@ -117,4 +165,5 @@ def index():
             waste_cerrada=0,
             waste_cancelada=0,
             inventory_records=0,
+            work_orders_in_process_list=[],
         )

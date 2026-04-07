@@ -6,9 +6,11 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.models.article import Article
-from app.models.user import User
+from app.models.mechanic import Mechanic
+from app.models.tool_loan import ToolLoan  # 🔥 NUEVO
 from app.models.work_order import WorkOrder
 from app.models.work_order_line import WorkOrderLine
+from app.models.work_order_request_line import WorkOrderRequestLine
 from app.services.audit_service import log_action
 from app.services.inventory_service import InventoryServiceError, subtract_stock
 
@@ -49,7 +51,7 @@ def create_work_order(
     if existing:
         raise WorkOrderServiceError("Ya existe una orden de trabajo con ese número.")
 
-    mechanics = User.query.filter(User.id.in_(mechanic_ids)).all()
+    mechanics = Mechanic.query.filter(Mechanic.id.in_(mechanic_ids)).all()
     if len(mechanics) != len(set(mechanic_ids)):
         raise WorkOrderServiceError("Uno o más mecánicos seleccionados no existen.")
 
@@ -91,34 +93,36 @@ def create_work_order(
     return work_order
 
 
-def add_work_order_line(
+# 🔥 ENTREGA DESDE SOLICITUD
+def deliver_from_request_line(
     *,
-    work_order_id: int,
-    article_id: int,
-    quantity: Decimal | int | float,
+    request_line_id: int,
+    quantity,
     delivered_by_user_id: int,
     received_by_user_id: int | None = None,
-    notes: str | None = None,
     commit: bool = True,
 ) -> WorkOrderLine:
-    work_order = WorkOrder.query.get(work_order_id)
-    if not work_order:
-        raise WorkOrderServiceError("La OT no existe.")
+
+    request_line = WorkOrderRequestLine.query.get(request_line_id)
+    if not request_line:
+        raise WorkOrderServiceError("La línea de solicitud no existe.")
+
+    work_order = request_line.work_order_request.work_order
 
     if work_order.status != "EN_PROCESO":
-        raise WorkOrderServiceError("Solo se pueden agregar líneas a una OT en proceso.")
-
-    article = Article.query.get(article_id)
-    if not article:
-        raise WorkOrderServiceError("El artículo no existe.")
+        raise WorkOrderServiceError("La OT no está en proceso.")
 
     qty = Decimal(str(quantity))
     if qty <= 0:
-        raise WorkOrderServiceError("La cantidad debe ser mayor a 0.")
+        raise WorkOrderServiceError("Cantidad inválida.")
+
+    remaining = request_line.quantity_requested - request_line.quantity_attended
+    if qty > remaining:
+        raise WorkOrderServiceError("No puede entregar más de lo solicitado.")
 
     try:
         subtract_stock(
-            article_id=article_id,
+            article_id=request_line.article_id,
             warehouse_id=work_order.warehouse_id,
             quantity=qty,
             performed_by_user_id=delivered_by_user_id,
@@ -133,15 +137,22 @@ def add_work_order_line(
         db.session.rollback()
         raise WorkOrderServiceError(str(exc)) from exc
 
+    request_line.quantity_attended += qty
+
+    if request_line.quantity_attended == request_line.quantity_requested:
+        request_line.line_status = "ENTREGADA"
+    else:
+        request_line.line_status = "ATENDIDA_PARCIAL"
+
     line = WorkOrderLine(
         work_order_id=work_order.id,
-        article_id=article_id,
+        request_line_id=request_line.id,
+        article_id=request_line.article_id,
         quantity=qty,
         delivered_by_user_id=delivered_by_user_id,
         received_by_user_id=received_by_user_id,
         line_status="ACTIVE",
         inventory_posted=True,
-        notes=(notes or "").strip() or None,
         delivered_at=datetime.now(UTC),
         received_at=datetime.now(UTC) if received_by_user_id else None,
     )
@@ -153,14 +164,12 @@ def add_work_order_line(
 
     log_action(
         user_id=delivered_by_user_id,
-        action="ADD_WORK_ORDER_LINE",
+        action="DELIVER_FROM_REQUEST",
         table_name="work_order_lines",
         record_id=str(line.id),
         details={
-            "work_order_id": work_order.id,
-            "article_id": article_id,
+            "request_line_id": request_line.id,
             "quantity": str(qty),
-            "movement_type": "SALIDA_OT",
         },
         commit=commit,
     )
@@ -168,13 +177,14 @@ def add_work_order_line(
     return line
 
 
+# 🔥 FINALIZAR OT (AUTOMÁTICO)
 def finalize_work_order(
     *,
     work_order_id: int,
     performed_by_user_id: int,
-    has_loaned_tools: bool = False,
     commit: bool = True,
 ) -> WorkOrder:
+
     work_order = WorkOrder.query.get(work_order_id)
     if not work_order:
         raise WorkOrderServiceError("La OT no existe.")
@@ -182,14 +192,16 @@ def finalize_work_order(
     if work_order.status != "EN_PROCESO":
         raise WorkOrderServiceError("Solo se puede finalizar una OT en proceso.")
 
-    if has_loaned_tools:
-        raise WorkOrderServiceError("No se puede finalizar la OT porque tiene herramientas prestadas.")
+    # 🔥 VALIDACIÓN REAL
+    has_open_loans = ToolLoan.query.filter_by(
+        work_order_id=work_order_id,
+        loan_status="PRESTADA",
+    ).count() > 0
 
-    for line in work_order.lines:
-        if line.delete_requests.filter_by(status="PENDIENTE").first():
-            raise WorkOrderServiceError(
-                "No se puede finalizar la OT porque tiene solicitudes de eliminación pendientes."
-            )
+    if has_open_loans:
+        raise WorkOrderServiceError(
+            "No se puede finalizar la OT porque tiene herramientas prestadas."
+        )
 
     work_order.status = "FINALIZADA"
     work_order.finalized_at = datetime.now(UTC)
@@ -215,6 +227,7 @@ def close_work_order(
     performed_by_user_id: int,
     commit: bool = True,
 ) -> WorkOrder:
+
     work_order = WorkOrder.query.get(work_order_id)
     if not work_order:
         raise WorkOrderServiceError("La OT no existe.")

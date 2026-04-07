@@ -2,6 +2,8 @@ from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
+from sqlalchemy.orm import joinedload
+
 from app.models.deletion_request import WorkOrderLineDeleteRequest
 from app.models.article import Article
 from app.models.work_order import WorkOrder
@@ -98,6 +100,7 @@ def create_work_order_page():
         mechanics=mechanics,
     )
 
+
 # =========================================================
 # CREAR OT
 # =========================================================
@@ -155,13 +158,23 @@ def create_work_order_action():
 
 
 # =========================================================
-# DETALLE OT
+# DETALLE OT (OPTIMIZADO)
 # =========================================================
 @work_order_bp.route("/<int:work_order_id>", methods=["GET"])
 @login_required
 def get_work_order(work_order_id: int):
     try:
-        work_order = WorkOrder.query.get(work_order_id)
+        work_order = (
+            WorkOrder.query
+            .options(
+                joinedload(WorkOrder.requests)
+                .joinedload("lines")
+                .joinedload("article"),
+                joinedload(WorkOrder.lines)
+                .joinedload("article"),
+            )
+            .get(work_order_id)
+        )
 
         if not work_order:
             raise ValueError("Orden de trabajo no encontrada.")
@@ -191,45 +204,12 @@ def get_work_order(work_order_id: int):
 
 
 # =========================================================
-# AGREGAR LÍNEA A OT
+# ❌ BLOQUEADO: AGREGAR LÍNEA DIRECTA
 # =========================================================
 @work_order_bp.route("/<int:work_order_id>/lines", methods=["POST"])
 @login_required
 def add_line_to_work_order(work_order_id: int):
-    try:
-        article_id_raw = request.form.get("article_id")
-        quantity_raw = (request.form.get("quantity") or "").strip()
-        notes = request.form.get("notes")
-
-        if not article_id_raw:
-            raise ValueError("Debe seleccionar un artículo.")
-
-        if not quantity_raw:
-            raise ValueError("Debe indicar una cantidad.")
-
-        try:
-            quantity = Decimal(quantity_raw)
-        except (InvalidOperation, ValueError) as exc:
-            raise ValueError("La cantidad ingresada no es válida.") from exc
-
-        add_work_order_line(
-            work_order_id=work_order_id,
-            article_id=int(article_id_raw),
-            quantity=quantity,
-            delivered_by_user_id=current_user.id,
-            received_by_user_id=None,
-            notes=notes,
-            commit=True,
-        )
-
-        flash("Línea agregada correctamente a la OT.", "success")
-
-    except (WorkOrderServiceError, ValueError) as exc:
-        flash(str(exc), "danger")
-
-    except Exception:
-        flash("Error interno al agregar la línea a la OT.", "danger")
-
+    flash("Las líneas deben generarse desde solicitudes (flujo correcto).", "warning")
     return redirect(url_for("work_orders.get_work_order", work_order_id=work_order_id))
 
 
