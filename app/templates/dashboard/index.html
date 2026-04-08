@@ -37,11 +37,11 @@
                                         <strong>OT {{ ot.number }}</strong>
 
                                         {% if ot.semaforo == "RED" %}
-                                            <span class="badge bg-danger">Herramienta pendiente</span>
+                                            <span class="badge bg-danger">Con solicitud</span>
                                         {% elif ot.semaforo == "YELLOW" %}
-                                            <span class="badge bg-warning text-dark">Con solicitud</span>
+                                            <span class="badge bg-warning text-dark">Atención parcial</span>
                                         {% elif ot.semaforo == "GREEN" %}
-                                            <span class="badge bg-success">Activa</span>
+                                            <span class="badge bg-success">Sin solicitud</span>
                                         {% else %}
                                             <span class="badge bg-secondary">—</span>
                                         {% endif %}
