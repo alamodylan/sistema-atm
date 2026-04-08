@@ -10,7 +10,6 @@ from app.models.equipment import Equipment
 from app.models.mechanic import Mechanic
 from app.models.service_catalog import ServiceCatalog
 from app.models.site import Site
-from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.models.work_order import WorkOrder
 from app.services.work_order_service import (
@@ -75,13 +74,6 @@ def create_work_order_page():
         warehouses_query = warehouses_query.filter(Warehouse.site_id == int(active_site_id))
     warehouses = warehouses_query.all()
 
-    responsible_users = (
-        User.query
-        .filter(User.is_active.is_(True))
-        .order_by(User.full_name)
-        .all()
-    )
-
     mechanics_query = (
         Mechanic.query
         .filter(Mechanic.is_active.is_(True))
@@ -101,7 +93,7 @@ def create_work_order_page():
     services = (
         ServiceCatalog.query
         .filter(ServiceCatalog.is_active.is_(True))
-        .order_by(ServiceCatalog.name)
+        .order_by(ServiceCatalog.name, ServiceCatalog.code)
         .all()
     )
 
@@ -111,7 +103,6 @@ def create_work_order_page():
         subtitle="Cree una orden con responsable, bodega, equipo y mecánicos asignados.",
         sites=sites,
         warehouses=warehouses,
-        responsible_users=responsible_users,
         mechanics=mechanics,
         equipments=equipments,
         services=services,
@@ -127,7 +118,7 @@ def create_work_order_action():
     try:
         site_id = session.get("active_site_id")
         warehouse_id = request.form.get("warehouse_id")
-        responsible_user_id = request.form.get("responsible_user_id")
+        responsible_user_id = current_user.id
         mechanic_ids = request.form.getlist("mechanics")
         service_id = request.form.get("service_id")
         service_notes = request.form.get("service_notes")
@@ -140,9 +131,6 @@ def create_work_order_action():
 
         if not warehouse_id:
             raise ValueError("La bodega es obligatoria.")
-
-        if not responsible_user_id:
-            raise ValueError("El responsable es obligatorio.")
 
         if not mechanic_ids:
             raise ValueError("Debe seleccionar al menos un mecánico.")

@@ -10,6 +10,8 @@
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
         <form method="POST" action="{{ url_for('work_orders.create_work_order_action') }}">
+            <input type="hidden" name="responsible_user_id" value="{{ current_user.id }}">
+
             <div class="row g-4">
 
                 <div class="col-12 col-md-6">
@@ -28,14 +30,12 @@
 
                 <div class="col-12 col-md-6">
                     <label class="form-label fw-semibold">Responsable</label>
-                    <select class="form-select" name="responsible_user_id" required>
-                        <option value="">Seleccione...</option>
-                        {% if responsible_users %}
-                            {% for user in responsible_users %}
-                                <option value="{{ user.id }}">{{ user.full_name }}</option>
-                            {% endfor %}
-                        {% endif %}
-                    </select>
+                    <input
+                        type="text"
+                        class="form-control"
+                        value="{{ current_user.full_name }}"
+                        readonly
+                    >
                 </div>
 
                 <div class="col-12 col-md-6">
@@ -45,11 +45,16 @@
                         {% if services %}
                             {% for service in services %}
                                 <option value="{{ service.id }}">
-                                    {{ service.name }}{% if service.category %} - {{ service.category }}{% endif %}
+                                    {{ service.code }} - {{ service.name }}{% if service.category %} - {{ service.category }}{% endif %}
                                 </option>
                             {% endfor %}
                         {% endif %}
                     </select>
+                    {% if not services %}
+                        <div class="form-text text-danger">
+                            No hay tipos de reparación activos para mostrar.
+                        </div>
+                    {% endif %}
                 </div>
 
                 <div class="col-12 col-md-6">
