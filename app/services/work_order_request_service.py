@@ -1,5 +1,3 @@
-# app/services/work_order_request_service.py
-
 from __future__ import annotations
 
 from decimal import Decimal
@@ -68,9 +66,7 @@ def create_request(
     )
 
     db.session.add(request_obj)
-
-    if commit:
-        db.session.commit()
+    db.session.flush()
 
     log_action(
         user_id=requested_by_user_id,
@@ -78,8 +74,11 @@ def create_request(
         table_name="work_order_requests",
         record_id=str(request_obj.id),
         details={"work_order_id": work_order_id},
-        commit=commit,
+        commit=False,
     )
+
+    if commit:
+        db.session.commit()
 
     return request_obj
 
@@ -92,6 +91,9 @@ def add_request_line(
     notes: str | None = None,
     commit: bool = True,
 ) -> WorkOrderRequestLine:
+    if not request_id:
+        raise WorkOrderRequestServiceError("La solicitud no existe.")
+
     request_obj = WorkOrderRequest.query.get(request_id)
     if not request_obj:
         raise WorkOrderRequestServiceError("La solicitud no existe.")
@@ -115,9 +117,7 @@ def add_request_line(
     )
 
     db.session.add(line)
-
-    if commit:
-        db.session.commit()
+    db.session.flush()
 
     log_action(
         user_id=request_obj.requested_by_user_id,
@@ -129,8 +129,11 @@ def add_request_line(
             "article_id": article_id,
             "quantity_requested": str(qty),
         },
-        commit=commit,
+        commit=False,
     )
+
+    if commit:
+        db.session.commit()
 
     return line
 
@@ -151,9 +154,7 @@ def cancel_request_line(
 
     line.line_status = "CANCELADA"
     _sync_request_status(request_obj)
-
-    if commit:
-        db.session.commit()
+    db.session.flush()
 
     log_action(
         user_id=performed_by_user_id,
@@ -161,8 +162,11 @@ def cancel_request_line(
         table_name="work_order_request_lines",
         record_id=str(line.id),
         details={"line_status": line.line_status},
-        commit=commit,
+        commit=False,
     )
+
+    if commit:
+        db.session.commit()
 
     return line
 
@@ -173,6 +177,9 @@ def send_request(
     performed_by_user_id: int,
     commit: bool = True,
 ) -> WorkOrderRequest:
+    if not request_id:
+        raise WorkOrderRequestServiceError("La solicitud no existe.")
+
     request_obj = WorkOrderRequest.query.get(request_id)
     if not request_obj:
         raise WorkOrderRequestServiceError("La solicitud no existe.")
@@ -188,9 +195,7 @@ def send_request(
         raise WorkOrderRequestServiceError("No se puede enviar una solicitud sin líneas activas.")
 
     request_obj.request_status = "ENVIADA"
-
-    if commit:
-        db.session.commit()
+    db.session.flush()
 
     log_action(
         user_id=performed_by_user_id,
@@ -198,8 +203,11 @@ def send_request(
         table_name="work_order_requests",
         record_id=str(request_obj.id),
         details={"status": request_obj.request_status},
-        commit=commit,
+        commit=False,
     )
+
+    if commit:
+        db.session.commit()
 
     return request_obj
 
@@ -233,9 +241,7 @@ def attend_request_line(
         line.line_status = "ATENDIDA_PARCIAL"
 
     _sync_request_status(request_obj)
-
-    if commit:
-        db.session.commit()
+    db.session.flush()
 
     log_action(
         user_id=performed_by_user_id,
@@ -247,8 +253,11 @@ def attend_request_line(
             "total_attended": str(line.quantity_attended),
             "line_status": line.line_status,
         },
-        commit=commit,
+        commit=False,
     )
+
+    if commit:
+        db.session.commit()
 
     return line
 
@@ -272,9 +281,7 @@ def mark_request_line_not_delivered(
     line.not_delivered_reason = (reason or "").strip() or None
 
     _sync_request_status(request_obj)
-
-    if commit:
-        db.session.commit()
+    db.session.flush()
 
     log_action(
         user_id=performed_by_user_id,
@@ -285,8 +292,11 @@ def mark_request_line_not_delivered(
             "line_status": line.line_status,
             "reason": line.not_delivered_reason,
         },
-        commit=commit,
+        commit=False,
     )
+
+    if commit:
+        db.session.commit()
 
     return line
 
@@ -320,9 +330,7 @@ def mark_request_line_loaned(
         line.line_status = "ATENDIDA_PARCIAL"
 
     _sync_request_status(request_obj)
-
-    if commit:
-        db.session.commit()
+    db.session.flush()
 
     log_action(
         user_id=performed_by_user_id,
@@ -334,7 +342,10 @@ def mark_request_line_loaned(
             "total_attended": str(line.quantity_attended),
             "line_status": line.line_status,
         },
-        commit=commit,
+        commit=False,
     )
+
+    if commit:
+        db.session.commit()
 
     return line
