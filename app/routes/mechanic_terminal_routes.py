@@ -1,13 +1,15 @@
-from flask import Blueprint, render_template, request, jsonify, session
-from flask_login import current_user, login_required
+from decimal import Decimal, InvalidOperation
 
+from flask import Blueprint, render_template, request, jsonify, session
+from flask_login import login_required, current_user
+
+from app.extensions import db
 from app.models.mechanic import Mechanic
 from app.models.work_order import WorkOrder
 from app.models.tool_loan import ToolLoan
-from app.services.inventory_service import get_inventory_by_warehouse, InventoryServiceError
-from app.extensions import db
 from app.models.work_order_request import WorkOrderRequest
 from app.models.work_order_request_line import WorkOrderRequestLine
+from app.services.inventory_service import get_inventory_by_warehouse, InventoryServiceError
 
 terminal_bp = Blueprint("mechanic_terminal", __name__, url_prefix="/terminal")
 
@@ -145,22 +147,19 @@ def get_borrowed_tools(work_order_id):
     return jsonify({"items": items})
 
 
-
 @terminal_bp.route("/work-orders/<int:work_order_id>/requests/submit", methods=["POST"])
 @login_required
 def submit_request(work_order_id):
     data = request.get_json(silent=True) or {}
     lines = data.get("lines") or []
-
-    if not lines:
-        return jsonify({"error": "No hay líneas para solicitar"}), 400
-
     active_site_id = session.get("active_site_id")
 
     if not active_site_id:
-        return jsonify({"error": "No hay predio activo"}), 400
+        return jsonify({"error": "No hay predio activo seleccionado"}), 400
 
-    # 🔹 validar OT
+    if not lines:
+        return jsonify({"error": "No hay artículos para solicitar"}), 400
+
     work_order = WorkOrder.query.filter_by(
         id=work_order_id,
         site_id=active_site_id,
@@ -173,34 +172,61 @@ def submit_request(work_order_id):
         return jsonify({"error": "La OT no está en proceso"}), 400
 
     try:
-        # 🔥 buscar solicitud existente
-        request_obj = WorkOrderRequest.query.filter_by(
-            work_order_id=work_order_id
-        ).first()
+        request_obj = (
+            WorkOrderRequest.query
+            .filter_by(
+                work_order_id=work_order.id,
+                request_status="ABIERTA",
+            )
+            .order_by(WorkOrderRequest.created_at.desc())
+            .first()
+        )
 
-        # 🔥 si no existe → crearla
         if not request_obj:
             request_obj = WorkOrderRequest(
-                work_order_id=work_order_id,
-                created_by_user_id=current_user.id,
+                work_order_id=work_order.id,
+                requested_by_user_id=current_user.id,
+                request_status="ABIERTA",
             )
             db.session.add(request_obj)
-            db.session.flush()  # 🔥 necesario para obtener id
+            db.session.flush()
 
-        # 🔥 insertar líneas
         for line in lines:
-            new_line = WorkOrderRequestLine(
+            article_id = line.get("article_id")
+            quantity_raw = line.get("quantity")
+            notes = line.get("notes")
+
+            if not article_id:
+                db.session.rollback()
+                return jsonify({"error": "Hay una línea sin artículo"}), 400
+
+            try:
+                quantity_requested = Decimal(str(quantity_raw))
+            except (InvalidOperation, TypeError, ValueError):
+                db.session.rollback()
+                return jsonify({"error": "Cantidad inválida en una de las líneas"}), 400
+
+            if quantity_requested <= 0:
+                db.session.rollback()
+                return jsonify({"error": "La cantidad debe ser mayor que cero"}), 400
+
+            request_line = WorkOrderRequestLine(
                 work_order_request_id=request_obj.id,
-                article_id=line["article_id"],
-                quantity=line["quantity"],
-                created_by_user_id=current_user.id,
+                article_id=int(article_id),
+                quantity_requested=quantity_requested,
+                quantity_attended=Decimal("0"),
+                line_status="SOLICITADA",
+                notes=(notes or "").strip() or None,
             )
-            db.session.add(new_line)
+            db.session.add(request_line)
 
         db.session.commit()
+        return jsonify({
+            "ok": True,
+            "request_id": request_obj.id,
+            "message": "Solicitud enviada correctamente.",
+        })
 
-        return jsonify({"ok": True})
-
-    except Exception as e:
+    except Exception as exc:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Error al enviar solicitud: {str(exc)}"}), 500
