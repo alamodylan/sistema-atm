@@ -61,21 +61,21 @@
                         name="equipment_code_snapshot"
                         id="equipment_search"
                         list="equipment_list"
-                        placeholder="Busque por código o nombre del equipo"
+                        placeholder="Busque por código o descripción del equipo"
                         autocomplete="off"
                     >
                     <datalist id="equipment_list">
                         {% if equipments %}
                             {% for equipment in equipments %}
                                 <option
-                                    value="{{ equipment.code }} - {{ equipment.name }}"
+                                    value="{{ equipment.code }} - {{ equipment.description or equipment.equipment_type or equipment.size_label or '' }}"
                                     data-id="{{ equipment.id }}"
                                 ></option>
                             {% endfor %}
                         {% endif %}
                     </datalist>
                     <div class="form-text">
-                        Empiece a escribir el código o nombre del equipo y seleccione una coincidencia.
+                        Empiece a escribir el código o la descripción del equipo y seleccione una coincidencia.
                     </div>
                 </div>
 

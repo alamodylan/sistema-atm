@@ -94,7 +94,7 @@ def create_work_order_page():
     equipments = (
         Equipment.query
         .filter(Equipment.is_active.is_(True))
-        .order_by(Equipment.code, Equipment.name)
+        .order_by(Equipment.code, Equipment.description)
         .all()
     )
 
