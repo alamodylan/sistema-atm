@@ -150,6 +150,11 @@ def get_borrowed_tools(work_order_id):
 @terminal_bp.route("/work-orders/<int:work_order_id>/requests/submit", methods=["POST"])
 @login_required
 def submit_request(work_order_id):
+    return jsonify({
+        "error": "ENTRO_A_SUBMIT_REQUEST_REAL",
+        "work_order_id": work_order_id,
+    }), 400
+
     data = request.get_json(silent=True) or {}
     lines = data.get("lines") or []
     active_site_id = session.get("active_site_id")
