@@ -194,12 +194,15 @@ function renderWorkOrders() {
     document.getElementById("noWorkOrders").classList.add("d-none");
 
     currentWorkOrders.forEach(ot => {
+        const equipo = ot.equipment_code_snapshot ? ot.equipment_code_snapshot : "Sin equipo";
+
         const col = document.createElement("div");
         col.className = "col-12 col-md-6 col-xl-4";
 
         col.innerHTML = `
-            <button class="btn btn-outline-primary w-100 p-3">
-                OT ${ot.number}
+            <button class="btn btn-outline-primary w-100 p-3 text-start">
+                <div class="fw-bold">OT ${ot.number}</div>
+                <div class="small text-muted">Equipo: ${equipo}</div>
             </button>
         `;
 
@@ -209,7 +212,7 @@ function renderWorkOrders() {
             renderCart();
 
             document.getElementById("selectedWorkOrderSection").classList.remove("d-none");
-            document.getElementById("selectedWorkOrderLabel").innerText = "OT " + ot.number;
+            document.getElementById("selectedWorkOrderLabel").innerText = `OT ${ot.number} | Equipo: ${equipo}`;
         };
 
         container.appendChild(col);

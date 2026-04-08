@@ -187,6 +187,9 @@ def submit_request(work_order_id):
             quantity_requested = line.get("quantity")
             notes = line.get("notes")
 
+            if not article_id:
+                raise WorkOrderRequestServiceError("Falta el artículo en una de las líneas.")
+
             add_request_line(
                 request_id=request_obj.id,
                 article_id=int(article_id),
@@ -194,6 +197,8 @@ def submit_request(work_order_id):
                 notes=notes,
                 commit=False,
             )
+
+        db.session.flush()
 
         send_request(
             request_id=request_obj.id,
