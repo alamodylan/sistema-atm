@@ -1,5 +1,3 @@
-from decimal import Decimal, InvalidOperation
-
 from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required, current_user
 
@@ -7,9 +5,13 @@ from app.extensions import db
 from app.models.mechanic import Mechanic
 from app.models.work_order import WorkOrder
 from app.models.tool_loan import ToolLoan
-from app.models.work_order_request import WorkOrderRequest
-from app.models.work_order_request_line import WorkOrderRequestLine
 from app.services.inventory_service import get_inventory_by_warehouse, InventoryServiceError
+from app.services.work_order_request_service import (
+    WorkOrderRequestServiceError,
+    create_request,
+    add_request_line,
+    send_request,
+)
 
 terminal_bp = Blueprint("mechanic_terminal", __name__, url_prefix="/terminal")
 
@@ -150,11 +152,6 @@ def get_borrowed_tools(work_order_id):
 @terminal_bp.route("/work-orders/<int:work_order_id>/requests/submit", methods=["POST"])
 @login_required
 def submit_request(work_order_id):
-    return jsonify({
-        "error": "ENTRO_A_SUBMIT_REQUEST_REAL",
-        "work_order_id": work_order_id,
-    }), 400
-
     data = request.get_json(silent=True) or {}
     lines = data.get("lines") or []
     active_site_id = session.get("active_site_id")
@@ -177,60 +174,44 @@ def submit_request(work_order_id):
         return jsonify({"error": "La OT no está en proceso"}), 400
 
     try:
-        request_obj = (
-            WorkOrderRequest.query
-            .filter_by(
-                work_order_id=work_order.id,
-                request_status="ABIERTA",
-            )
-            .order_by(WorkOrderRequest.created_at.desc())
-            .first()
+        request_obj = create_request(
+            work_order_id=work_order.id,
+            requested_by_user_id=current_user.id,
+            commit=False,
         )
 
-        if not request_obj:
-            request_obj = WorkOrderRequest(
-                work_order_id=work_order.id,
-                requested_by_user_id=current_user.id,
-                request_status="ABIERTA",
-            )
-            db.session.add(request_obj)
-            db.session.flush()
+        db.session.flush()
 
         for line in lines:
             article_id = line.get("article_id")
-            quantity_raw = line.get("quantity")
+            quantity_requested = line.get("quantity")
             notes = line.get("notes")
 
-            if not article_id:
-                db.session.rollback()
-                return jsonify({"error": "Hay una línea sin artículo"}), 400
-
-            try:
-                quantity_requested = Decimal(str(quantity_raw))
-            except (InvalidOperation, TypeError, ValueError):
-                db.session.rollback()
-                return jsonify({"error": "Cantidad inválida en una de las líneas"}), 400
-
-            if quantity_requested <= 0:
-                db.session.rollback()
-                return jsonify({"error": "La cantidad debe ser mayor que cero"}), 400
-
-            request_line = WorkOrderRequestLine(
-                work_order_request_id=request_obj.id,
+            add_request_line(
+                request_id=request_obj.id,
                 article_id=int(article_id),
                 quantity_requested=quantity_requested,
-                quantity_attended=Decimal("0"),
-                line_status="SOLICITADA",
-                notes=(notes or "").strip() or None,
+                notes=notes,
+                commit=False,
             )
-            db.session.add(request_line)
+
+        send_request(
+            request_id=request_obj.id,
+            performed_by_user_id=current_user.id,
+            commit=False,
+        )
 
         db.session.commit()
+
         return jsonify({
             "ok": True,
             "request_id": request_obj.id,
             "message": "Solicitud enviada correctamente.",
         })
+
+    except WorkOrderRequestServiceError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
 
     except Exception as exc:
         db.session.rollback()

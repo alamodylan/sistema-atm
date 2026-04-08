@@ -15,7 +15,6 @@
 
     <div id="terminalContent" class="d-none">
 
-        <!-- MECANICO -->
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-body d-flex justify-content-between">
                 <div>
@@ -26,7 +25,6 @@
             </div>
         </div>
 
-        <!-- OT -->
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-body">
                 <h5>Órdenes activas</h5>
@@ -37,7 +35,6 @@
             </div>
         </div>
 
-        <!-- ACCIONES -->
         <div id="selectedWorkOrderSection" class="d-none">
             <div class="card border-0 shadow-sm rounded-4 mb-4">
                 <div class="card-body">
@@ -52,7 +49,6 @@
             </div>
         </div>
 
-        <!-- LISTADO -->
         <div id="itemsSection" class="card border-0 shadow-sm rounded-4 d-none">
             <div class="card-body">
                 <h5 id="itemsTitle"></h5>
@@ -67,7 +63,6 @@
             </div>
         </div>
 
-        <!-- 🔥 CARRITO NUEVO -->
         <div id="cartSection" class="card border-0 shadow-sm rounded-4 mt-3 d-none">
             <div class="card-body">
                 <h5>Solicitud</h5>
@@ -75,6 +70,32 @@
                 <button class="btn btn-success mt-2" id="submitRequestBtn">
                     Enviar solicitud
                 </button>
+            </div>
+        </div>
+
+        <div id="quantitySection" class="card border-0 shadow-sm rounded-4 mt-3 d-none">
+            <div class="card-body">
+                <h5>Ingresar cantidad</h5>
+                <div class="mb-2 fw-semibold" id="quantityItemLabel"></div>
+
+                <input type="hidden" id="quantityArticleId">
+                <input type="hidden" id="quantityArticleName">
+
+                <input
+                    type="number"
+                    id="quantityInput"
+                    class="form-control"
+                    min="1"
+                    step="1"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="Cantidad"
+                >
+
+                <div class="d-flex gap-2 mt-3">
+                    <button class="btn btn-success" id="confirmQuantityBtn">Agregar</button>
+                    <button class="btn btn-outline-secondary" id="cancelQuantityBtn">Cancelar</button>
+                </div>
             </div>
         </div>
 
@@ -87,18 +108,25 @@ let currentMechanic = null;
 let currentWorkOrders = [];
 let selectedWorkOrder = null;
 let currentItems = [];
-let cart = []; // 🔥 NUEVO
+let cart = [];
 
 const scannerEl = document.getElementById("scanner");
+const quantitySection = document.getElementById("quantitySection");
+const quantityItemLabel = document.getElementById("quantityItemLabel");
+const quantityArticleId = document.getElementById("quantityArticleId");
+const quantityArticleName = document.getElementById("quantityArticleName");
+const quantityInput = document.getElementById("quantityInput");
 
 function keepScannerFocus() {
-    if (document.activeElement !== scannerEl) {
+    if (
+        document.activeElement !== scannerEl &&
+        quantitySection.classList.contains("d-none")
+    ) {
         scannerEl.focus();
     }
 }
 setInterval(keepScannerFocus, 500);
 
-// ---------------- RESET ----------------
 function resetTerminal() {
     scannerInput = "";
     currentMechanic = null;
@@ -109,12 +137,21 @@ function resetTerminal() {
 
     document.getElementById("terminalContent").classList.add("d-none");
     document.getElementById("cartSection").classList.add("d-none");
+    document.getElementById("itemsSection").classList.add("d-none");
+    document.getElementById("selectedWorkOrderSection").classList.add("d-none");
+    quantitySection.classList.add("d-none");
+
+    document.getElementById("workOrdersList").innerHTML = "";
+    document.getElementById("itemsList").innerHTML = "";
+    document.getElementById("cartList").innerHTML = "";
 }
 
-// ---------------- SCAN ----------------
 document.addEventListener("keydown", async function(e) {
-    if (e.key === "Enter") {
+    if (!quantitySection.classList.contains("d-none")) {
+        return;
+    }
 
+    if (e.key === "Enter") {
         const res = await fetch("/terminal/scan", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
@@ -132,16 +169,19 @@ document.addEventListener("keydown", async function(e) {
             document.getElementById("mechanicCode").innerText = data.code;
 
             renderWorkOrders();
+        } else {
+            alert(data.error || "Error al escanear mecánico.");
         }
 
         scannerInput = "";
         return;
     }
 
-    if (e.key.length === 1) scannerInput += e.key;
+    if (e.key.length === 1) {
+        scannerInput += e.key;
+    }
 });
 
-// ---------------- OT ----------------
 function renderWorkOrders() {
     const container = document.getElementById("workOrdersList");
     container.innerHTML = "";
@@ -150,6 +190,8 @@ function renderWorkOrders() {
         document.getElementById("noWorkOrders").classList.remove("d-none");
         return;
     }
+
+    document.getElementById("noWorkOrders").classList.add("d-none");
 
     currentWorkOrders.forEach(ot => {
         const col = document.createElement("div");
@@ -163,6 +205,9 @@ function renderWorkOrders() {
 
         col.querySelector("button").onclick = () => {
             selectedWorkOrder = ot;
+            cart = [];
+            renderCart();
+
             document.getElementById("selectedWorkOrderSection").classList.remove("d-none");
             document.getElementById("selectedWorkOrderLabel").innerText = "OT " + ot.number;
         };
@@ -171,14 +216,18 @@ function renderWorkOrders() {
     });
 }
 
-// ---------------- ITEMS ----------------
 async function loadItems(url, title) {
     document.getElementById("itemsTitle").innerText = title;
 
     const res = await fetch(url);
     const data = await res.json();
 
-    currentItems = data.items;
+    if (!res.ok) {
+        alert(data.error || "Error al cargar elementos.");
+        return;
+    }
+
+    currentItems = data.items || [];
     renderItems();
 
     document.getElementById("itemsSection").classList.remove("d-none");
@@ -188,9 +237,16 @@ function renderItems() {
     const container = document.getElementById("itemsList");
     container.innerHTML = "";
 
+    if (!currentItems.length) {
+        document.getElementById("noItemsMessage").classList.remove("d-none");
+        return;
+    }
+
+    document.getElementById("noItemsMessage").classList.add("d-none");
+
     currentItems.forEach(item => {
         const row = document.createElement("div");
-        row.className = "border p-2 mb-1 d-flex justify-content-between";
+        row.className = "border p-2 mb-1 d-flex justify-content-between align-items-center";
 
         row.innerHTML = `
             <div>${item.code} - ${item.name}</div>
@@ -198,37 +254,38 @@ function renderItems() {
         `;
 
         row.querySelector("button").onclick = () => {
-            const qty = parseInt(prompt("Cantidad:"), 10);
-            if (!qty || qty <= 0) return;
-
-            cart.push({
-                article_id: item.article_id,
-                name: item.name,
-                quantity: qty
-            });
-
-            renderCart();
+            quantityArticleId.value = item.article_id;
+            quantityArticleName.value = item.name;
+            quantityItemLabel.innerText = item.code + " - " + item.name;
+            quantityInput.value = "";
+            quantitySection.classList.remove("d-none");
+            quantityInput.focus();
         };
 
         container.appendChild(row);
     });
 }
 
-// ---------------- CARRITO ----------------
 function renderCart() {
     const container = document.getElementById("cartList");
     container.innerHTML = "";
 
+    if (!cart.length) {
+        document.getElementById("cartSection").classList.add("d-none");
+        return;
+    }
+
     cart.forEach((c, i) => {
         const row = document.createElement("div");
+        row.className = "d-flex justify-content-between align-items-center border-bottom py-2";
 
         row.innerHTML = `
-            ${c.name} - ${c.quantity}
+            <div>${c.name} - ${c.quantity}</div>
             <button class="btn btn-sm btn-danger ms-2">X</button>
         `;
 
         row.querySelector("button").onclick = () => {
-            cart.splice(i,1);
+            cart.splice(i, 1);
             renderCart();
         };
 
@@ -238,11 +295,43 @@ function renderCart() {
     document.getElementById("cartSection").classList.remove("d-none");
 }
 
-// ---------------- ENVIAR ----------------
-document.getElementById("submitRequestBtn").onclick = async () => {
+document.getElementById("confirmQuantityBtn").onclick = () => {
+    const quantityValue = quantityInput.value.trim();
 
-    if (!selectedWorkOrder) return;
-    if (!cart.length) return alert("Sin items");
+    if (!quantityValue) {
+        alert("Debe ingresar una cantidad.");
+        return;
+    }
+
+    const quantityNumber = Number(quantityValue);
+
+    if (!Number.isFinite(quantityNumber) || quantityNumber <= 0) {
+        alert("La cantidad debe ser mayor que cero.");
+        return;
+    }
+
+    cart.push({
+        article_id: quantityArticleId.value,
+        name: quantityArticleName.value,
+        quantity: quantityValue
+    });
+
+    quantitySection.classList.add("d-none");
+    renderCart();
+};
+
+document.getElementById("cancelQuantityBtn").onclick = () => {
+    quantitySection.classList.add("d-none");
+};
+
+document.getElementById("submitRequestBtn").onclick = async () => {
+    if (!selectedWorkOrder) {
+        return;
+    }
+
+    if (!cart.length) {
+        return alert("Sin items");
+    }
 
     const res = await fetch(`/terminal/work-orders/${selectedWorkOrder.id}/requests/submit`, {
         method: "POST",
@@ -258,11 +347,10 @@ document.getElementById("submitRequestBtn").onclick = async () => {
         renderCart();
         document.getElementById("cartSection").classList.add("d-none");
     } else {
-        alert(data.error);
+        alert(data.error || "Error al enviar solicitud.");
     }
 };
 
-// ---------------- BOTONES ----------------
 document.getElementById("loadArticlesBtn").onclick = () => {
     loadItems(`/terminal/articles/${selectedWorkOrder.warehouse_id}`, "Solicitar artículo");
 };
@@ -276,5 +364,49 @@ document.getElementById("loadBorrowedToolsBtn").onclick = () => {
 };
 
 document.getElementById("resetTerminalBtn").onclick = resetTerminal;
+
+document.getElementById("itemsSearch").addEventListener("input", function() {
+    const term = this.value.toLowerCase().trim();
+
+    if (!term) {
+        renderItems();
+        return;
+    }
+
+    const filtered = currentItems.filter(item =>
+        `${item.code} ${item.name}`.toLowerCase().includes(term)
+    );
+
+    const container = document.getElementById("itemsList");
+    container.innerHTML = "";
+
+    if (!filtered.length) {
+        document.getElementById("noItemsMessage").classList.remove("d-none");
+        return;
+    }
+
+    document.getElementById("noItemsMessage").classList.add("d-none");
+
+    filtered.forEach(item => {
+        const row = document.createElement("div");
+        row.className = "border p-2 mb-1 d-flex justify-content-between align-items-center";
+
+        row.innerHTML = `
+            <div>${item.code} - ${item.name}</div>
+            <button class="btn btn-sm btn-success">Agregar</button>
+        `;
+
+        row.querySelector("button").onclick = () => {
+            quantityArticleId.value = item.article_id;
+            quantityArticleName.value = item.name;
+            quantityItemLabel.innerText = item.code + " - " + item.name;
+            quantityInput.value = "";
+            quantitySection.classList.remove("d-none");
+            quantityInput.focus();
+        };
+
+        container.appendChild(row);
+    });
+});
 </script>
 {% endblock %}
