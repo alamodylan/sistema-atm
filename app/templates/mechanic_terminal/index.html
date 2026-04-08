@@ -198,8 +198,8 @@ function renderItems() {
         `;
 
         row.querySelector("button").onclick = () => {
-            const qty = prompt("Cantidad:");
-            if (!qty) return;
+            const qty = parseInt(prompt("Cantidad:"), 10);
+            if (!qty || qty <= 0) return;
 
             cart.push({
                 article_id: item.article_id,
