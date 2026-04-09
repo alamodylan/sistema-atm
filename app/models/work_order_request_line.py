@@ -55,7 +55,7 @@ class WorkOrderRequestLine(db.Model):
     delivered_lines = db.relationship(
         "WorkOrderLine",
         back_populates="request_line",
-        lazy="dynamic",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:

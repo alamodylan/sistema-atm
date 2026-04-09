@@ -102,34 +102,34 @@ class WorkOrder(db.Model):
         "WorkOrderLine",
         back_populates="work_order",
         cascade="all, delete-orphan",
-        lazy="dynamic",
+        lazy="selectin",
     )
 
     requests = db.relationship(
         "WorkOrderRequest",
         back_populates="work_order",
         cascade="all, delete-orphan",
-        lazy="dynamic",
+        lazy="selectin",
     )
 
     services = db.relationship(
         "WorkOrderService",
         back_populates="work_order",
         cascade="all, delete-orphan",
-        lazy="dynamic",
+        lazy="selectin",
     )
 
     tool_loans = db.relationship(
         "ToolLoan",
         back_populates="work_order",
         cascade="all, delete-orphan",
-        lazy="dynamic",
+        lazy="selectin",
     )
 
     waste_act_lines = db.relationship(
         "WasteActLine",
         back_populates="work_order",
-        lazy="dynamic",
+        lazy="selectin",
     )
 
     mechanics = db.relationship(

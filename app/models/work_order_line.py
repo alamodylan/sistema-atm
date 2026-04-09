@@ -93,13 +93,13 @@ class WorkOrderLine(db.Model):
         "WorkOrderLineDeleteRequest",
         back_populates="work_order_line",
         cascade="all, delete-orphan",
-        lazy="dynamic",
+        lazy="selectin",
     )
 
     waste_act_lines = db.relationship(
         "WasteActLine",
         back_populates="work_order_line",
-        lazy="dynamic",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:

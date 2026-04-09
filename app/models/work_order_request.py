@@ -92,7 +92,7 @@ class WorkOrderRequest(db.Model):
         "WorkOrderRequestLine",
         back_populates="work_order_request",
         cascade="all, delete-orphan",
-        lazy="dynamic",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:

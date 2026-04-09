@@ -109,8 +109,8 @@ def index():
         for ot in work_orders_in_process_list:
             semaforo = "GREEN"
 
-            requests = ot.requests.all() if hasattr(ot.requests, "all") else ot.requests
-            tool_loans = ot.tool_loans.all() if hasattr(ot.tool_loans, "all") else ot.tool_loans
+            requests = ot.requests
+            tool_loans = ot.tool_loans
 
             has_open_tool_loans = any(
                 loan.loan_status == "PRESTADA"
@@ -121,7 +121,7 @@ def index():
             has_partial_request = False
 
             for req in requests:
-                req_lines = req.lines.all() if hasattr(req.lines, "all") else req.lines
+                req_lines = req.lines
 
                 # Pendiente de jefatura
                 if req.request_status in ("ABIERTA", "ENVIADA") and not req.sent_to_warehouse_at:
@@ -226,9 +226,7 @@ def manager_dashboard():
                 req.requested_by_user.full_name if req.requested_by_user else "-"
             )
 
-            lines = req.lines.order_by(
-                req.lines.property.mapper.class_.created_at.asc()
-            ).all()
+            lines = req.lines  # 🔧 CORRECCIÓN
 
             req.visible_lines = []
             req.send_to_warehouse_enabled = False
