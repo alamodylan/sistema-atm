@@ -2,10 +2,10 @@ from flask import Blueprint, redirect, render_template, session, url_for
 from flask_login import current_user, login_required
 
 from app.models.inventory import WarehouseStock
-from app.models.tool_loan import ToolLoan
-from app.models.warehouse import Warehouse
 from app.models.waste_act import WasteAct
+from app.models.warehouse import Warehouse
 from app.models.work_order import WorkOrder
+from app.models.work_order_request import WorkOrderRequest
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -176,4 +176,87 @@ def index():
             waste_cancelada=0,
             inventory_records=0,
             work_orders_in_process_list=[],
+        )
+
+
+@dashboard_bp.route("/dashboard/jefatura")
+@login_required
+def manager_dashboard():
+    active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return render_template(
+            "dashboard/manager.html",
+            title="Dashboard Jefatura",
+            subtitle="Revise y autorice solicitudes antes de que lleguen a bodega.",
+            pending_requests=[],
+            pending_requests_count=0,
+            pending_lines_count=0,
+        )
+
+    try:
+        active_site_id = int(active_site_id)
+
+        pending_requests = (
+            WorkOrderRequest.query
+            .join(WorkOrder, WorkOrder.id == WorkOrderRequest.work_order_id)
+            .filter(
+                WorkOrder.site_id == active_site_id,
+                WorkOrderRequest.request_status == "ENVIADA",
+            )
+            .order_by(WorkOrderRequest.created_at.desc())
+            .all()
+        )
+
+        pending_requests_count = len(pending_requests)
+        pending_lines_count = 0
+
+        for req in pending_requests:
+            req.work_order_number = req.work_order.number if req.work_order else "-"
+            req.equipment_code_snapshot = (
+                req.work_order.equipment_code_snapshot if req.work_order else "-"
+            )
+            req.requested_by_name = (
+                req.requested_by_user.full_name if req.requested_by_user else "-"
+            )
+
+            lines = req.lines.order_by(
+                req.lines.property.mapper.class_.created_at.asc()
+            ).all()
+
+            req.visible_lines = []
+            req.send_to_warehouse_enabled = False
+
+            for line in lines:
+                if line.line_status == "CANCELADA":
+                    line.manager_decision = "RECHAZADA"
+                elif line.line_status in ("SOLICITADA", "ATENDIDA_PARCIAL", "ENTREGADA", "NO_ENTREGADA", "PRESTADA"):
+                    line.manager_decision = "APROBABLE"
+                else:
+                    line.manager_decision = line.line_status
+
+                if line.line_status != "CANCELADA":
+                    req.send_to_warehouse_enabled = True
+
+                req.visible_lines.append(line)
+                pending_lines_count += 1
+
+        return render_template(
+            "dashboard/manager.html",
+            title="Dashboard Jefatura",
+            subtitle="Revise y autorice solicitudes antes de que lleguen a bodega.",
+            pending_requests=pending_requests,
+            pending_requests_count=pending_requests_count,
+            pending_lines_count=pending_lines_count,
+        )
+
+    except Exception as exc:
+        print(f"[MANAGER DASHBOARD ERROR] {exc}")
+        return render_template(
+            "dashboard/manager.html",
+            title="Dashboard Jefatura",
+            subtitle="Revise y autorice solicitudes antes de que lleguen a bodega.",
+            pending_requests=[],
+            pending_requests_count=0,
+            pending_lines_count=0,
         )

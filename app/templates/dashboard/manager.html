@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard Jefatura | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% include 'components/page_header.html' with context %}
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body">
+                <div class="text-secondary small text-uppercase fw-semibold">Solicitudes pendientes</div>
+                <div class="display-6 fw-bold text-dark mt-2">
+                    {{ pending_requests_count }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body">
+                <div class="text-secondary small text-uppercase fw-semibold">Líneas por revisar</div>
+                <div class="display-6 fw-bold text-dark mt-2">
+                    {{ pending_lines_count }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+            <div>
+                <h5 class="fw-bold mb-1">Solicitudes pendientes de jefatura</h5>
+                <div class="text-muted small">
+                    Aquí se revisan las líneas antes de enviarlas a bodega.
+                </div>
+            </div>
+        </div>
+
+        {% for req in pending_requests %}
+        <div class="border rounded-4 p-3 mb-4">
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-lg-8">
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <h6 class="fw-bold mb-0">Solicitud #{{ req.id }}</h6>
+                        <span class="badge text-bg-warning text-dark">{{ req.request_status }}</span>
+                    </div>
+
+                    <div class="small text-muted">
+                        OT: <strong class="text-dark">{{ req.work_order_number }}</strong>
+                    </div>
+                    <div class="small text-muted">
+                        Equipo: <strong class="text-dark">{{ req.equipment_code_snapshot or 'Sin equipo' }}</strong>
+                    </div>
+                    <div class="small text-muted">
+                        Solicitó: <strong class="text-dark">{{ req.requested_by_name }}</strong>
+                    </div>
+                    <div class="small text-muted">
+                        Fecha: <strong class="text-dark">{{ req.created_at }}</strong>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-4 d-flex justify-content-lg-end align-items-start">
+                    {% if req.send_to_warehouse_enabled %}
+                    <form method="POST" action="{{ url_for('work_order_requests.send_request_to_warehouse_action', request_id=req.id) }}">
+                        <button class="btn btn-primary">
+                            Enviar a bodega
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Artículo</th>
+                            <th class="text-end">Cantidad solicitada</th>
+                            <th>Estado</th>
+                            <th style="min-width: 320px;">Acción jefatura</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line in req.visible_lines %}
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">{{ line.article.code }} - {{ line.article.name }}</div>
+                                {% if line.notes %}
+                                    <div class="small text-muted">{{ line.notes }}</div>
+                                {% endif %}
+                                {% if line.not_delivered_reason %}
+                                    <div class="small text-danger">Motivo: {{ line.not_delivered_reason }}</div>
+                                {% endif %}
+                            </td>
+
+                            <td class="text-end">{{ line.quantity_requested }}</td>
+
+                            <td>
+                                {% if line.line_status == "SOLICITADA" %}
+                                    <span class="badge text-bg-secondary">SOLICITADA</span>
+                                {% elif line.line_status == "CANCELADA" %}
+                                    <span class="badge text-bg-danger">RECHAZADA</span>
+                                {% elif line.line_status == "ATENDIDA_PARCIAL" %}
+                                    <span class="badge text-bg-warning text-dark">AJUSTADA / PARCIAL</span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">{{ line.line_status }}</span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if line.line_status != "CANCELADA" %}
+                                <div class="d-flex flex-column flex-lg-row gap-2">
+                                    <form method="POST" action="{{ url_for('work_order_requests.approve_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2">
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0.01"
+                                            name="quantity"
+                                            value="{{ line.quantity_requested }}"
+                                            class="form-control form-control-sm"
+                                            style="width: 120px;"
+                                        >
+                                        <button class="btn btn-sm btn-outline-success">
+                                            Aprobar / Ajustar
+                                        </button>
+                                    </form>
+
+                                    <form method="POST" action="{{ url_for('work_order_requests.reject_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2">
+                                        <input
+                                            type="text"
+                                            name="reason"
+                                            class="form-control form-control-sm"
+                                            placeholder="Motivo rechazo"
+                                            style="width: 160px;"
+                                        >
+                                        <button class="btn btn-sm btn-outline-danger">
+                                            Rechazar
+                                        </button>
+                                    </form>
+                                </div>
+                                {% else %}
+                                <span class="text-danger small fw-semibold">Línea rechazada por jefatura</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-4">
+                                Esta solicitud no tiene líneas visibles.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="text-muted">
+            No hay solicitudes pendientes de revisión en jefatura.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
