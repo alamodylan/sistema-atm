@@ -172,15 +172,17 @@ def create_work_order_action():
 @login_required
 def get_work_order(work_order_id: int):
     try:
-        # 🔧 CORRECCIÓN: cargar relaciones necesarias para evitar errores en template
+        source = (request.args.get("source") or "").strip()
+
         work_order = (
             WorkOrder.query
             .options(
                 joinedload(WorkOrder.lines),
-                joinedload(WorkOrder.requests),
+                joinedload(WorkOrder.requests).joinedload("lines"),
                 joinedload(WorkOrder.mechanics),
                 joinedload(WorkOrder.equipment),
                 joinedload(WorkOrder.warehouse),
+                joinedload(WorkOrder.responsible_user),
             )
             .filter(WorkOrder.id == work_order_id)
             .first()
@@ -196,12 +198,24 @@ def get_work_order(work_order_id: int):
             .all()
         )
 
+        # 🔧 Si se entra desde el dashboard regular, solo se muestran
+        # solicitudes que ya fueron enviadas a bodega.
+        if source == "dashboard":
+            visible_requests = [
+                req for req in work_order.requests
+                if req.sent_to_warehouse_at
+            ]
+        else:
+            visible_requests = list(work_order.requests)
+
         return render_template(
             "work_orders/detail.html",
             title="Detalle de Orden de Trabajo",
             subtitle="Consulte la información general, líneas y acciones de la OT.",
             work_order=work_order,
             available_articles=available_articles,
+            visible_requests=visible_requests,
+            source=source,
         )
 
     except ValueError as exc:

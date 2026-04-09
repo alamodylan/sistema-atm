@@ -43,7 +43,7 @@
                 <div class="row g-3">
                     {% for ot in work_orders_in_process_list %}
                     <div class="col-12 col-md-6 col-xl-4">
-                        <a href="{{ url_for('work_orders.get_work_order', work_order_id=ot.id) }}"
+                        <a href="{{ url_for('work_orders.get_work_order', work_order_id=ot.id, source='dashboard') }}"
                            class="text-decoration-none text-dark">
 
                             <div class="card border shadow-sm h-100">

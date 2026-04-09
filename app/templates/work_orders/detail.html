@@ -84,7 +84,7 @@
                         </div>
                     </div>
 
-                    {% if work_order.status == "EN_PROCESO" %}
+                    {% if work_order.status == "EN_PROCESO" and source != "dashboard" %}
                     <form method="POST" action="{{ url_for('work_order_requests.create_request_action', work_order_id=work_order.id) }}">
                         <button class="btn btn-sm btn-primary">
                             Nueva solicitud
@@ -93,7 +93,7 @@
                     {% endif %}
                 </div>
 
-                {% for req in work_order.requests %}
+                {% for req in visible_requests %}
                 <div class="border rounded p-3 mb-3">
 
                     <div class="d-flex justify-content-between mb-2">
@@ -116,7 +116,7 @@
                         </div>
 
                         <div class="d-flex gap-2">
-                            {% if req.request_status == "ABIERTA" %}
+                            {% if req.request_status == "ABIERTA" and source != "dashboard" %}
                             <form method="POST" action="{{ url_for('work_order_requests.send_request_action', request_id=req.id) }}">
                                 <button class="btn btn-sm btn-success">
                                     Enviar a jefatura
@@ -124,7 +124,7 @@
                             </form>
                             {% endif %}
 
-                            {% if req.request_status == "ENVIADA" and not req.sent_to_warehouse_at and req.send_to_warehouse_enabled is defined and req.send_to_warehouse_enabled %}
+                            {% if req.request_status == "ENVIADA" and not req.sent_to_warehouse_at and req.send_to_warehouse_enabled is defined and req.send_to_warehouse_enabled and source != "dashboard" %}
                             <form method="POST" action="{{ url_for('work_order_requests.send_request_to_warehouse_action', request_id=req.id) }}">
                                 <button class="btn btn-sm btn-primary">
                                     Enviar a bodega
@@ -205,12 +205,94 @@
                                 </td>
 
                                 <td>
-                                    <span class="badge text-bg-secondary">{{ line.line_status }}</span>
+                                    {% if line.line_status == "SOLICITADA" %}
+                                        <span class="badge text-bg-secondary">SOLICITADA</span>
+                                    {% elif line.line_status == "ATENDIDA_PARCIAL" %}
+                                        <span class="badge text-bg-warning text-dark">ATENDIDA PARCIAL</span>
+                                    {% elif line.line_status == "ENTREGADA" %}
+                                        <span class="badge text-bg-success">ENTREGADA</span>
+                                    {% elif line.line_status == "NO_ENTREGADA" %}
+                                        <span class="badge text-bg-danger">NO ENTREGADA</span>
+                                    {% elif line.line_status == "CANCELADA" %}
+                                        <span class="badge text-bg-dark">RECHAZADA</span>
+                                    {% elif line.line_status == "PRESTADA" %}
+                                        <span class="badge text-bg-primary">PRESTADA</span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">{{ line.line_status }}</span>
+                                    {% endif %}
                                 </td>
 
                                 <td>
                                     <div class="d-flex flex-column gap-2">
-                                        <!-- lógica intacta -->
+                                        {% if req.request_status == "ENVIADA" and not req.sent_to_warehouse_at and line.line_status == "SOLICITADA" and line.manager_review_enabled is defined and line.manager_review_enabled and source != "dashboard" %}
+                                        <div class="border rounded-3 p-2 bg-light-subtle">
+                                            <div class="small fw-semibold mb-2">Jefatura</div>
+                                            <div class="d-flex flex-column flex-md-row gap-2">
+                                                <form method="POST" action="{{ url_for('work_order_requests.approve_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2">
+                                                    <input
+                                                        name="quantity"
+                                                        class="form-control form-control-sm"
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0.01"
+                                                        value="{{ line.quantity_requested }}"
+                                                        style="width: 110px;"
+                                                    >
+                                                    <button class="btn btn-sm btn-outline-success">Aprobar</button>
+                                                </form>
+
+                                                <form method="POST" action="{{ url_for('work_order_requests.reject_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2">
+                                                    <input
+                                                        name="reason"
+                                                        class="form-control form-control-sm"
+                                                        placeholder="Motivo rechazo"
+                                                        style="width: 150px;"
+                                                    >
+                                                    <button class="btn btn-sm btn-outline-danger">Rechazar</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+
+                                        {% if req.sent_to_warehouse_at and req.request_status in ["ENVIADA", "ATENDIDA"] and line.line_status in ["SOLICITADA", "ATENDIDA_PARCIAL"] and line.warehouse_action_enabled is defined and line.warehouse_action_enabled %}
+                                        <div class="border rounded-3 p-2 bg-light-subtle">
+                                            <div class="small fw-semibold mb-2">Bodega</div>
+                                            <form method="POST" action="{{ url_for('work_order_requests.attend_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2 align-items-center">
+                                                <input
+                                                    name="quantity"
+                                                    class="form-control form-control-sm"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0.01"
+                                                    max="{{ line.stock_available if line.stock_available is defined else '' }}"
+                                                    value="{{ line.suggested_attend_quantity if line.suggested_attend_quantity is defined else line.quantity_requested }}"
+                                                    style="width: 110px;"
+                                                >
+                                                <button class="btn btn-sm btn-outline-primary">Preparar</button>
+                                            </form>
+                                            <div class="small text-muted mt-2">
+                                                No se puede preparar más de lo disponible en stock.
+                                            </div>
+                                        </div>
+                                        {% endif %}
+
+                                        {% if line.line_status == "ENTREGADA" %}
+                                        <div class="small text-success fw-semibold">
+                                            Lista para confirmación en terminal taller.
+                                        </div>
+                                        {% endif %}
+
+                                        {% if line.line_status == "CANCELADA" and not req.sent_to_warehouse_at %}
+                                        <div class="small text-danger fw-semibold">
+                                            Línea rechazada por jefatura.
+                                        </div>
+                                        {% endif %}
+
+                                        {% if line.line_status == "NO_ENTREGADA" %}
+                                        <div class="small text-danger fw-semibold">
+                                            Línea no atendida.
+                                        </div>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>
@@ -224,7 +306,13 @@
 
                 </div>
                 {% else %}
-                <div class="text-muted">No hay solicitudes aún.</div>
+                <div class="text-muted">
+                    {% if source == "dashboard" %}
+                        No hay solicitudes operativas visibles para bodega aún.
+                    {% else %}
+                        No hay solicitudes aún.
+                    {% endif %}
+                </div>
                 {% endfor %}
             </div>
         </div>
@@ -259,6 +347,12 @@
                     </div>
                 </div>
 
+                {% if work_order.status == "EN_PROCESO" %}
+                <div class="alert alert-warning">
+                    Las líneas deben generarse desde solicitudes confirmadas en terminal (flujo controlado).
+                </div>
+                {% endif %}
+
                 <div class="table-responsive">
                     <table class="table align-middle">
                         <thead class="table-light">
@@ -273,6 +367,7 @@
 
                         <tbody>
                             {% for line in work_order.lines %}
+                            {% set delete_req = line.delete_requests|sort(attribute='created_at', reverse=True)|first %}
                             <tr>
                                 <td>{{ line.article.code }} - {{ line.article.name }}</td>
 
@@ -287,11 +382,25 @@
                                 </td>
 
                                 <td>
-                                    <span class="badge text-bg-secondary">{{ line.line_status }}</span>
+                                    {% if line.line_status == "ACTIVE" %}
+                                        <span class="badge text-bg-success">Activa</span>
+                                    {% elif line.line_status == "REMOVAL_PENDING" %}
+                                        <span class="badge text-bg-warning">Pendiente eliminación</span>
+                                    {% elif line.line_status == "REMOVED" %}
+                                        <span class="badge text-bg-danger">Eliminada</span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">{{ line.line_status }}</span>
+                                    {% endif %}
                                 </td>
 
                                 <td>
-                                    <span class="text-muted">—</span>
+                                    {% if delete_req %}
+                                        <span class="text-muted">Solicitud de eliminación registrada</span>
+                                    {% elif work_order.status == "EN_PROCESO" and line.line_status == "ACTIVE" %}
+                                        <span class="text-muted">Disponible para gestión</span>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% else %}

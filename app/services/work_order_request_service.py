@@ -31,7 +31,7 @@ def _to_decimal(value) -> Decimal:
 
 
 def _sync_request_status(request_obj: WorkOrderRequest) -> None:
-    lines = request_obj.lines.all()
+    lines = list(request_obj.lines)
     if not lines:
         return
 
@@ -299,9 +299,10 @@ def send_request(
     if request_obj.request_status != "ABIERTA":
         raise WorkOrderRequestServiceError("Solo solicitudes abiertas pueden enviarse.")
 
-    active_lines_count = request_obj.lines.filter(
-        WorkOrderRequestLine.line_status != "CANCELADA"
-    ).count()
+    active_lines_count = sum(
+        1 for line in request_obj.lines
+        if line.line_status != "CANCELADA"
+    )
 
     if active_lines_count == 0:
         raise WorkOrderRequestServiceError("No se puede enviar una solicitud sin líneas activas.")
@@ -340,9 +341,10 @@ def send_request_to_warehouse(
     if request_obj.sent_to_warehouse_at:
         raise WorkOrderRequestServiceError("La solicitud ya fue enviada a bodega.")
 
-    active_lines = request_obj.lines.filter(
-        WorkOrderRequestLine.line_status != "CANCELADA"
-    ).count()
+    active_lines = sum(
+        1 for line in request_obj.lines
+        if line.line_status != "CANCELADA"
+    )
 
     if active_lines == 0:
         raise WorkOrderRequestServiceError("No se puede enviar a bodega una solicitud sin líneas activas.")
