@@ -126,8 +126,6 @@ def index():
 
                 req_lines = req.lines
 
-                has_pending_request = True
-
                 for line in req_lines:
                     if line.line_status == "ATENDIDA_PARCIAL":
                         has_partial_request = True
@@ -230,16 +228,13 @@ def manager_dashboard():
             all_lines_decided = True
 
             for line in lines:
-                if line.line_status == "CANCELADA":
+                # 🔥 CAMBIO REAL AQUÍ
+                if line.manager_review_status == "RECHAZADA":
                     line.manager_decision = "RECHAZADA"
 
-                elif line.line_status in ("ATENDIDA_PARCIAL", "ENTREGADA"):
+                elif line.manager_review_status == "APROBADA":
                     line.manager_decision = "APROBADA"
                     has_approved_lines = True
-
-                elif line.line_status == "SOLICITADA":
-                    line.manager_decision = "PENDIENTE"
-                    all_lines_decided = False
 
                 else:
                     line.manager_decision = "PENDIENTE"

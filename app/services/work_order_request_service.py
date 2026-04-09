@@ -130,6 +130,7 @@ def add_request_line(
         quantity_attended=Decimal("0"),
         notes=(notes or "").strip() or None,
         line_status="SOLICITADA",
+        manager_review_status="PENDIENTE",
     )
 
     db.session.add(line)
@@ -204,7 +205,11 @@ def reject_request_line_by_management(
     if request_obj.sent_to_warehouse_at:
         raise WorkOrderRequestServiceError("La solicitud ya fue enviada a bodega y no puede rechazarse desde jefatura.")
 
+    line.manager_review_status = "RECHAZADA"
+    line.manager_reviewed_by_user_id = performed_by_user_id
+    line.manager_reviewed_at = db.func.now()
     line.line_status = "CANCELADA"
+
     _sync_request_status(request_obj)
     db.session.flush()
 
@@ -216,6 +221,7 @@ def reject_request_line_by_management(
         details={
             "request_id": request_obj.id,
             "line_status": line.line_status,
+            "manager_review_status": line.manager_review_status,
         },
         commit=False,
     )
@@ -249,6 +255,10 @@ def update_request_line_requested_quantity(
 
     qty = _to_decimal(quantity_requested)
 
+    line.manager_review_status = "APROBADA"
+    line.manager_reviewed_by_user_id = performed_by_user_id
+    line.manager_reviewed_at = db.func.now()
+
     line.quantity_requested = qty
 
     if line.quantity_attended > qty:
@@ -273,6 +283,7 @@ def update_request_line_requested_quantity(
             "request_id": request_obj.id,
             "new_quantity_requested": str(qty),
             "line_status": line.line_status,
+            "manager_review_status": line.manager_review_status,
         },
         commit=False,
     )
@@ -341,13 +352,22 @@ def send_request_to_warehouse(
     if request_obj.sent_to_warehouse_at:
         raise WorkOrderRequestServiceError("La solicitud ya fue enviada a bodega.")
 
-    active_lines = sum(
-        1 for line in request_obj.lines
-        if line.line_status != "CANCELADA"
-    )
+    lines = list(request_obj.lines)
 
-    if active_lines == 0:
-        raise WorkOrderRequestServiceError("No se puede enviar a bodega una solicitud sin líneas activas.")
+    if not lines:
+        raise WorkOrderRequestServiceError("No hay líneas en la solicitud.")
+
+    has_approved = False
+
+    for line in lines:
+        if line.manager_review_status == "PENDIENTE":
+            raise WorkOrderRequestServiceError("Debe decidir todas las líneas antes de enviar a bodega.")
+
+        if line.manager_review_status == "APROBADA":
+            has_approved = True
+
+    if not has_approved:
+        raise WorkOrderRequestServiceError("Debe haber al menos una línea aprobada.")
 
     request_obj.approved_by_user_id = performed_by_user_id
     request_obj.approved_at = db.func.now()
@@ -394,6 +414,9 @@ def attend_request_line(
 
     if line.line_status == "CANCELADA":
         raise WorkOrderRequestServiceError("No se puede atender una línea cancelada.")
+
+    if line.manager_review_status != "APROBADA":
+        raise WorkOrderRequestServiceError("La línea no fue aprobada por jefatura.")
 
     qty = _to_decimal(quantity)
     remaining = line.quantity_requested - line.quantity_attended
@@ -460,6 +483,9 @@ def mark_request_line_not_delivered(
     if not request_obj.sent_to_warehouse_at:
         raise WorkOrderRequestServiceError("La solicitud aún no ha sido enviada a bodega.")
 
+    if line.manager_review_status != "APROBADA":
+        raise WorkOrderRequestServiceError("La línea no fue aprobada por jefatura.")
+
     line.line_status = "NO_ENTREGADA"
     line.not_delivered_reason = (reason or "").strip() or None
 
@@ -501,6 +527,9 @@ def mark_request_line_loaned(
 
     if not request_obj.sent_to_warehouse_at:
         raise WorkOrderRequestServiceError("La solicitud aún no ha sido enviada a bodega.")
+
+    if line.manager_review_status != "APROBADA":
+        raise WorkOrderRequestServiceError("La línea no fue aprobada por jefatura.")
 
     qty = _to_decimal(quantity)
     remaining = line.quantity_requested - line.quantity_attended
