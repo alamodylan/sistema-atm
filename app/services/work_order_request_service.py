@@ -5,9 +5,15 @@ from decimal import Decimal
 from app.extensions import db
 from app.models.article import Article
 from app.models.work_order import WorkOrder
+from app.models.work_order_line import WorkOrderLine
 from app.models.work_order_request import WorkOrderRequest
 from app.models.work_order_request_line import WorkOrderRequestLine
 from app.services.audit_service import log_action
+from app.services.inventory_service import (
+    InventoryServiceError,
+    get_warehouse_stock_record,
+    subtract_stock,
+)
 
 
 class WorkOrderRequestServiceError(Exception):
@@ -29,8 +35,18 @@ def _sync_request_status(request_obj: WorkOrderRequest) -> None:
     if not lines:
         return
 
-    if all(line.line_status in TERMINAL_LINE_STATUSES for line in lines):
+    active_lines = [line for line in lines if line.line_status != "CANCELADA"]
+
+    if not active_lines:
+        request_obj.request_status = "CANCELADA"
+        return
+
+    if all(line.line_status in TERMINAL_LINE_STATUSES for line in active_lines):
         request_obj.request_status = "ATENDIDA"
+        return
+
+    if request_obj.request_status not in ("ABIERTA", "ENVIADA", "ATENDIDA", "CANCELADA"):
+        request_obj.request_status = "ENVIADA"
 
 
 def create_request(
@@ -171,6 +187,96 @@ def cancel_request_line(
     return line
 
 
+def reject_request_line_by_management(
+    *,
+    request_line_id: int,
+    performed_by_user_id: int,
+    commit: bool = True,
+) -> WorkOrderRequestLine:
+    line = WorkOrderRequestLine.query.get(request_line_id)
+    if not line:
+        raise WorkOrderRequestServiceError("La línea no existe.")
+
+    request_obj = line.work_order_request
+    if request_obj.request_status not in ("ENVIADA",):
+        raise WorkOrderRequestServiceError("Solo se pueden rechazar líneas de solicitudes enviadas.")
+
+    line.line_status = "CANCELADA"
+    _sync_request_status(request_obj)
+    db.session.flush()
+
+    log_action(
+        user_id=performed_by_user_id,
+        action="REJECT_REQUEST_LINE_BY_MANAGEMENT",
+        table_name="work_order_request_lines",
+        record_id=str(line.id),
+        details={
+            "request_id": request_obj.id,
+            "line_status": line.line_status,
+        },
+        commit=False,
+    )
+
+    if commit:
+        db.session.commit()
+
+    return line
+
+
+def update_request_line_requested_quantity(
+    *,
+    request_line_id: int,
+    quantity_requested,
+    performed_by_user_id: int,
+    commit: bool = True,
+) -> WorkOrderRequestLine:
+    line = WorkOrderRequestLine.query.get(request_line_id)
+    if not line:
+        raise WorkOrderRequestServiceError("La línea no existe.")
+
+    request_obj = line.work_order_request
+    if request_obj.request_status not in ("ENVIADA",):
+        raise WorkOrderRequestServiceError("Solo se puede modificar cantidad en solicitudes enviadas.")
+
+    if line.line_status == "CANCELADA":
+        raise WorkOrderRequestServiceError("No se puede modificar una línea cancelada.")
+
+    qty = _to_decimal(quantity_requested)
+
+    line.quantity_requested = qty
+
+    if line.quantity_attended > qty:
+        line.quantity_attended = qty
+
+    if line.quantity_attended == 0:
+        line.line_status = "SOLICITADA"
+    elif line.quantity_attended < line.quantity_requested:
+        line.line_status = "ATENDIDA_PARCIAL"
+    else:
+        line.line_status = "ENTREGADA"
+
+    _sync_request_status(request_obj)
+    db.session.flush()
+
+    log_action(
+        user_id=performed_by_user_id,
+        action="UPDATE_REQUEST_LINE_REQUESTED_QUANTITY",
+        table_name="work_order_request_lines",
+        record_id=str(line.id),
+        details={
+            "request_id": request_obj.id,
+            "new_quantity_requested": str(qty),
+            "line_status": line.line_status,
+        },
+        commit=False,
+    )
+
+    if commit:
+        db.session.commit()
+
+    return line
+
+
 def send_request(
     *,
     request_id: int,
@@ -227,11 +333,24 @@ def attend_request_line(
     if request_obj.request_status != "ENVIADA":
         raise WorkOrderRequestServiceError("Solo se pueden atender líneas de solicitudes enviadas.")
 
+    if line.line_status == "CANCELADA":
+        raise WorkOrderRequestServiceError("No se puede atender una línea cancelada.")
+
     qty = _to_decimal(quantity)
     remaining = line.quantity_requested - line.quantity_attended
 
     if qty > remaining:
         raise WorkOrderRequestServiceError("No puede atender más de lo solicitado.")
+
+    work_order = request_obj.work_order
+    stock_record = get_warehouse_stock_record(line.article_id, work_order.warehouse_id)
+
+    if not stock_record:
+        raise WorkOrderRequestServiceError("No hay stock registrado para este artículo en la bodega de la OT.")
+
+    available = Decimal(str(stock_record.available_quantity or 0))
+    if qty > available:
+        raise WorkOrderRequestServiceError("No hay suficiente stock disponible para esa cantidad.")
 
     line.quantity_attended += qty
 
@@ -252,6 +371,8 @@ def attend_request_line(
             "attended": str(qty),
             "total_attended": str(line.quantity_attended),
             "line_status": line.line_status,
+            "warehouse_id": work_order.warehouse_id,
+            "available_quantity": str(available),
         },
         commit=False,
     )
@@ -322,6 +443,16 @@ def mark_request_line_loaned(
     if qty > remaining:
         raise WorkOrderRequestServiceError("No puede prestar más de lo solicitado.")
 
+    work_order = request_obj.work_order
+    stock_record = get_warehouse_stock_record(line.article_id, work_order.warehouse_id)
+
+    if not stock_record:
+        raise WorkOrderRequestServiceError("No hay stock registrado para este artículo en la bodega de la OT.")
+
+    available = Decimal(str(stock_record.available_quantity or 0))
+    if qty > available:
+        raise WorkOrderRequestServiceError("No hay suficiente stock disponible para esa cantidad.")
+
     line.quantity_attended += qty
 
     if line.quantity_attended == line.quantity_requested:
@@ -341,6 +472,8 @@ def mark_request_line_loaned(
             "loaned": str(qty),
             "total_attended": str(line.quantity_attended),
             "line_status": line.line_status,
+            "warehouse_id": work_order.warehouse_id,
+            "available_quantity": str(available),
         },
         commit=False,
     )
@@ -349,3 +482,85 @@ def mark_request_line_loaned(
         db.session.commit()
 
     return line
+
+
+def confirm_request_line_to_work_order(
+    *,
+    request_line_id: int,
+    delivered_by_user_id: int,
+    received_by_user_id: int,
+    commit: bool = True,
+) -> WorkOrderLine:
+    line = WorkOrderRequestLine.query.get(request_line_id)
+    if not line:
+        raise WorkOrderRequestServiceError("La línea no existe.")
+
+    if line.line_status not in ("ENTREGADA", "PRESTADA"):
+        raise WorkOrderRequestServiceError("La línea aún no está lista para confirmarse en la OT.")
+
+    request_obj = line.work_order_request
+    work_order = request_obj.work_order
+
+    existing_line = (
+        WorkOrderLine.query
+        .filter_by(request_line_id=line.id)
+        .first()
+    )
+    if existing_line:
+        raise WorkOrderRequestServiceError("Esta línea ya fue confirmada en la OT.")
+
+    qty = Decimal(str(line.quantity_attended or 0))
+    if qty <= 0:
+        raise WorkOrderRequestServiceError("La línea no tiene cantidad atendida para confirmar.")
+
+    try:
+        subtract_stock(
+            article_id=line.article_id,
+            warehouse_id=work_order.warehouse_id,
+            quantity=qty,
+            performed_by_user_id=delivered_by_user_id,
+            movement_type="SALIDA_OT",
+            reason=f"Salida por OT {work_order.number}",
+            reference_type="WORK_ORDER",
+            reference_id=work_order.id,
+            reference_number=work_order.number,
+            commit=False,
+        )
+    except InventoryServiceError as exc:
+        raise WorkOrderRequestServiceError(str(exc)) from exc
+
+    work_order_line = WorkOrderLine(
+        work_order_id=work_order.id,
+        request_line_id=line.id,
+        article_id=line.article_id,
+        quantity=qty,
+        delivered_by_user_id=delivered_by_user_id,
+        received_by_user_id=received_by_user_id,
+        line_status="ACTIVE",
+        inventory_posted=True,
+        notes=line.notes,
+    )
+
+    db.session.add(work_order_line)
+    db.session.flush()
+
+    log_action(
+        user_id=received_by_user_id,
+        action="CONFIRM_REQUEST_LINE_TO_WORK_ORDER",
+        table_name="work_order_lines",
+        record_id=str(work_order_line.id),
+        details={
+            "work_order_id": work_order.id,
+            "request_line_id": line.id,
+            "article_id": line.article_id,
+            "quantity": str(qty),
+            "delivered_by_user_id": delivered_by_user_id,
+            "received_by_user_id": received_by_user_id,
+        },
+        commit=False,
+    )
+
+    if commit:
+        db.session.commit()
+
+    return work_order_line
