@@ -40,13 +40,24 @@
             </div>
         </div>
 
+        <div class="alert alert-info border-0 rounded-4 mb-4">
+            <div class="fw-semibold mb-1">Flujo de aprobación</div>
+            <div class="small mb-0">
+                Las solicitudes que aparecen aquí aún <strong>no son visibles para bodega</strong>.
+                Bodega solo verá la solicitud después de que jefatura revise las líneas y presione
+                <strong>“Enviar a bodega”</strong>. Si jefatura rechaza una línea o toda la solicitud,
+                bodega no debe enterarse de esa etapa inicial.
+            </div>
+        </div>
+
         {% for req in pending_requests %}
         <div class="border rounded-4 p-3 mb-4">
             <div class="row g-3 mb-3">
                 <div class="col-12 col-lg-8">
                     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
                         <h6 class="fw-bold mb-0">Solicitud #{{ req.id }}</h6>
-                        <span class="badge text-bg-warning text-dark">{{ req.request_status }}</span>
+                        <span class="badge text-bg-warning text-dark">PENDIENTE JEFATURA</span>
+                        <span class="badge text-bg-secondary">AÚN NO VISIBLE EN BODEGA</span>
                     </div>
 
                     <div class="small text-muted">

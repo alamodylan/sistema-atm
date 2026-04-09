@@ -21,6 +21,20 @@ class WorkOrderRequest(db.Model):
         index=True,
     )
 
+    approved_by_user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("atm.users.id"),
+        nullable=True,
+        index=True,
+    )
+
+    sent_to_warehouse_by_user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("atm.users.id"),
+        nullable=True,
+        index=True,
+    )
+
     request_status = db.Column(
         db.String(20),
         nullable=False,
@@ -43,6 +57,16 @@ class WorkOrderRequest(db.Model):
         onupdate=db.func.now(),
     )
 
+    approved_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    sent_to_warehouse_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
     work_order = db.relationship(
         "WorkOrder",
         back_populates="requests",
@@ -52,6 +76,16 @@ class WorkOrderRequest(db.Model):
         "User",
         foreign_keys=[requested_by_user_id],
         back_populates="work_order_requests",
+    )
+
+    approved_by_user = db.relationship(
+        "User",
+        foreign_keys=[approved_by_user_id],
+    )
+
+    sent_to_warehouse_by_user = db.relationship(
+        "User",
+        foreign_keys=[sent_to_warehouse_by_user_id],
     )
 
     lines = db.relationship(

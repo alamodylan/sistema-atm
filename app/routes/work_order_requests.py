@@ -14,12 +14,16 @@ from app.services.work_order_request_service import (
     mark_request_line_not_delivered,
     reject_request_line_by_management,
     send_request,
+    send_request_to_warehouse,  # ✅ NUEVO
     update_request_line_requested_quantity,
 )
 
 work_order_request_bp = Blueprint("work_order_requests", __name__)
 
 
+# =========================
+# CREAR SOLICITUD
+# =========================
 @work_order_request_bp.route("/work-orders/<int:work_order_id>/requests", methods=["POST"])
 @login_required
 def create_request_action(work_order_id: int):
@@ -37,6 +41,9 @@ def create_request_action(work_order_id: int):
     return redirect(url_for("work_orders.get_work_order", work_order_id=work_order_id))
 
 
+# =========================
+# AGREGAR LÍNEA
+# =========================
 @work_order_request_bp.route("/requests/<int:request_id>/lines", methods=["POST"])
 @login_required
 def add_request_line_action(request_id: int):
@@ -48,10 +55,7 @@ def add_request_line_action(request_id: int):
         if not article_id or not quantity_raw:
             raise ValueError("Datos incompletos.")
 
-        try:
-            qty = Decimal(quantity_raw)
-        except (InvalidOperation, ValueError):
-            raise ValueError("Cantidad inválida.")
+        qty = Decimal(quantity_raw)
 
         add_request_line(
             request_id=request_id,
@@ -63,12 +67,15 @@ def add_request_line_action(request_id: int):
 
         flash("Línea agregada a la solicitud.", "success")
 
-    except (WorkOrderRequestServiceError, ValueError) as exc:
+    except (WorkOrderRequestServiceError, ValueError, InvalidOperation) as exc:
         flash(str(exc), "danger")
 
     return redirect(request.referrer or "/")
 
 
+# =========================
+# MECÁNICO ENVÍA
+# =========================
 @work_order_request_bp.route("/requests/<int:request_id>/send", methods=["POST"])
 @login_required
 def send_request_action(request_id: int):
@@ -78,7 +85,7 @@ def send_request_action(request_id: int):
             performed_by_user_id=current_user.id,
             commit=True,
         )
-        flash("Solicitud enviada.", "success")
+        flash("Solicitud enviada a jefatura.", "success")
 
     except WorkOrderRequestServiceError as exc:
         flash(str(exc), "danger")
@@ -86,6 +93,29 @@ def send_request_action(request_id: int):
     return redirect(request.referrer or "/")
 
 
+# =========================
+# JEFATURA → ENVIAR A BODEGA
+# =========================
+@work_order_request_bp.route("/requests/<int:request_id>/send-to-warehouse", methods=["POST"])
+@login_required
+def send_request_to_warehouse_action(request_id: int):
+    try:
+        send_request_to_warehouse(
+            request_id=request_id,
+            performed_by_user_id=current_user.id,
+            commit=True,
+        )
+        flash("Solicitud enviada a bodega.", "success")
+
+    except WorkOrderRequestServiceError as exc:
+        flash(str(exc), "danger")
+
+    return redirect(request.referrer or "/")
+
+
+# =========================
+# CANCELAR LÍNEA
+# =========================
 @work_order_request_bp.route("/request-lines/<int:line_id>/cancel", methods=["POST"])
 @login_required
 def cancel_request_line_action(line_id: int):
@@ -103,29 +133,14 @@ def cancel_request_line_action(line_id: int):
     return redirect(request.referrer or "/")
 
 
-@work_order_request_bp.route("/request-lines/<int:line_id>/management-update", methods=["POST"])
+# =========================
+# JEFATURA → APROBAR / AJUSTAR
+# =========================
+@work_order_request_bp.route("/request-lines/<int:line_id>/approve", methods=["POST"])
 @login_required
-def management_update_request_line_action(line_id: int):
+def approve_request_line_action(line_id: int):
     try:
-        quantity_raw = request.form.get("quantity")
-        reject = request.form.get("reject")
-
-        if reject == "1":
-            reject_request_line_by_management(
-                request_line_id=line_id,
-                performed_by_user_id=current_user.id,
-                commit=True,
-            )
-            flash("Línea rechazada por jefatura.", "success")
-            return redirect(request.referrer or "/")
-
-        if not quantity_raw:
-            raise ValueError("Debe indicar una cantidad.")
-
-        try:
-            qty = Decimal(quantity_raw)
-        except (InvalidOperation, ValueError):
-            raise ValueError("Cantidad inválida.")
+        qty = Decimal(request.form.get("quantity"))
 
         update_request_line_requested_quantity(
             request_line_id=line_id,
@@ -133,24 +148,44 @@ def management_update_request_line_action(line_id: int):
             performed_by_user_id=current_user.id,
             commit=True,
         )
-        flash("Cantidad ajustada por jefatura.", "success")
 
-    except (WorkOrderRequestServiceError, ValueError) as exc:
+        flash("Cantidad aprobada/ajustada.", "success")
+
+    except (WorkOrderRequestServiceError, InvalidOperation, ValueError) as exc:
         flash(str(exc), "danger")
 
     return redirect(request.referrer or "/")
 
 
+# =========================
+# JEFATURA → RECHAZAR
+# =========================
+@work_order_request_bp.route("/request-lines/<int:line_id>/reject", methods=["POST"])
+@login_required
+def reject_request_line_action(line_id: int):
+    try:
+        reject_request_line_by_management(
+            request_line_id=line_id,
+            performed_by_user_id=current_user.id,
+            commit=True,
+        )
+
+        flash("Línea rechazada.", "success")
+
+    except WorkOrderRequestServiceError as exc:
+        flash(str(exc), "danger")
+
+    return redirect(request.referrer or "/")
+
+
+# =========================
+# BODEGA → ATENDER
+# =========================
 @work_order_request_bp.route("/request-lines/<int:line_id>/attend", methods=["POST"])
 @login_required
 def attend_request_line_action(line_id: int):
     try:
-        quantity_raw = request.form.get("quantity")
-
-        try:
-            qty = Decimal(quantity_raw)
-        except (InvalidOperation, ValueError):
-            raise ValueError("Cantidad inválida.")
+        qty = Decimal(request.form.get("quantity"))
 
         attend_request_line(
             request_line_id=line_id,
@@ -159,28 +194,29 @@ def attend_request_line_action(line_id: int):
             commit=True,
         )
 
-        flash("Línea atendida correctamente.", "success")
+        flash("Línea preparada correctamente.", "success")
 
-    except (WorkOrderRequestServiceError, ValueError) as exc:
+    except (WorkOrderRequestServiceError, InvalidOperation, ValueError) as exc:
         flash(str(exc), "danger")
 
     return redirect(request.referrer or "/")
 
 
+# =========================
+# BODEGA → NO ENTREGADO
+# =========================
 @work_order_request_bp.route("/request-lines/<int:line_id>/not-delivered", methods=["POST"])
 @login_required
 def mark_request_line_not_delivered_action(line_id: int):
     try:
-        reason = request.form.get("reason")
-
         mark_request_line_not_delivered(
             request_line_id=line_id,
-            reason=reason or "",
+            reason=request.form.get("reason") or "",
             performed_by_user_id=current_user.id,
             commit=True,
         )
 
-        flash("Línea marcada como no entregada.", "success")
+        flash("Marcado como no entregado.", "success")
 
     except WorkOrderRequestServiceError as exc:
         flash(str(exc), "danger")
@@ -188,16 +224,14 @@ def mark_request_line_not_delivered_action(line_id: int):
     return redirect(request.referrer or "/")
 
 
+# =========================
+# BODEGA → PRESTAR
+# =========================
 @work_order_request_bp.route("/request-lines/<int:line_id>/loan", methods=["POST"])
 @login_required
 def mark_request_line_loaned_action(line_id: int):
     try:
-        quantity_raw = request.form.get("quantity")
-
-        try:
-            qty = Decimal(quantity_raw)
-        except (InvalidOperation, ValueError):
-            raise ValueError("Cantidad inválida.")
+        qty = Decimal(request.form.get("quantity"))
 
         mark_request_line_loaned(
             request_line_id=line_id,
@@ -206,32 +240,29 @@ def mark_request_line_loaned_action(line_id: int):
             commit=True,
         )
 
-        flash("Línea prestada correctamente.", "success")
+        flash("Línea prestada.", "success")
 
-    except (WorkOrderRequestServiceError, ValueError) as exc:
+    except (WorkOrderRequestServiceError, InvalidOperation, ValueError) as exc:
         flash(str(exc), "danger")
 
     return redirect(request.referrer or "/")
 
 
+# =========================
+# TERMINAL → CONFIRMAR ENTREGA
+# =========================
 @work_order_request_bp.route("/request-lines/<int:line_id>/confirm-to-work-order", methods=["POST"])
 @login_required
 def confirm_request_line_to_work_order_action(line_id: int):
     try:
-        delivered_by_user_id_raw = request.form.get("delivered_by_user_id")
-        received_by_user_id_raw = request.form.get("received_by_user_id")
-
-        if not delivered_by_user_id_raw or not received_by_user_id_raw:
-            raise ValueError("Faltan usuarios de entrega o recepción.")
-
         confirm_request_line_to_work_order(
             request_line_id=line_id,
-            delivered_by_user_id=int(delivered_by_user_id_raw),
-            received_by_user_id=int(received_by_user_id_raw),
+            delivered_by_user_id=int(request.form.get("delivered_by_user_id")),
+            received_by_user_id=int(request.form.get("received_by_user_id")),
             commit=True,
         )
 
-        flash("Entrega confirmada y agregada a la OT.", "success")
+        flash("Entrega confirmada.", "success")
 
     except (WorkOrderRequestServiceError, ValueError) as exc:
         flash(str(exc), "danger")

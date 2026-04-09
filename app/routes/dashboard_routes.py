@@ -121,10 +121,15 @@ def index():
             has_partial_request = False
 
             for req in requests:
-                if req.request_status in ("ABIERTA", "ENVIADA"):
+                req_lines = req.lines.all() if hasattr(req.lines, "all") else req.lines
+
+                # Pendiente de jefatura
+                if req.request_status in ("ABIERTA", "ENVIADA") and not req.sent_to_warehouse_at:
                     has_pending_request = True
 
-                req_lines = req.lines.all() if hasattr(req.lines, "all") else req.lines
+                # Ya aprobado/enviado a bodega
+                if req.sent_to_warehouse_at:
+                    has_pending_request = True
 
                 for line in req_lines:
                     if line.line_status == "ATENDIDA_PARCIAL":
@@ -203,6 +208,7 @@ def manager_dashboard():
             .filter(
                 WorkOrder.site_id == active_site_id,
                 WorkOrderRequest.request_status == "ENVIADA",
+                WorkOrderRequest.sent_to_warehouse_at.is_(None),
             )
             .order_by(WorkOrderRequest.created_at.desc())
             .all()
@@ -230,12 +236,8 @@ def manager_dashboard():
             for line in lines:
                 if line.line_status == "CANCELADA":
                     line.manager_decision = "RECHAZADA"
-                elif line.line_status in ("SOLICITADA", "ATENDIDA_PARCIAL", "ENTREGADA", "NO_ENTREGADA", "PRESTADA"):
-                    line.manager_decision = "APROBABLE"
                 else:
-                    line.manager_decision = line.line_status
-
-                if line.line_status != "CANCELADA":
+                    line.manager_decision = "APROBABLE"
                     req.send_to_warehouse_enabled = True
 
                 req.visible_lines.append(line)

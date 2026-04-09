@@ -45,7 +45,7 @@ def _sync_request_status(request_obj: WorkOrderRequest) -> None:
         request_obj.request_status = "ATENDIDA"
         return
 
-    if request_obj.request_status not in ("ABIERTA", "ENVIADA", "ATENDIDA", "CANCELADA"):
+    if request_obj.request_status == "CANCELADA":
         request_obj.request_status = "ENVIADA"
 
 
@@ -198,8 +198,11 @@ def reject_request_line_by_management(
         raise WorkOrderRequestServiceError("La línea no existe.")
 
     request_obj = line.work_order_request
-    if request_obj.request_status not in ("ENVIADA",):
+    if request_obj.request_status != "ENVIADA":
         raise WorkOrderRequestServiceError("Solo se pueden rechazar líneas de solicitudes enviadas.")
+
+    if request_obj.sent_to_warehouse_at:
+        raise WorkOrderRequestServiceError("La solicitud ya fue enviada a bodega y no puede rechazarse desde jefatura.")
 
     line.line_status = "CANCELADA"
     _sync_request_status(request_obj)
@@ -235,8 +238,11 @@ def update_request_line_requested_quantity(
         raise WorkOrderRequestServiceError("La línea no existe.")
 
     request_obj = line.work_order_request
-    if request_obj.request_status not in ("ENVIADA",):
+    if request_obj.request_status != "ENVIADA":
         raise WorkOrderRequestServiceError("Solo se puede modificar cantidad en solicitudes enviadas.")
+
+    if request_obj.sent_to_warehouse_at:
+        raise WorkOrderRequestServiceError("La solicitud ya fue enviada a bodega y no puede modificarse desde jefatura.")
 
     if line.line_status == "CANCELADA":
         raise WorkOrderRequestServiceError("No se puede modificar una línea cancelada.")
@@ -318,6 +324,54 @@ def send_request(
     return request_obj
 
 
+def send_request_to_warehouse(
+    *,
+    request_id: int,
+    performed_by_user_id: int,
+    commit: bool = True,
+) -> WorkOrderRequest:
+    request_obj = WorkOrderRequest.query.get(request_id)
+    if not request_obj:
+        raise WorkOrderRequestServiceError("La solicitud no existe.")
+
+    if request_obj.request_status != "ENVIADA":
+        raise WorkOrderRequestServiceError("Solo solicitudes enviadas por mecánico pueden pasar a bodega.")
+
+    if request_obj.sent_to_warehouse_at:
+        raise WorkOrderRequestServiceError("La solicitud ya fue enviada a bodega.")
+
+    active_lines = request_obj.lines.filter(
+        WorkOrderRequestLine.line_status != "CANCELADA"
+    ).count()
+
+    if active_lines == 0:
+        raise WorkOrderRequestServiceError("No se puede enviar a bodega una solicitud sin líneas activas.")
+
+    request_obj.approved_by_user_id = performed_by_user_id
+    request_obj.approved_at = db.func.now()
+    request_obj.sent_to_warehouse_by_user_id = performed_by_user_id
+    request_obj.sent_to_warehouse_at = db.func.now()
+
+    db.session.flush()
+
+    log_action(
+        user_id=performed_by_user_id,
+        action="SEND_REQUEST_TO_WAREHOUSE",
+        table_name="work_order_requests",
+        record_id=str(request_obj.id),
+        details={
+            "approved_by_user_id": performed_by_user_id,
+            "sent_to_warehouse_by_user_id": performed_by_user_id,
+        },
+        commit=False,
+    )
+
+    if commit:
+        db.session.commit()
+
+    return request_obj
+
+
 def attend_request_line(
     *,
     request_line_id: int,
@@ -332,6 +386,9 @@ def attend_request_line(
     request_obj = line.work_order_request
     if request_obj.request_status != "ENVIADA":
         raise WorkOrderRequestServiceError("Solo se pueden atender líneas de solicitudes enviadas.")
+
+    if not request_obj.sent_to_warehouse_at:
+        raise WorkOrderRequestServiceError("La solicitud aún no ha sido enviada a bodega.")
 
     if line.line_status == "CANCELADA":
         raise WorkOrderRequestServiceError("No se puede atender una línea cancelada.")
@@ -398,6 +455,9 @@ def mark_request_line_not_delivered(
     if request_obj.request_status != "ENVIADA":
         raise WorkOrderRequestServiceError("Solo se pueden marcar líneas no entregadas en solicitudes enviadas.")
 
+    if not request_obj.sent_to_warehouse_at:
+        raise WorkOrderRequestServiceError("La solicitud aún no ha sido enviada a bodega.")
+
     line.line_status = "NO_ENTREGADA"
     line.not_delivered_reason = (reason or "").strip() or None
 
@@ -436,6 +496,9 @@ def mark_request_line_loaned(
     request_obj = line.work_order_request
     if request_obj.request_status != "ENVIADA":
         raise WorkOrderRequestServiceError("Solo se pueden prestar líneas de solicitudes enviadas.")
+
+    if not request_obj.sent_to_warehouse_at:
+        raise WorkOrderRequestServiceError("La solicitud aún no ha sido enviada a bodega.")
 
     qty = _to_decimal(quantity)
     remaining = line.quantity_requested - line.quantity_attended
