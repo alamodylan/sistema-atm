@@ -166,7 +166,7 @@ def create_work_order_action():
 
 
 # =========================================================
-# DETALLE OT (OPTIMIZADO)
+# DETALLE OT
 # =========================================================
 @work_order_bp.route("/<int:work_order_id>", methods=["GET"])
 @login_required
@@ -177,8 +177,6 @@ def get_work_order(work_order_id: int):
         work_order = (
             WorkOrder.query
             .options(
-                joinedload(WorkOrder.lines),
-                joinedload(WorkOrder.requests).joinedload("lines"),
                 joinedload(WorkOrder.mechanics),
                 joinedload(WorkOrder.equipment),
                 joinedload(WorkOrder.warehouse),
@@ -198,8 +196,6 @@ def get_work_order(work_order_id: int):
             .all()
         )
 
-        # 🔧 Si se entra desde el dashboard regular, solo se muestran
-        # solicitudes que ya fueron enviadas a bodega.
         if source == "dashboard":
             visible_requests = [
                 req for req in work_order.requests

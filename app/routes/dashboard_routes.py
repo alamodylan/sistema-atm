@@ -121,15 +121,12 @@ def index():
             has_partial_request = False
 
             for req in requests:
+                if not req.sent_to_warehouse_at:
+                    continue
+
                 req_lines = req.lines
 
-                # Pendiente de jefatura
-                if req.request_status in ("ABIERTA", "ENVIADA") and not req.sent_to_warehouse_at:
-                    has_pending_request = True
-
-                # Ya aprobado/enviado a bodega
-                if req.sent_to_warehouse_at:
-                    has_pending_request = True
+                has_pending_request = True
 
                 for line in req_lines:
                     if line.line_status == "ATENDIDA_PARCIAL":
@@ -226,20 +223,32 @@ def manager_dashboard():
                 req.requested_by_user.full_name if req.requested_by_user else "-"
             )
 
-            lines = req.lines  # 🔧 CORRECCIÓN
+            lines = req.lines
 
             req.visible_lines = []
-            req.send_to_warehouse_enabled = False
+            has_approved_lines = False
+            all_lines_decided = True
 
             for line in lines:
                 if line.line_status == "CANCELADA":
                     line.manager_decision = "RECHAZADA"
+
+                elif line.line_status in ("ATENDIDA_PARCIAL", "ENTREGADA"):
+                    line.manager_decision = "APROBADA"
+                    has_approved_lines = True
+
+                elif line.line_status == "SOLICITADA":
+                    line.manager_decision = "PENDIENTE"
+                    all_lines_decided = False
+
                 else:
-                    line.manager_decision = "APROBABLE"
-                    req.send_to_warehouse_enabled = True
+                    line.manager_decision = "PENDIENTE"
+                    all_lines_decided = False
 
                 req.visible_lines.append(line)
                 pending_lines_count += 1
+
+            req.send_to_warehouse_enabled = all_lines_decided and has_approved_lines
 
         return render_template(
             "dashboard/manager.html",
