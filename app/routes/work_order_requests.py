@@ -14,7 +14,8 @@ from app.services.work_order_request_service import (
     mark_request_line_not_delivered,
     reject_request_line_by_management,
     send_request,
-    send_request_to_warehouse,  # ✅ NUEVO
+    send_request_to_warehouse,
+    undo_manager_decision,
     update_request_line_requested_quantity,
 )
 
@@ -171,6 +172,26 @@ def reject_request_line_action(line_id: int):
         )
 
         flash("Línea rechazada.", "success")
+
+    except WorkOrderRequestServiceError as exc:
+        flash(str(exc), "danger")
+
+    return redirect(request.referrer or "/")
+
+
+# =========================
+# JEFATURA → DESHACER DECISIÓN
+# =========================
+@work_order_request_bp.route("/request-lines/<int:line_id>/undo-manager-decision", methods=["POST"])
+@login_required
+def undo_manager_decision_action(line_id: int):
+    try:
+        undo_manager_decision(
+            request_line_id=line_id,
+            performed_by_user_id=current_user.id,
+            commit=True,
+        )
+        flash("Decisión de jefatura revertida.", "success")
 
     except WorkOrderRequestServiceError as exc:
         flash(str(exc), "danger")

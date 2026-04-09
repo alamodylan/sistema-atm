@@ -111,19 +111,19 @@
                             <td class="text-end">{{ line.quantity_requested }}</td>
 
                             <td>
-                                {% if line.line_status == "SOLICITADA" %}
-                                    <span class="badge text-bg-secondary">SOLICITADA</span>
-                                {% elif line.line_status == "CANCELADA" %}
+                                {% if line.manager_decision == "PENDIENTE" %}
+                                    <span class="badge text-bg-secondary">PENDIENTE</span>
+                                {% elif line.manager_decision == "APROBADA" %}
+                                    <span class="badge text-bg-success">APROBADA</span>
+                                {% elif line.manager_decision == "RECHAZADA" %}
                                     <span class="badge text-bg-danger">RECHAZADA</span>
-                                {% elif line.line_status == "ATENDIDA_PARCIAL" %}
-                                    <span class="badge text-bg-warning text-dark">AJUSTADA / PARCIAL</span>
                                 {% else %}
-                                    <span class="badge text-bg-secondary">{{ line.line_status }}</span>
+                                    <span class="badge text-bg-secondary">PENDIENTE</span>
                                 {% endif %}
                             </td>
 
                             <td>
-                                {% if line.line_status != "CANCELADA" %}
+                                {% if line.manager_decision == "PENDIENTE" %}
                                 <div class="d-flex flex-column flex-lg-row gap-2">
                                     <form method="POST" action="{{ url_for('work_order_requests.approve_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2">
                                         <input
@@ -153,8 +153,29 @@
                                         </button>
                                     </form>
                                 </div>
+
+                                {% elif line.manager_decision == "APROBADA" %}
+                                <div class="d-flex flex-column flex-lg-row gap-2 align-items-start">
+                                    <span class="text-success small fw-semibold">Línea aprobada por jefatura</span>
+                                    <form method="POST" action="{{ url_for('work_order_requests.undo_manager_decision_action', line_id=line.id) }}">
+                                        <button class="btn btn-sm btn-outline-secondary">
+                                            Deshacer
+                                        </button>
+                                    </form>
+                                </div>
+
+                                {% elif line.manager_decision == "RECHAZADA" %}
+                                <div class="d-flex flex-column flex-lg-row gap-2 align-items-start">
+                                    <span class="text-danger small fw-semibold">Línea rechazada por jefatura</span>
+                                    <form method="POST" action="{{ url_for('work_order_requests.undo_manager_decision_action', line_id=line.id) }}">
+                                        <button class="btn btn-sm btn-outline-secondary">
+                                            Deshacer
+                                        </button>
+                                    </form>
+                                </div>
+
                                 {% else %}
-                                <span class="text-danger small fw-semibold">Línea rechazada por jefatura</span>
+                                <span class="text-muted small">—</span>
                                 {% endif %}
                             </td>
                         </tr>

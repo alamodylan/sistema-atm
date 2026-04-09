@@ -294,6 +294,51 @@ def update_request_line_requested_quantity(
     return line
 
 
+def undo_manager_decision(
+    *,
+    request_line_id: int,
+    performed_by_user_id: int,
+    commit: bool = True,
+) -> WorkOrderRequestLine:
+    line = WorkOrderRequestLine.query.get(request_line_id)
+    if not line:
+        raise WorkOrderRequestServiceError("La línea no existe.")
+
+    request_obj = line.work_order_request
+    if request_obj.request_status != "ENVIADA":
+        raise WorkOrderRequestServiceError("Solo se puede deshacer en solicitudes enviadas a jefatura.")
+
+    if request_obj.sent_to_warehouse_at:
+        raise WorkOrderRequestServiceError("La solicitud ya fue enviada a bodega y no puede revertirse.")
+
+    line.manager_review_status = "PENDIENTE"
+    line.manager_reviewed_by_user_id = None
+    line.manager_reviewed_at = None
+    line.line_status = "SOLICITADA"
+    line.not_delivered_reason = None
+
+    _sync_request_status(request_obj)
+    db.session.flush()
+
+    log_action(
+        user_id=performed_by_user_id,
+        action="UNDO_MANAGER_DECISION",
+        table_name="work_order_request_lines",
+        record_id=str(line.id),
+        details={
+            "request_id": request_obj.id,
+            "manager_review_status": line.manager_review_status,
+            "line_status": line.line_status,
+        },
+        commit=False,
+    )
+
+    if commit:
+        db.session.commit()
+
+    return line
+
+
 def send_request(
     *,
     request_id: int,
