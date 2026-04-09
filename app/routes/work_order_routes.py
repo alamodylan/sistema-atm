@@ -172,14 +172,7 @@ def create_work_order_action():
 @login_required
 def get_work_order(work_order_id: int):
     try:
-        work_order = (
-            WorkOrder.query
-            .options(
-                joinedload(WorkOrder.requests).joinedload("lines").joinedload("article"),
-                joinedload(WorkOrder.lines).joinedload("article"),
-            )
-            .get(work_order_id)
-        )
+        work_order = WorkOrder.query.get(work_order_id)
 
         if not work_order:
             raise ValueError("Orden de trabajo no encontrada.")
@@ -203,7 +196,8 @@ def get_work_order(work_order_id: int):
         flash(str(exc), "danger")
         return redirect(url_for("work_orders.list_work_orders"))
 
-    except Exception:
+    except Exception as exc:
+        print(f"[ERROR OT DETAIL] {exc}")  # 👈 clave para no volver a volar a ciegas
         flash("Error al cargar la orden de trabajo.", "danger")
         return redirect(url_for("work_orders.list_work_orders"))
 

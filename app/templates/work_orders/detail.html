@@ -8,7 +8,7 @@
 {% include 'components/page_header.html' with context %}
 
 <div class="row g-4">
-    <!-- ===================== INFO GENERAL ===================== -->
+    <!-- INFO GENERAL -->
     <div class="col-12 col-xl-4">
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body">
@@ -70,10 +70,10 @@
         </div>
     </div>
 
-    <!-- ===================== CONTENIDO ===================== -->
+    <!-- CONTENIDO -->
     <div class="col-12 col-xl-8">
 
-        <!-- ===================== SOLICITUDES ===================== -->
+        <!-- SOLICITUDES -->
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-body">
                 <div class="d-flex justify-content-between mb-3">
@@ -88,7 +88,7 @@
                     {% endif %}
                 </div>
 
-                {% for req in work_order.requests %}
+                {% for req in work_order.requests.all() %}
                 <div class="border rounded p-3 mb-3">
 
                     <div class="d-flex justify-content-between mb-2">
@@ -116,7 +116,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for line in req.lines %}
+                            {% for line in req.lines.all() %}
                             <tr>
                                 <td>{{ line.article.code }} - {{ line.article.name }}</td>
                                 <td>{{ line.quantity_requested }}</td>
@@ -157,7 +157,7 @@
             </div>
         </div>
 
-        <!-- ===================== LÍNEAS ===================== -->
+        <!-- LÍNEAS -->
         <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body">
 
@@ -195,53 +195,11 @@
 
                 <div class="table-responsive">
                     <table class="table align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Artículo</th>
-                                <th>Cantidad</th>
-                                <th>Inventario</th>
-                                <th>Estado</th>
-                                <th>Acción / Historial</th>
-                            </tr>
-                        </thead>
-
                         <tbody>
                             {% for line in work_order.lines.all() %}
-                            {% set delete_req = line.delete_requests.order_by(line.delete_requests.property.mapper.class_.created_at.desc()).first() %}
                             <tr>
                                 <td>{{ line.article.code }} - {{ line.article.name }}</td>
-
                                 <td>{{ line.quantity }}</td>
-
-                                <td>
-                                    {% if line.inventory_posted %}
-                                        <span class="badge text-bg-success">Aplicado</span>
-                                    {% else %}
-                                        <span class="badge text-bg-secondary">No aplicado</span>
-                                    {% endif %}
-                                </td>
-
-                                <td>
-                                    {% if line.line_status == "ACTIVE" %}
-                                        <span class="badge text-bg-success">Activa</span>
-                                    {% elif line.line_status == "REMOVAL_PENDING" %}
-                                        <span class="badge text-bg-warning">Pendiente eliminación</span>
-                                    {% elif line.line_status == "REMOVED" %}
-                                        <span class="badge text-bg-danger">Eliminada</span>
-                                    {% else %}
-                                        <span class="badge text-bg-secondary">{{ line.line_status }}</span>
-                                    {% endif %}
-                                </td>
-
-                                <td>
-                                    {% if delete_req %}
-                                        <!-- contenido intacto -->
-                                    {% elif work_order.status == "EN_PROCESO" and line.line_status == "ACTIVE" %}
-                                        <!-- contenido intacto -->
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endif %}
-                                </td>
                             </tr>
                             {% else %}
                             <tr>
@@ -256,7 +214,7 @@
 
                 <hr class="my-4">
 
-                <!-- ===================== MECÁNICOS ===================== -->
+                <!-- MECÁNICOS -->
                 <h6 class="fw-bold mb-3">Mecánicos asignados</h6>
 
                 <div class="d-flex flex-wrap gap-2">
