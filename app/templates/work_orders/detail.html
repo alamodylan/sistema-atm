@@ -169,7 +169,8 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for line in req.lines %}
+                            {% set lines = req.filtered_lines if source == "dashboard" else req.lines %}
+                            {% for line in lines %}
                             <tr>
                                 <td>
                                     <div>{{ line.article.code }} - {{ line.article.name }}</div>

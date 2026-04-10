@@ -197,10 +197,23 @@ def get_work_order(work_order_id: int):
         )
 
         if source == "dashboard":
-            visible_requests = [
-                req for req in work_order.requests
-                if req.sent_to_warehouse_at
-            ]
+            visible_requests = []
+
+            for req in work_order.requests:
+                if not req.sent_to_warehouse_at:
+                    continue
+
+                # 🔥 AJUSTE EXACTO (SIN ROMPER NADA)
+                req.lines = [
+                    line for line in req.lines
+                    if line.manager_review_status == "APROBADA"
+                ]
+
+                if not req.lines:
+                    continue
+
+                visible_requests.append(req)
+
         else:
             visible_requests = list(work_order.requests)
 
@@ -278,62 +291,3 @@ def close_work_order_action(work_order_id: int):
         flash("Error interno al cerrar la OT.", "danger")
 
     return redirect(url_for("work_orders.get_work_order", work_order_id=work_order_id))
-
-
-# =========================================================
-# IMPRESIÓN OT
-# =========================================================
-@work_order_bp.route("/<int:work_order_id>/print", methods=["GET"])
-@login_required
-def print_work_order(work_order_id: int):
-    try:
-        work_order = WorkOrder.query.get(work_order_id)
-
-        if not work_order:
-            raise ValueError("Orden de trabajo no encontrada.")
-
-        return render_template(
-            "work_orders/print.html",
-            work_order=work_order,
-        )
-
-    except Exception:
-        flash("Error al generar impresión.", "danger")
-        return redirect(url_for("work_orders.get_work_order", work_order_id=work_order_id))
-
-
-# =========================================================
-# LISTADO SOLICITUDES DE ELIMINACIÓN
-# =========================================================
-@work_order_bp.route("/deletion-requests", methods=["GET"])
-@login_required
-def deletion_requests_list():
-    status = (request.args.get("status") or "").strip()
-
-    try:
-        query = WorkOrderLineDeleteRequest.query
-
-        if status:
-            query = query.filter(WorkOrderLineDeleteRequest.status == status)
-
-        delete_requests = query.order_by(
-            WorkOrderLineDeleteRequest.created_at.desc()
-        ).all()
-
-        return render_template(
-            "work_orders/deletion_requests.html",
-            title="Solicitudes de Eliminación",
-            subtitle="Gestione solicitudes de eliminación de líneas de OT.",
-            delete_requests=delete_requests,
-            status=status,
-        )
-
-    except Exception:
-        flash("Error al cargar las solicitudes de eliminación.", "danger")
-        return render_template(
-            "work_orders/deletion_requests.html",
-            title="Solicitudes de Eliminación",
-            subtitle="Gestione solicitudes de eliminación de líneas de OT.",
-            delete_requests=[],
-            status=status,
-        )
