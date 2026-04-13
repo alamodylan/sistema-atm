@@ -21,6 +21,13 @@ class WorkOrderRequest(db.Model):
         index=True,
     )
 
+    mechanic_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("atm.mechanics.id"),
+        nullable=True,
+        index=True,
+    )
+
     approved_by_user_id = db.Column(
         db.BigInteger,
         db.ForeignKey("atm.users.id"),
@@ -76,6 +83,11 @@ class WorkOrderRequest(db.Model):
         "User",
         foreign_keys=[requested_by_user_id],
         back_populates="work_order_requests",
+    )
+
+    mechanic = db.relationship(
+        "Mechanic",
+        foreign_keys=[mechanic_id],
     )
 
     approved_by_user = db.relationship(

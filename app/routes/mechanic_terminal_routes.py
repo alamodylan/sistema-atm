@@ -154,6 +154,7 @@ def get_borrowed_tools(work_order_id):
 def submit_request(work_order_id):
     data = request.get_json(silent=True) or {}
     lines = data.get("lines") or []
+    mechanic_id = data.get("mechanic_id")  # 🔥 NUEVO
     active_site_id = session.get("active_site_id")
 
     if not active_site_id:
@@ -161,6 +162,9 @@ def submit_request(work_order_id):
 
     if not lines:
         return jsonify({"error": "No hay artículos para solicitar"}), 400
+
+    if not mechanic_id:
+        return jsonify({"error": "Falta el mecánico que realizó el escaneo"}), 400  # 🔥 NUEVO
 
     work_order = WorkOrder.query.filter_by(
         id=work_order_id,
@@ -177,6 +181,7 @@ def submit_request(work_order_id):
         request_obj = create_request(
             work_order_id=work_order.id,
             requested_by_user_id=current_user.id,
+            mechanic_id=int(mechanic_id),  # 🔥 NUEVO
             commit=False,
         )
 

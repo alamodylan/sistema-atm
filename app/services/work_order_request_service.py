@@ -53,6 +53,7 @@ def create_request(
     *,
     work_order_id: int,
     requested_by_user_id: int,
+    mechanic_id: int | None = None,
     commit: bool = True,
 ) -> WorkOrderRequest:
     work_order = WorkOrder.query.get(work_order_id)
@@ -78,6 +79,7 @@ def create_request(
     request_obj = WorkOrderRequest(
         work_order_id=work_order_id,
         requested_by_user_id=requested_by_user_id,
+        mechanic_id=mechanic_id,
         request_status="ABIERTA",
     )
 
@@ -89,7 +91,10 @@ def create_request(
         action="CREATE_WORK_ORDER_REQUEST",
         table_name="work_order_requests",
         record_id=str(request_obj.id),
-        details={"work_order_id": work_order_id},
+        details={
+            "work_order_id": work_order_id,
+            "mechanic_id": mechanic_id,
+        },
         commit=False,
     )
 

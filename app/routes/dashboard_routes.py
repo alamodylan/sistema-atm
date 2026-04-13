@@ -218,7 +218,7 @@ def manager_dashboard():
                 req.work_order.equipment_code_snapshot if req.work_order else "-"
             )
             req.requested_by_name = (
-                req.requested_by_user.full_name if req.requested_by_user else "-"
+                req.mechanic.name if req.mechanic else "-"
             )
 
             lines = req.lines
@@ -228,7 +228,6 @@ def manager_dashboard():
             all_lines_decided = True
 
             for line in lines:
-                # 🔥 CAMBIO REAL AQUÍ
                 if line.manager_review_status == "RECHAZADA":
                     line.manager_decision = "RECHAZADA"
 

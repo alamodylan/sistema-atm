@@ -339,7 +339,10 @@ document.getElementById("submitRequestBtn").onclick = async () => {
     const res = await fetch(`/terminal/work-orders/${selectedWorkOrder.id}/requests/submit`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({lines: cart})
+        body: JSON.stringify({
+            lines: cart,
+            mechanic_id: currentMechanic.mechanic_id
+        })
     });
 
     const data = await res.json();
