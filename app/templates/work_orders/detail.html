@@ -380,6 +380,14 @@
                                 <td>{{ line.quantity }}</td>
 
                                 <td>
+                                    {% if line.inventory_posted %}
+                                        <span class="badge text-bg-success">Aplicado</span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">No aplicado</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
                                     {% if line.received_by_user %}
                                         <div class="fw-semibold text-success">
                                             {{ line.received_by_user.full_name }}
@@ -409,14 +417,6 @@
                                 </td>
 
                                 <td>
-                                    {% if line.inventory_posted %}
-                                        <span class="badge text-bg-success">Aplicado</span>
-                                    {% else %}
-                                        <span class="badge text-bg-secondary">No aplicado</span>
-                                    {% endif %}
-                                </td>
-
-                                <td>
                                     {% if line.line_status == "ACTIVE" %}
                                         <span class="badge text-bg-success">Activa</span>
                                     {% elif line.line_status == "REMOVAL_PENDING" %}
@@ -440,7 +440,7 @@
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-4">
+                                <td colspan="8" class="text-center text-muted py-4">
                                     No hay líneas registradas para esta OT.
                                 </td>
                             </tr>

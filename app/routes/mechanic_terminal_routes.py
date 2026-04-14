@@ -1,3 +1,4 @@
+# routes /mechanic-terminal_routes.py
 # routes /mechanic-terminal/*
 from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required, current_user
@@ -249,77 +250,120 @@ def pending_receptions(mechanic_id):
     if not mechanic:
         return jsonify({"error": "Mecánico no encontrado"}), 404
 
-    lines = (
-        WorkOrderRequestLine.query
-        .join(
-            WorkOrderRequest,
-            WorkOrderRequest.id == WorkOrderRequestLine.work_order_request_id
-        )
-        .join(
-            WorkOrder,
-            WorkOrder.id == WorkOrderRequest.work_order_id
-        )
+    requests = (
+        WorkOrderRequest.query
+        .join(WorkOrder, WorkOrder.id == WorkOrderRequest.work_order_id)
         .filter(
             WorkOrder.site_id == active_site_id,
             WorkOrderRequest.mechanic_id == mechanic_id,
-            WorkOrderRequestLine.line_status == "ENTREGADA",
         )
         .all()
     )
 
-    result = []
-    for line in lines:
-        result.append({
-            "line_id": line.id,
-            "article": line.article.name if line.article else "",
-            "quantity": str(line.quantity_attended),
-            "work_order": line.work_order_request.work_order.number,
+    items = []
+
+    for req in requests:
+        delivered_lines = [
+            line for line in req.lines
+            if line.line_status == "ENTREGADA"
+            and not line.delivered_lines
+        ]
+
+        if not delivered_lines:
+            continue
+
+        work_order = req.work_order
+        equipment_label = (
+            work_order.equipment_code_snapshot
+            if work_order and work_order.equipment_code_snapshot
+            else "Sin equipo"
+        )
+
+        articles = [
+            {
+                "line_id": line.id,
+                "article": (
+                    f"{line.article.code} - {line.article.name}"
+                    if line.article else ""
+                ),
+                "quantity": str(line.quantity_attended),
+            }
+            for line in delivered_lines
+        ]
+
+        items.append({
+            "request_id": req.id,
+            "work_order": work_order.number if work_order else "",
+            "equipment": equipment_label,
+            "articles": articles,
         })
 
-    return jsonify({"items": result})
+    return jsonify({"items": items})
+
 
 @terminal_bp.route("/confirm-reception", methods=["POST"])
 @login_required
 def confirm_reception():
     data = request.get_json(silent=True) or {}
 
-    line_id = data.get("line_id")
+    request_id = data.get("request_id")
     mechanic_code = (data.get("code") or "").strip()
     active_site_id = session.get("active_site_id")
 
-    if not line_id or not mechanic_code:
+    if not request_id or not mechanic_code:
         return jsonify({"error": "Datos incompletos"}), 400
+
+    if not active_site_id:
+        return jsonify({"error": "No hay predio activo seleccionado"}), 400
 
     mechanic = Mechanic.query.filter_by(
         code=mechanic_code,
         site_id=active_site_id,
-        is_active=True
+        is_active=True,
     ).first()
 
     if not mechanic:
         return jsonify({"error": "Mecánico no encontrado"}), 404
 
-    line = WorkOrderRequestLine.query.get(line_id)
-    if not line:
-        return jsonify({"error": "Línea no existe"}), 404
+    request_obj = (
+        WorkOrderRequest.query
+        .join(WorkOrder, WorkOrder.id == WorkOrderRequest.work_order_id)
+        .filter(
+            WorkOrderRequest.id == request_id,
+            WorkOrder.site_id == active_site_id,
+        )
+        .first()
+    )
 
-    request_obj = line.work_order_request
+    if not request_obj:
+        return jsonify({"error": "Solicitud no existe"}), 404
 
-    # 🔥 VALIDACIÓN CRÍTICA
     if request_obj.mechanic_id != mechanic.id:
         return jsonify({
             "error": "Este mecánico no fue quien solicitó esta entrega"
         }), 400
 
-    try:
-        confirm_request_line_to_work_order(
-            request_line_id=line.id,
-            delivered_by_user_id=current_user.id,
-            received_by_user_id=current_user.id,
-            commit=True,
-        )
+    delivered_lines = [
+        line for line in request_obj.lines
+        if line.line_status == "ENTREGADA"
+        and not line.delivered_lines
+    ]
 
+    if not delivered_lines:
+        return jsonify({"error": "La solicitud no tiene entregas pendientes por recibir"}), 400
+
+    try:
+        for line in delivered_lines:
+            confirm_request_line_to_work_order(
+                request_line_id=line.id,
+                delivered_by_user_id=current_user.id,
+                received_by_user_id=current_user.id,
+                commit=False,
+            )
+
+        db.session.commit()
         return jsonify({"ok": True})
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400

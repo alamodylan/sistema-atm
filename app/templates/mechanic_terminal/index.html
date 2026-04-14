@@ -37,8 +37,17 @@
 
         <div id="receptionSection" class="card border-0 shadow-sm rounded-4 mb-4 d-none">
             <div class="card-body">
-                <h5>Recepción de artículos</h5>
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                    <div>
+                        <h5 class="mb-1">Recepción de artículos</h5>
+                        <div id="receptionScanHint" class="small text-primary d-none">
+                            Escanee para firmar recepción de la solicitud seleccionada.
+                        </div>
+                    </div>
+                </div>
+
                 <div id="receptionList"></div>
+
                 <div id="noReception" class="text-muted d-none">
                     No hay artículos pendientes de recepción.
                 </div>
@@ -119,7 +128,7 @@ let currentWorkOrders = [];
 let selectedWorkOrder = null;
 let currentItems = [];
 let cart = [];
-let pendingReceptionLineId = null;
+let pendingReceptionRequestId = null;
 let receptionMode = false;
 
 const scannerEl = document.getElementById("scanner");
@@ -128,6 +137,8 @@ const quantityItemLabel = document.getElementById("quantityItemLabel");
 const quantityArticleId = document.getElementById("quantityArticleId");
 const quantityArticleName = document.getElementById("quantityArticleName");
 const quantityInput = document.getElementById("quantityInput");
+const receptionScanHint = document.getElementById("receptionScanHint");
+const scanStatus = document.getElementById("scanStatus");
 
 function keepScannerFocus() {
     if (
@@ -146,7 +157,7 @@ function resetTerminal() {
     selectedWorkOrder = null;
     currentItems = [];
     cart = [];
-    pendingReceptionLineId = null;
+    pendingReceptionRequestId = null;
     receptionMode = false;
 
     document.getElementById("terminalContent").classList.add("d-none");
@@ -155,6 +166,8 @@ function resetTerminal() {
     document.getElementById("selectedWorkOrderSection").classList.add("d-none");
     document.getElementById("receptionSection").classList.add("d-none");
     quantitySection.classList.add("d-none");
+    receptionScanHint.classList.add("d-none");
+    scanStatus.innerText = "Esperando escaneo...";
 
     document.getElementById("workOrdersList").innerHTML = "";
     document.getElementById("itemsList").innerHTML = "";
@@ -169,13 +182,12 @@ document.addEventListener("keydown", async function(e) {
 
     if (e.key === "Enter") {
 
-        // MODO RECEPCIÓN / FIRMA POR ESCANEO
-        if (receptionMode && pendingReceptionLineId) {
+        if (receptionMode && pendingReceptionRequestId) {
             const res = await fetch("/terminal/confirm-reception", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
-                    line_id: pendingReceptionLineId,
+                    request_id: pendingReceptionRequestId,
                     code: scannerInput
                 })
             });
@@ -183,19 +195,19 @@ document.addEventListener("keydown", async function(e) {
             const data = await res.json();
 
             if (data.ok) {
-                alert("Artículo recibido correctamente");
+                scanStatus.innerText = "Recepción confirmada correctamente.";
                 await loadPendingReceptions();
             } else {
-                alert(data.error || "Error al recibir");
+                scanStatus.innerText = data.error || "Error al recibir";
             }
 
             receptionMode = false;
-            pendingReceptionLineId = null;
+            pendingReceptionRequestId = null;
+            receptionScanHint.classList.add("d-none");
             scannerInput = "";
             return;
         }
 
-        // MODO NORMAL: ESCANEO DE MECÁNICO
         const res = await fetch("/terminal/scan", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
@@ -211,11 +223,12 @@ document.addEventListener("keydown", async function(e) {
             document.getElementById("terminalContent").classList.remove("d-none");
             document.getElementById("mechanicName").innerText = data.mechanic;
             document.getElementById("mechanicCode").innerText = data.code;
+            scanStatus.innerText = "Escaneo correcto.";
 
             renderWorkOrders();
             loadPendingReceptions();
         } else {
-            alert(data.error || "Error al escanear mecánico.");
+            scanStatus.innerText = data.error || "Error al escanear mecánico.";
         }
 
         scannerInput = "";
@@ -291,21 +304,30 @@ async function loadPendingReceptions() {
     document.getElementById("noReception").classList.add("d-none");
 
     data.items.forEach(item => {
+        const articlesHtml = item.articles.map(article => `
+            <div class="small text-muted">
+                ${article.article} | Cantidad: ${article.quantity}
+            </div>
+        `).join("");
+
         const row = document.createElement("div");
-        row.className = "border p-2 mb-1 d-flex justify-content-between align-items-center";
+        row.className = "border p-3 mb-2 d-flex justify-content-between align-items-start gap-3";
 
         row.innerHTML = `
             <div>
-                <div class="fw-semibold">${item.article}</div>
-                <small class="text-muted">OT ${item.work_order} | Cantidad: ${item.quantity}</small>
+                <div class="fw-semibold">Solicitud #${item.request_id}</div>
+                <div class="small mb-1">OT ${item.work_order} | Equipo: ${item.equipment}</div>
+                ${articlesHtml}
             </div>
-            <button class="btn btn-sm btn-success">Recibir</button>
+            <button class="btn btn-sm btn-success">Recibir solicitud</button>
         `;
 
         row.querySelector("button").onclick = () => {
-            pendingReceptionLineId = item.line_id;
+            pendingReceptionRequestId = item.request_id;
             receptionMode = true;
-            alert("Escanee su código para confirmar recepción");
+            receptionScanHint.classList.remove("d-none");
+            scanStatus.innerText = `Escanee para firmar recepción de la solicitud #${item.request_id}.`;
+            scannerEl.focus();
         };
 
         container.appendChild(row);
