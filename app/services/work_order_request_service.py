@@ -469,10 +469,8 @@ def attend_request_line(
         raise WorkOrderRequestServiceError("La línea no fue aprobada por jefatura.")
 
     qty = _to_decimal(quantity)
-    remaining = line.quantity_requested - line.quantity_attended
 
-    if qty > remaining:
-        raise WorkOrderRequestServiceError("No puede atender más de lo solicitado.")
+    remaining = line.quantity_requested - line.quantity_attended
 
     work_order = request_obj.work_order
     stock_record = get_warehouse_stock_record(line.article_id, work_order.warehouse_id)
@@ -481,8 +479,28 @@ def attend_request_line(
         raise WorkOrderRequestServiceError("No hay stock registrado para este artículo en la bodega de la OT.")
 
     available = Decimal(str(stock_record.available_quantity or 0))
-    if qty > available:
-        raise WorkOrderRequestServiceError("No hay suficiente stock disponible para esa cantidad.")
+
+    # ==============================
+    # 🔥 NUEVA REGLA DE NEGOCIO
+    # ==============================
+
+    if available >= remaining:
+        # ✔ Hay stock suficiente → debe entregar EXACTO
+        if qty != remaining:
+            raise WorkOrderRequestServiceError(
+                f"Debe entregar exactamente {remaining} unidades (cantidad aprobada por jefatura)."
+            )
+    else:
+        # ✔ No hay stock suficiente → puede entregar lo disponible
+        if qty > available:
+            raise WorkOrderRequestServiceError(
+                f"No puede entregar más de lo disponible en stock ({available})."
+            )
+
+    if qty > remaining:
+        raise WorkOrderRequestServiceError("No puede atender más de lo solicitado.")
+
+    # ==============================
 
     line.quantity_attended += qty
 

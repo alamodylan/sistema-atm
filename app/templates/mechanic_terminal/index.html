@@ -119,6 +119,8 @@ let currentWorkOrders = [];
 let selectedWorkOrder = null;
 let currentItems = [];
 let cart = [];
+let pendingReceptionLineId = null;
+let receptionMode = false;
 
 const scannerEl = document.getElementById("scanner");
 const quantitySection = document.getElementById("quantitySection");
@@ -144,6 +146,8 @@ function resetTerminal() {
     selectedWorkOrder = null;
     currentItems = [];
     cart = [];
+    pendingReceptionLineId = null;
+    receptionMode = false;
 
     document.getElementById("terminalContent").classList.add("d-none");
     document.getElementById("cartSection").classList.add("d-none");
@@ -164,6 +168,34 @@ document.addEventListener("keydown", async function(e) {
     }
 
     if (e.key === "Enter") {
+
+        // MODO RECEPCIÓN / FIRMA POR ESCANEO
+        if (receptionMode && pendingReceptionLineId) {
+            const res = await fetch("/terminal/confirm-reception", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    line_id: pendingReceptionLineId,
+                    code: scannerInput
+                })
+            });
+
+            const data = await res.json();
+
+            if (data.ok) {
+                alert("Artículo recibido correctamente");
+                await loadPendingReceptions();
+            } else {
+                alert(data.error || "Error al recibir");
+            }
+
+            receptionMode = false;
+            pendingReceptionLineId = null;
+            scannerInput = "";
+            return;
+        }
+
+        // MODO NORMAL: ESCANEO DE MECÁNICO
         const res = await fetch("/terminal/scan", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
@@ -270,19 +302,10 @@ async function loadPendingReceptions() {
             <button class="btn btn-sm btn-success">Recibir</button>
         `;
 
-        row.querySelector("button").onclick = async () => {
-            const res = await fetch(`/work-order-requests/confirm/${item.line_id}`, {
-                method: "POST"
-            });
-
-            const result = await res.json();
-
-            if (result.ok) {
-                await loadPendingReceptions();
-                alert("Artículo recibido");
-            } else {
-                alert(result.error || "Error al recibir");
-            }
+        row.querySelector("button").onclick = () => {
+            pendingReceptionLineId = item.line_id;
+            receptionMode = true;
+            alert("Escanee su código para confirmar recepción");
         };
 
         container.appendChild(row);

@@ -236,8 +236,10 @@
                                                         type="number"
                                                         step="0.01"
                                                         min="0.01"
-                                                        value="{{ line.quantity_requested }}"
+                                                        max="{{ line.stock_available if line.stock_available is defined else '' }}"
+                                                        value="{{ line.suggested_attend_quantity if line.suggested_attend_quantity is defined else line.quantity_requested }}"
                                                         style="width: 110px;"
+                                                        {% if line.force_exact_attend is defined and line.force_exact_attend %}readonly{% endif %}
                                                     >
                                                     <button class="btn btn-sm btn-outline-success">Aprobar</button>
                                                 </form>
@@ -361,6 +363,9 @@
                                 <th>Artículo</th>
                                 <th>Cantidad</th>
                                 <th>Inventario</th>
+                                <th>Recibido</th>
+                                <th>Entregado</th>
+                                <th>Jefatura</th>
                                 <th>Estado</th>
                                 <th>Acción / Historial</th>
                             </tr>
@@ -373,6 +378,35 @@
                                 <td>{{ line.article.code }} - {{ line.article.name }}</td>
 
                                 <td>{{ line.quantity }}</td>
+
+                                <td>
+                                    {% if line.received_by_user %}
+                                        <div class="fw-semibold text-success">
+                                            {{ line.received_by_user.full_name }}
+                                        </div>
+                                        <div class="small text-muted">
+                                            {{ line.received_at or '-' }}
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted">Pendiente</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if line.delivered_by_user %}
+                                        {{ line.delivered_by_user.full_name }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if line.request_line and line.request_line.work_order_request and line.request_line.work_order_request.approved_by_user %}
+                                        {{ line.request_line.work_order_request.approved_by_user.full_name }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
 
                                 <td>
                                     {% if line.inventory_posted %}

@@ -8,6 +8,7 @@ from app.models.work_order import WorkOrder
 from app.models.work_order_request import WorkOrderRequest
 from app.models.tool_loan import ToolLoan
 from app.models.work_order_request_line import WorkOrderRequestLine
+from app.services.work_order_request_service import confirm_request_line_to_work_order
 from app.services.inventory_service import get_inventory_by_warehouse, InventoryServiceError
 from app.services.work_order_request_service import (
     WorkOrderRequestServiceError,
@@ -276,3 +277,49 @@ def pending_receptions(mechanic_id):
         })
 
     return jsonify({"items": result})
+
+@terminal_bp.route("/confirm-reception", methods=["POST"])
+@login_required
+def confirm_reception():
+    data = request.get_json(silent=True) or {}
+
+    line_id = data.get("line_id")
+    mechanic_code = (data.get("code") or "").strip()
+    active_site_id = session.get("active_site_id")
+
+    if not line_id or not mechanic_code:
+        return jsonify({"error": "Datos incompletos"}), 400
+
+    mechanic = Mechanic.query.filter_by(
+        code=mechanic_code,
+        site_id=active_site_id,
+        is_active=True
+    ).first()
+
+    if not mechanic:
+        return jsonify({"error": "Mecánico no encontrado"}), 404
+
+    line = WorkOrderRequestLine.query.get(line_id)
+    if not line:
+        return jsonify({"error": "Línea no existe"}), 404
+
+    request_obj = line.work_order_request
+
+    # 🔥 VALIDACIÓN CRÍTICA
+    if request_obj.mechanic_id != mechanic.id:
+        return jsonify({
+            "error": "Este mecánico no fue quien solicitó esta entrega"
+        }), 400
+
+    try:
+        confirm_request_line_to_work_order(
+            request_line_id=line.id,
+            delivered_by_user_id=current_user.id,
+            received_by_user_id=current_user.id,
+            commit=True,
+        )
+
+        return jsonify({"ok": True})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
