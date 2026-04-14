@@ -12,6 +12,7 @@ from app.models.service_catalog import ServiceCatalog
 from app.models.site import Site
 from app.models.warehouse import Warehouse
 from app.models.work_order import WorkOrder
+from app.models.inventory import WarehouseStock
 from app.services.work_order_service import (
     WorkOrderServiceError,
     close_work_order,
@@ -203,10 +204,35 @@ def get_work_order(work_order_id: int):
                 if not req.sent_to_warehouse_at:
                     continue
 
-                req.filtered_lines = [
-                    line for line in req.lines
-                    if line.manager_review_status == "APROBADA"
-                ]
+                req.filtered_lines = []
+
+                for line in req.lines:
+                    if line.manager_review_status != "APROBADA":
+                        continue
+
+                    # =============================
+                    # 🔥 LÓGICA BODEGA
+                    # =============================
+                    stock = (
+                        WarehouseStock.query
+                        .filter_by(
+                            article_id=line.article_id,
+                            warehouse_id=work_order.warehouse_id
+                        )
+                        .first()
+                    )
+
+                    available_qty = Decimal(str(stock.available_quantity)) if stock and stock.available_quantity else Decimal("0")
+
+                    remaining = Decimal(str(line.quantity_requested)) - Decimal(str(line.quantity_attended))
+
+                    # Campos que usa el template
+                    line.stock_available = available_qty
+                    line.suggested_attend_quantity = min(available_qty, remaining) if remaining > 0 else Decimal("0")
+                    line.warehouse_action_enabled = available_qty > 0 and remaining > 0
+                    line.location_label = stock.location_name if stock and hasattr(stock, "location_name") else "-"
+
+                    req.filtered_lines.append(line)
 
                 if not req.filtered_lines:
                     continue
