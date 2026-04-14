@@ -5,10 +5,10 @@ from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.mechanic import Mechanic
 from app.models.work_order import WorkOrder
+from app.models.work_order_request import WorkOrderRequest
 from app.models.tool_loan import ToolLoan
 from app.models.work_order_request_line import WorkOrderRequestLine
 from app.services.inventory_service import get_inventory_by_warehouse, InventoryServiceError
-from app.models.work_order_request import WorkOrderRequest
 from app.services.work_order_request_service import (
     WorkOrderRequestServiceError,
     create_request,
@@ -157,7 +157,7 @@ def get_borrowed_tools(work_order_id):
 def submit_request(work_order_id):
     data = request.get_json(silent=True) or {}
     lines = data.get("lines") or []
-    mechanic_id = data.get("mechanic_id")  # 🔥 NUEVO
+    mechanic_id = data.get("mechanic_id")
     active_site_id = session.get("active_site_id")
 
     if not active_site_id:
@@ -167,7 +167,7 @@ def submit_request(work_order_id):
         return jsonify({"error": "No hay artículos para solicitar"}), 400
 
     if not mechanic_id:
-        return jsonify({"error": "Falta el mecánico que realizó el escaneo"}), 400  # 🔥 NUEVO
+        return jsonify({"error": "Falta el mecánico que realizó el escaneo"}), 400
 
     work_order = WorkOrder.query.filter_by(
         id=work_order_id,
@@ -184,7 +184,7 @@ def submit_request(work_order_id):
         request_obj = create_request(
             work_order_id=work_order.id,
             requested_by_user_id=current_user.id,
-            mechanic_id=int(mechanic_id),  # 🔥 NUEVO
+            mechanic_id=int(mechanic_id),
             commit=False,
         )
 
@@ -229,8 +229,8 @@ def submit_request(work_order_id):
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Error al enviar solicitud: {str(exc)}"}), 500
-    
-# 🔽 ENDPOINT CORREGIDO
+
+
 @terminal_bp.route("/pending-receptions/<int:mechanic_id>")
 @login_required
 def pending_receptions(mechanic_id):
@@ -241,13 +241,12 @@ def pending_receptions(mechanic_id):
 
     mechanic = Mechanic.query.filter_by(
         id=mechanic_id,
-        site_id=active_site_id
+        site_id=active_site_id,
+        is_active=True,
     ).first()
 
     if not mechanic:
         return jsonify({"error": "Mecánico no encontrado"}), 404
-
-    work_order_ids = [ot.id for ot in mechanic.work_orders]
 
     lines = (
         WorkOrderRequestLine.query
@@ -260,9 +259,9 @@ def pending_receptions(mechanic_id):
             WorkOrder.id == WorkOrderRequest.work_order_id
         )
         .filter(
-            WorkOrder.id.in_(work_order_ids),
             WorkOrder.site_id == active_site_id,
-            WorkOrderRequestLine.line_status == "ENTREGADA"
+            WorkOrderRequest.mechanic_id == mechanic_id,
+            WorkOrderRequestLine.line_status == "ENTREGADA",
         )
         .all()
     )
@@ -273,7 +272,7 @@ def pending_receptions(mechanic_id):
             "line_id": line.id,
             "article": line.article.name if line.article else "",
             "quantity": str(line.quantity_attended),
-            "work_order": line.work_order_request.work_order.number
+            "work_order": line.work_order_request.work_order.number,
         })
 
     return jsonify({"items": result})
