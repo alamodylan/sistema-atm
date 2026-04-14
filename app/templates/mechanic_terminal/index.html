@@ -35,6 +35,16 @@
             </div>
         </div>
 
+        <div id="receptionSection" class="card border-0 shadow-sm rounded-4 mb-4 d-none">
+            <div class="card-body">
+                <h5>Recepción de artículos</h5>
+                <div id="receptionList"></div>
+                <div id="noReception" class="text-muted d-none">
+                    No hay artículos pendientes de recepción.
+                </div>
+            </div>
+        </div>
+
         <div id="selectedWorkOrderSection" class="d-none">
             <div class="card border-0 shadow-sm rounded-4 mb-4">
                 <div class="card-body">
@@ -139,11 +149,13 @@ function resetTerminal() {
     document.getElementById("cartSection").classList.add("d-none");
     document.getElementById("itemsSection").classList.add("d-none");
     document.getElementById("selectedWorkOrderSection").classList.add("d-none");
+    document.getElementById("receptionSection").classList.add("d-none");
     quantitySection.classList.add("d-none");
 
     document.getElementById("workOrdersList").innerHTML = "";
     document.getElementById("itemsList").innerHTML = "";
     document.getElementById("cartList").innerHTML = "";
+    document.getElementById("receptionList").innerHTML = "";
 }
 
 document.addEventListener("keydown", async function(e) {
@@ -169,6 +181,7 @@ document.addEventListener("keydown", async function(e) {
             document.getElementById("mechanicCode").innerText = data.code;
 
             renderWorkOrders();
+            loadPendingReceptions();
         } else {
             alert(data.error || "Error al escanear mecánico.");
         }
@@ -216,6 +229,63 @@ function renderWorkOrders() {
         };
 
         container.appendChild(col);
+    });
+}
+
+async function loadPendingReceptions() {
+    if (!currentMechanic || !currentMechanic.mechanic_id) {
+        return;
+    }
+
+    const res = await fetch(`/terminal/pending-receptions/${currentMechanic.mechanic_id}`);
+    const data = await res.json();
+
+    const container = document.getElementById("receptionList");
+    container.innerHTML = "";
+
+    if (!res.ok) {
+        document.getElementById("receptionSection").classList.remove("d-none");
+        document.getElementById("noReception").classList.remove("d-none");
+        return;
+    }
+
+    if (!data.items || !data.items.length) {
+        document.getElementById("receptionSection").classList.remove("d-none");
+        document.getElementById("noReception").classList.remove("d-none");
+        return;
+    }
+
+    document.getElementById("receptionSection").classList.remove("d-none");
+    document.getElementById("noReception").classList.add("d-none");
+
+    data.items.forEach(item => {
+        const row = document.createElement("div");
+        row.className = "border p-2 mb-1 d-flex justify-content-between align-items-center";
+
+        row.innerHTML = `
+            <div>
+                <div class="fw-semibold">${item.article}</div>
+                <small class="text-muted">OT ${item.work_order} | Cantidad: ${item.quantity}</small>
+            </div>
+            <button class="btn btn-sm btn-success">Recibir</button>
+        `;
+
+        row.querySelector("button").onclick = async () => {
+            const res = await fetch(`/work-order-requests/confirm/${item.line_id}`, {
+                method: "POST"
+            });
+
+            const result = await res.json();
+
+            if (result.ok) {
+                await loadPendingReceptions();
+                alert("Artículo recibido");
+            } else {
+                alert(result.error || "Error al recibir");
+            }
+        };
+
+        container.appendChild(row);
     });
 }
 

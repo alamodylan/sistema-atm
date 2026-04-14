@@ -1,3 +1,4 @@
+# routes /mechanic-terminal/*
 from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required, current_user
 
@@ -5,6 +6,7 @@ from app.extensions import db
 from app.models.mechanic import Mechanic
 from app.models.work_order import WorkOrder
 from app.models.tool_loan import ToolLoan
+from app.models.work_order_request_line import WorkOrderRequestLine
 from app.services.inventory_service import get_inventory_by_warehouse, InventoryServiceError
 from app.services.work_order_request_service import (
     WorkOrderRequestServiceError,
@@ -226,3 +228,44 @@ def submit_request(work_order_id):
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Error al enviar solicitud: {str(exc)}"}), 500
+    
+# 🔽 NUEVO ENDPOINT
+@terminal_bp.route("/pending-receptions/<int:mechanic_id>")
+@login_required
+def pending_receptions(mechanic_id):
+    active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return jsonify({"error": "No hay predio activo seleccionado"}), 400
+
+    mechanic = Mechanic.query.filter_by(
+        id=mechanic_id,
+        site_id=active_site_id
+    ).first()
+
+    if not mechanic:
+        return jsonify({"error": "Mecánico no encontrado"}), 404
+
+    work_order_ids = [ot.id for ot in mechanic.work_orders]
+
+    lines = (
+        WorkOrderRequestLine.query
+        .join(WorkOrder)
+        .filter(
+            WorkOrder.id.in_(work_order_ids),
+            WorkOrder.site_id == active_site_id,
+            WorkOrderRequestLine.line_status == "ENTREGADA"
+        )
+        .all()
+    )
+
+    result = []
+    for line in lines:
+        result.append({
+            "line_id": line.id,
+            "article": line.article.name if line.article else "",
+            "quantity": str(line.quantity_attended),
+            "work_order": line.work_order_request.work_order.number
+        })
+
+    return jsonify({"items": result})
