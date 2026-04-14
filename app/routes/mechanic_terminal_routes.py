@@ -8,6 +8,7 @@ from app.models.work_order import WorkOrder
 from app.models.tool_loan import ToolLoan
 from app.models.work_order_request_line import WorkOrderRequestLine
 from app.services.inventory_service import get_inventory_by_warehouse, InventoryServiceError
+from app.models.work_order_request import WorkOrderRequest
 from app.services.work_order_request_service import (
     WorkOrderRequestServiceError,
     create_request,
@@ -229,7 +230,7 @@ def submit_request(work_order_id):
         db.session.rollback()
         return jsonify({"error": f"Error al enviar solicitud: {str(exc)}"}), 500
     
-# 🔽 NUEVO ENDPOINT
+# 🔽 ENDPOINT CORREGIDO
 @terminal_bp.route("/pending-receptions/<int:mechanic_id>")
 @login_required
 def pending_receptions(mechanic_id):
@@ -250,7 +251,14 @@ def pending_receptions(mechanic_id):
 
     lines = (
         WorkOrderRequestLine.query
-        .join(WorkOrder)
+        .join(
+            WorkOrderRequest,
+            WorkOrderRequest.id == WorkOrderRequestLine.work_order_request_id
+        )
+        .join(
+            WorkOrder,
+            WorkOrder.id == WorkOrderRequest.work_order_id
+        )
         .filter(
             WorkOrder.id.in_(work_order_ids),
             WorkOrder.site_id == active_site_id,
