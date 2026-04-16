@@ -1,14 +1,13 @@
-# routes /mechanic-terminal_routes.py
 from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required, current_user
 
 from app.extensions import db
 from app.models.mechanic import Mechanic
 from app.models.work_order import WorkOrder
+from app.models.work_order_line import WorkOrderLine
 from app.models.work_order_request import WorkOrderRequest
 from app.models.tool_loan import ToolLoan
 from app.models.work_order_request_line import WorkOrderRequestLine
-from app.models.work_order_line import WorkOrderLine
 from app.services.work_order_request_service import confirm_request_line_to_work_order
 from app.services.inventory_service import get_inventory_by_warehouse, InventoryServiceError
 from app.services.work_order_request_service import (
@@ -354,11 +353,22 @@ def confirm_reception():
             "error": "Este mecánico no fue quien solicitó esta entrega"
         }), 400
 
-    delivered_lines = [
-        line for line in request_obj.lines
-        if line.line_status == "ENTREGADA"
-        and not line.delivered_lines
-    ]
+    delivered_lines = []
+
+    for line in request_obj.lines:
+        if line.line_status != "ENTREGADA":
+            continue
+
+        existing_ot_line = (
+            WorkOrderLine.query
+            .filter_by(request_line_id=line.id)
+            .first()
+        )
+
+        if existing_ot_line:
+            continue
+
+        delivered_lines.append(line)
 
     if not delivered_lines:
         return jsonify({"error": "La solicitud no tiene entregas pendientes por recibir"}), 400
@@ -368,7 +378,7 @@ def confirm_reception():
             confirm_request_line_to_work_order(
                 request_line_id=line.id,
                 delivered_by_user_id=current_user.id,
-                received_by_user_id=mechanic.id,
+                received_by_user_id=current_user.id,
                 commit=False,
             )
 

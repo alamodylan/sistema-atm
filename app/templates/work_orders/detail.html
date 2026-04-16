@@ -374,7 +374,14 @@
                                 </td>
 
                                 <td>
-                                    {% if line.received_by_user %}
+                                    {% if line.request_line and line.request_line.work_order_request and line.request_line.work_order_request.mechanic %}
+                                        <div class="fw-semibold text-success">
+                                            {{ line.request_line.work_order_request.mechanic.name }}
+                                        </div>
+                                        <div class="small text-muted">
+                                            {{ line.received_at or '-' }}
+                                        </div>
+                                    {% elif line.received_by_user %}
                                         <div class="fw-semibold text-success">
                                             {{ line.received_by_user.full_name }}
                                         </div>
