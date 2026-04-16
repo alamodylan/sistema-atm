@@ -5,82 +5,88 @@
 {% block content %}
 {% include 'components/page_header.html' with context %}
 
-<div class="row g-4">
-    <div class="col-12 col-md-6 col-xl-3">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body">
-                <div class="text-secondary small text-uppercase fw-semibold">OT en proceso</div>
-                <div class="display-6 fw-bold text-dark mt-2">
-                    {{ work_orders_in_process }}
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-4 mt-1">
-    <div class="col-12">
-        <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-body">
-                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+<div class="row g-4 mb-4">
+    <div class="col-12 col-xl-8">
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100">
+            <div class="card-body p-4">
+                <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
                     <div>
-                        <h5 class="fw-bold mb-1">Órdenes en proceso</h5>
-                        <div class="text-muted small">
-                            Este dashboard corresponde a la operación general y bodega. Las solicitudes iniciales del mecánico
-                            se revisan primero en jefatura. Aquí debe reflejarse únicamente el avance operativo posterior.
+                        <div class="text-uppercase fw-semibold small text-primary mb-2">
+                            Operación en tiempo real
+                        </div>
+                        <h4 class="fw-bold mb-2">Panel operativo de órdenes en proceso</h4>
+                        <div class="text-muted">
+                            Este dashboard refleja el avance operativo de las OT del predio activo.
+                            El bloque de órdenes se actualiza automáticamente cada 2 minutos para mostrar cambios recientes.
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-column align-items-lg-end gap-2">
+                        <button id="refreshDashboardBtn" class="btn btn-primary rounded-pill px-4">
+                            Actualizar ahora
+                        </button>
+                        <div class="small text-muted">
+                            Última actualización:
+                            <strong id="lastRefreshLabel">
+                                {{ current_time.strftime('%d/%m/%Y %I:%M %p') if current_time else '-' }}
+                            </strong>
                         </div>
                     </div>
                 </div>
+            </div>
+            <div class="bg-primary-subtle px-4 py-3 border-top">
+                <div class="small text-primary-emphasis mb-0">
+                    Jefatura revisa primero las solicitudes del mecánico. Bodega interviene solo cuando ya existe aprobación o avance operativo posterior.
+                </div>
+            </div>
+        </div>
+    </div>
 
-                <div class="alert alert-info border-0 rounded-4 mb-4">
-                    <div class="fw-semibold mb-1">Flujo operativo</div>
-                    <div class="small mb-0">
-                        Jefatura revisa primero las solicitudes del mecánico. Bodega solo debe intervenir cuando jefatura
-                        ya aprobó, ajustó o envió la solicitud al siguiente paso operativo.
+    <div class="col-12 col-md-6 col-xl-4">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <div class="text-secondary small text-uppercase fw-semibold">OT en proceso</div>
+                        <div class="display-4 fw-bold text-dark mt-2">
+                            {{ work_orders_in_process }}
+                        </div>
+                    </div>
+                    <div class="rounded-circle bg-success-subtle d-flex align-items-center justify-content-center"
+                         style="width: 52px; height: 52px;">
+                        <span class="fw-bold text-success">OT</span>
                     </div>
                 </div>
 
-                <div class="row g-3">
-                    {% for ot in work_orders_in_process_list %}
-                    <div class="col-12 col-md-6 col-xl-4">
-                        <a href="{{ url_for('work_orders.get_work_order', work_order_id=ot.id, source='dashboard') }}"
-                           class="text-decoration-none text-dark">
+                <div class="small text-muted">
+                    Total de órdenes actualmente activas en el predio seleccionado.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
-                            <div class="card border shadow-sm h-100">
-                                <div class="card-body">
-
-                                    <div class="d-flex justify-content-between mb-2">
-                                        <strong>OT {{ ot.number }}</strong>
-
-                                        {% if ot.semaforo == "RED" %}
-                                            <span class="badge bg-danger">Con gestión pendiente</span>
-                                        {% elif ot.semaforo == "YELLOW" %}
-                                            <span class="badge bg-warning text-dark">Atención parcial</span>
-                                        {% elif ot.semaforo == "GREEN" %}
-                                            <span class="badge bg-success">Sin pendientes</span>
-                                        {% else %}
-                                            <span class="badge bg-secondary">—</span>
-                                        {% endif %}
-                                    </div>
-
-                                    <div class="small text-muted mb-1">
-                                        {{ ot.equipment_code_snapshot or "Sin equipo" }}
-                                    </div>
-
-                                    <div class="small text-muted">
-                                        Estado operativo de materiales y solicitudes ligado a esta OT.
-                                    </div>
-
-                                </div>
-                            </div>
-
-                        </a>
+<div class="row g-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-body p-4">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+                    <div>
+                        <h5 class="fw-bold mb-1">Órdenes en proceso</h5>
+                        <div class="text-muted small">
+                            Vista operativa del estado actual de materiales, solicitudes y herramientas ligadas a cada OT.
+                        </div>
                     </div>
-                    {% else %}
-                    <div class="col-12 text-muted">
-                        No hay órdenes en proceso.
+
+                    <div class="d-flex flex-wrap gap-2">
+                        <span class="badge rounded-pill text-bg-danger px-3 py-2">Con gestión pendiente</span>
+                        <span class="badge rounded-pill text-bg-warning text-dark px-3 py-2">Atención parcial</span>
+                        <span class="badge rounded-pill text-bg-success px-3 py-2">Sin pendientes</span>
                     </div>
-                    {% endfor %}
+                </div>
+
+                <div id="workOrdersContainer">
+                    {% include "dashboard/_work_orders.html" %}
                 </div>
 
             </div>
@@ -88,4 +94,73 @@
     </div>
 </div>
 
+<style>
+.dashboard-ot-card {
+    transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.dashboard-ot-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 1rem 2rem rgba(15, 23, 42, 0.10) !important;
+}
+</style>
+
+<script>
+(function () {
+    const refreshBtn = document.getElementById("refreshDashboardBtn");
+    const workOrdersContainer = document.getElementById("workOrdersContainer");
+    const lastRefreshLabel = document.getElementById("lastRefreshLabel");
+
+    function formatNow() {
+        const now = new Date();
+
+        const day = String(now.getDate()).padStart(2, "0");
+        const month = String(now.getMonth() + 1).padStart(2, "0");
+        const year = now.getFullYear();
+
+        let hours = now.getHours();
+        const minutes = String(now.getMinutes()).padStart(2, "0");
+        const ampm = hours >= 12 ? "PM" : "AM";
+
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        const hoursStr = String(hours).padStart(2, "0");
+
+        return `${day}/${month}/${year} ${hoursStr}:${minutes} ${ampm}`;
+    }
+
+    async function refreshWorkOrders() {
+        if (!workOrdersContainer) return;
+
+        try {
+            const res = await fetch("/dashboard/partial/work-orders", {
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest"
+                }
+            });
+
+            if (!res.ok) {
+                throw new Error("No se pudo actualizar el bloque de órdenes.");
+            }
+
+            const html = await res.text();
+            workOrdersContainer.style.opacity = "0.55";
+            workOrdersContainer.innerHTML = html;
+            workOrdersContainer.style.opacity = "1";
+
+            if (lastRefreshLabel) {
+                lastRefreshLabel.textContent = formatNow();
+            }
+        } catch (error) {
+            console.error("Error actualizando bloque de OTs:", error);
+        }
+    }
+
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", refreshWorkOrders);
+    }
+
+    setInterval(refreshWorkOrders, 120000);
+})();
+</script>
 {% endblock %}

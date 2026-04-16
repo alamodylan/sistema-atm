@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import Blueprint, redirect, render_template, session, url_for
 from flask_login import current_user, login_required
 
@@ -28,6 +30,7 @@ def set_site(site_id):
 @login_required
 def index():
     active_site_id = session.get("active_site_id")
+    current_time = datetime.now()
 
     if not active_site_id:
         return render_template(
@@ -44,6 +47,7 @@ def index():
             waste_cancelada=0,
             inventory_records=0,
             work_orders_in_process_list=[],
+            current_time=current_time,
         )
 
     try:
@@ -158,6 +162,7 @@ def index():
             waste_cancelada=waste_cancelada,
             inventory_records=inventory_records,
             work_orders_in_process_list=work_orders_in_process_list,
+            current_time=current_time,
         )
 
     except Exception as exc:
@@ -176,8 +181,70 @@ def index():
             waste_cancelada=0,
             inventory_records=0,
             work_orders_in_process_list=[],
+            current_time=current_time,
         )
 
+
+@dashboard_bp.route("/dashboard/partial/work-orders")
+@login_required
+def dashboard_work_orders_partial():
+    active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return ""
+
+    active_site_id = int(active_site_id)
+
+    work_orders = (
+        WorkOrder.query
+        .filter_by(
+            site_id=active_site_id,
+            status="EN_PROCESO",
+        )
+        .order_by(WorkOrder.created_at.desc())
+        .all()
+    )
+
+    for ot in work_orders:
+        semaforo = "GREEN"
+
+        requests = ot.requests
+        tool_loans = ot.tool_loans
+
+        has_open_tool_loans = any(
+            loan.loan_status == "PRESTADA"
+            for loan in tool_loans
+        )
+
+        has_pending_request = False
+        has_partial_request = False
+
+        for req in requests:
+            if not req.sent_to_warehouse_at:
+                continue
+
+            for line in req.lines:
+                if line.line_status == "ATENDIDA_PARCIAL":
+                    has_partial_request = True
+
+                if line.line_status in ("SOLICITADA", "PRESTADA"):
+                    has_pending_request = True
+
+        if has_open_tool_loans:
+            semaforo = "RED"
+        elif has_partial_request:
+            semaforo = "YELLOW"
+        elif has_pending_request:
+            semaforo = "RED"
+        else:
+            semaforo = "GREEN"
+
+        ot.semaforo = semaforo
+
+    return render_template(
+        "dashboard/_work_orders.html",
+        work_orders_in_process_list=work_orders
+    )
 
 @dashboard_bp.route("/dashboard/jefatura")
 @login_required

@@ -1,0 +1,46 @@
+<div class="row g-3">
+    {% for ot in work_orders_in_process_list %}
+    <div class="col-12 col-md-6 col-xl-4">
+        <a href="{{ url_for('work_orders.get_work_order', work_order_id=ot.id, source='dashboard') }}"
+           class="text-decoration-none text-dark">
+            <div class="card border-0 shadow-sm rounded-4 h-100 dashboard-ot-card">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                        <div>
+                            <div class="small text-uppercase text-secondary fw-semibold mb-1">
+                                Orden de trabajo
+                            </div>
+                            <div class="fw-bold fs-5">OT {{ ot.number }}</div>
+                        </div>
+
+                        {% if ot.semaforo == "RED" %}
+                            <span class="badge rounded-pill text-bg-danger px-3 py-2">Con gestión pendiente</span>
+                        {% elif ot.semaforo == "YELLOW" %}
+                            <span class="badge rounded-pill text-bg-warning text-dark px-3 py-2">Atención parcial</span>
+                        {% elif ot.semaforo == "GREEN" %}
+                            <span class="badge rounded-pill text-bg-success px-3 py-2">Sin pendientes</span>
+                        {% else %}
+                            <span class="badge rounded-pill text-bg-secondary px-3 py-2">—</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="small text-secondary text-uppercase fw-semibold mb-1">Equipo</div>
+                        <div class="text-dark fw-medium">
+                            {{ ot.equipment_code_snapshot or "Sin equipo" }}
+                        </div>
+                    </div>
+
+                    <div class="small text-muted">
+                        Estado operativo de materiales y solicitudes ligado a esta OT.
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% else %}
+    <div class="col-12 text-muted text-center">
+        No hay órdenes en proceso.
+    </div>
+    {% endfor %}
+</div>
