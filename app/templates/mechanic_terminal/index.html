@@ -141,15 +141,44 @@ const receptionScanHint = document.getElementById("receptionScanHint");
 const scanStatus = document.getElementById("scanStatus");
 const itemsSearch = document.getElementById("itemsSearch");
 
-function keepScannerFocus() {
+function canForceScannerFocus() {
+    const activeEl = document.activeElement;
+
+    if (!quantitySection.classList.contains("d-none")) {
+        return false;
+    }
+
+    if (activeEl === itemsSearch || activeEl === quantityInput) {
+        return false;
+    }
+
     if (
-        document.activeElement !== scannerEl &&
-        quantitySection.classList.contains("d-none")
+        activeEl &&
+        (
+            activeEl.tagName === "INPUT" ||
+            activeEl.tagName === "TEXTAREA" ||
+            activeEl.tagName === "SELECT"
+        )
     ) {
+        return false;
+    }
+
+    return true;
+}
+
+function keepScannerFocus() {
+    if (canForceScannerFocus() && document.activeElement !== scannerEl) {
         scannerEl.focus();
     }
 }
+
 setInterval(keepScannerFocus, 500);
+
+function focusItemsSearch() {
+    if (!itemsSearch) return;
+    itemsSearch.focus();
+    itemsSearch.select();
+}
 
 function resetTerminal() {
     scannerInput = "";
@@ -166,6 +195,10 @@ function resetTerminal() {
     document.getElementById("itemsSection").classList.add("d-none");
     document.getElementById("selectedWorkOrderSection").classList.add("d-none");
     document.getElementById("receptionSection").classList.add("d-none");
+    document.getElementById("noWorkOrders").classList.add("d-none");
+    document.getElementById("noReception").classList.add("d-none");
+    document.getElementById("noItemsMessage").classList.add("d-none");
+
     quantitySection.classList.add("d-none");
     receptionScanHint.classList.add("d-none");
     scanStatus.innerText = "Esperando escaneo...";
@@ -174,9 +207,6 @@ function resetTerminal() {
     document.getElementById("itemsList").innerHTML = "";
     document.getElementById("cartList").innerHTML = "";
     document.getElementById("receptionList").innerHTML = "";
-    document.getElementById("noWorkOrders").classList.add("d-none");
-    document.getElementById("noReception").classList.add("d-none");
-    document.getElementById("noItemsMessage").classList.add("d-none");
 
     if (itemsSearch) {
         itemsSearch.value = "";
@@ -185,63 +215,80 @@ function resetTerminal() {
     scannerEl.focus();
 }
 
-document.addEventListener("keydown", async function(e) {
+async function handleScannerEnter() {
+    if (receptionMode && pendingReceptionRequestId) {
+        const res = await fetch("/terminal/confirm-reception", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                request_id: pendingReceptionRequestId,
+                code: scannerInput
+            })
+        });
+
+        const data = await res.json();
+
+        if (data.ok) {
+            scanStatus.innerText = "Recepción confirmada correctamente.";
+            await loadPendingReceptions();
+        } else {
+            scanStatus.innerText = data.error || "Error al recibir";
+        }
+
+        receptionMode = false;
+        pendingReceptionRequestId = null;
+        receptionScanHint.classList.add("d-none");
+        scannerInput = "";
+        return;
+    }
+
+    const res = await fetch("/terminal/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: scannerInput })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+        currentMechanic = data;
+        currentWorkOrders = data.work_orders || [];
+
+        document.getElementById("terminalContent").classList.remove("d-none");
+        document.getElementById("mechanicName").innerText = data.mechanic;
+        document.getElementById("mechanicCode").innerText = data.code;
+        scanStatus.innerText = "Escaneo correcto.";
+
+        renderWorkOrders();
+        await loadPendingReceptions();
+    } else {
+        scanStatus.innerText = data.error || "Error al escanear mecánico.";
+    }
+
+    scannerInput = "";
+}
+
+document.addEventListener("keydown", async function (e) {
+    const activeEl = document.activeElement;
+    const writingInInput =
+        activeEl &&
+        (
+            activeEl === itemsSearch ||
+            activeEl === quantityInput ||
+            activeEl.tagName === "TEXTAREA" ||
+            activeEl.tagName === "SELECT"
+        );
+
+    if (writingInInput) {
+        return;
+    }
+
     if (!quantitySection.classList.contains("d-none")) {
         return;
     }
 
     if (e.key === "Enter") {
-
-        if (receptionMode && pendingReceptionRequestId) {
-            const res = await fetch("/terminal/confirm-reception", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                    request_id: pendingReceptionRequestId,
-                    code: scannerInput
-                })
-            });
-
-            const data = await res.json();
-
-            if (data.ok) {
-                scanStatus.innerText = "Recepción confirmada correctamente.";
-                await loadPendingReceptions();
-            } else {
-                scanStatus.innerText = data.error || "Error al recibir";
-            }
-
-            receptionMode = false;
-            pendingReceptionRequestId = null;
-            receptionScanHint.classList.add("d-none");
-            scannerInput = "";
-            return;
-        }
-
-        const res = await fetch("/terminal/scan", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({code: scannerInput})
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            currentMechanic = data;
-            currentWorkOrders = data.work_orders;
-
-            document.getElementById("terminalContent").classList.remove("d-none");
-            document.getElementById("mechanicName").innerText = data.mechanic;
-            document.getElementById("mechanicCode").innerText = data.code;
-            scanStatus.innerText = "Escaneo correcto.";
-
-            renderWorkOrders();
-            loadPendingReceptions();
-        } else {
-            scanStatus.innerText = data.error || "Error al escanear mecánico.";
-        }
-
-        scannerInput = "";
+        await handleScannerEnter();
         return;
     }
 
@@ -261,7 +308,7 @@ function renderWorkOrders() {
 
     document.getElementById("noWorkOrders").classList.add("d-none");
 
-    currentWorkOrders.forEach(ot => {
+    currentWorkOrders.forEach(function (ot) {
         const equipo = ot.equipment_code_snapshot ? ot.equipment_code_snapshot : "Sin equipo";
 
         const col = document.createElement("div");
@@ -274,7 +321,7 @@ function renderWorkOrders() {
             </button>
         `;
 
-        col.querySelector("button").onclick = () => {
+        col.querySelector("button").onclick = function () {
             selectedWorkOrder = ot;
             cart = [];
             renderCart();
@@ -312,12 +359,14 @@ async function loadPendingReceptions() {
 
     document.getElementById("noReception").classList.add("d-none");
 
-    data.items.forEach(item => {
-        const articlesHtml = item.articles.map(article => `
-            <div class="small text-muted">
-                ${article.article} | Cantidad: ${article.quantity}
-            </div>
-        `).join("");
+    data.items.forEach(function (item) {
+        const articlesHtml = item.articles.map(function (article) {
+            return `
+                <div class="small text-muted">
+                    ${article.article} | Cantidad: ${article.quantity}
+                </div>
+            `;
+        }).join("");
 
         const row = document.createElement("div");
         row.className = "border p-3 mb-2 d-flex justify-content-between align-items-start gap-3";
@@ -331,7 +380,7 @@ async function loadPendingReceptions() {
             <button class="btn btn-sm btn-success">Recibir solicitud</button>
         `;
 
-        row.querySelector("button").onclick = () => {
+        row.querySelector("button").onclick = function () {
             pendingReceptionRequestId = item.request_id;
             receptionMode = true;
             receptionScanHint.classList.remove("d-none");
@@ -361,9 +410,20 @@ async function loadItems(url, title) {
     }
 
     renderItems();
-
     document.getElementById("itemsSection").classList.remove("d-none");
-    document.getElementById("itemsSection").scrollIntoView({ behavior: "smooth", block: "start" });
+
+    setTimeout(function () {
+        focusItemsSearch();
+    }, 50);
+}
+
+function openQuantityForItem(item) {
+    quantityArticleId.value = item.article_id;
+    quantityArticleName.value = item.name;
+    quantityItemLabel.innerText = item.code + " - " + item.name;
+    quantityInput.value = "";
+    quantitySection.classList.remove("d-none");
+    quantityInput.focus();
 }
 
 function renderItemRows(items) {
@@ -377,7 +437,7 @@ function renderItemRows(items) {
 
     document.getElementById("noItemsMessage").classList.add("d-none");
 
-    items.forEach(item => {
+    items.forEach(function (item) {
         const row = document.createElement("div");
         row.className = "border p-2 mb-1 d-flex justify-content-between align-items-center";
 
@@ -386,14 +446,8 @@ function renderItemRows(items) {
             <button class="btn btn-sm btn-success">Agregar</button>
         `;
 
-        row.querySelector("button").onclick = () => {
-            quantityArticleId.value = item.article_id;
-            quantityArticleName.value = item.name;
-            quantityItemLabel.innerText = item.code + " - " + item.name;
-            quantityInput.value = "";
-            quantitySection.classList.remove("d-none");
-            quantityInput.focus();
-            quantitySection.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.querySelector("button").onclick = function () {
+            openQuantityForItem(item);
         };
 
         container.appendChild(row);
@@ -413,7 +467,7 @@ function renderCart() {
         return;
     }
 
-    cart.forEach((c, i) => {
+    cart.forEach(function (c, i) {
         const row = document.createElement("div");
         row.className = "d-flex justify-content-between align-items-center border-bottom py-2";
 
@@ -422,7 +476,7 @@ function renderCart() {
             <button class="btn btn-sm btn-danger ms-2">X</button>
         `;
 
-        row.querySelector("button").onclick = () => {
+        row.querySelector("button").onclick = function () {
             cart.splice(i, 1);
             renderCart();
         };
@@ -433,7 +487,7 @@ function renderCart() {
     document.getElementById("cartSection").classList.remove("d-none");
 }
 
-document.getElementById("confirmQuantityBtn").onclick = () => {
+document.getElementById("confirmQuantityBtn").onclick = function () {
     const quantityValue = quantityInput.value.trim();
 
     if (!quantityValue) {
@@ -456,26 +510,33 @@ document.getElementById("confirmQuantityBtn").onclick = () => {
 
     quantitySection.classList.add("d-none");
     renderCart();
-    document.getElementById("itemsSection").scrollIntoView({ behavior: "smooth", block: "start" });
+
+    setTimeout(function () {
+        focusItemsSearch();
+    }, 50);
 };
 
-document.getElementById("cancelQuantityBtn").onclick = () => {
+document.getElementById("cancelQuantityBtn").onclick = function () {
     quantitySection.classList.add("d-none");
-    document.getElementById("itemsSection").scrollIntoView({ behavior: "smooth", block: "start" });
+
+    setTimeout(function () {
+        focusItemsSearch();
+    }, 50);
 };
 
-document.getElementById("submitRequestBtn").onclick = async () => {
+document.getElementById("submitRequestBtn").onclick = async function () {
     if (!selectedWorkOrder) {
         return;
     }
 
     if (!cart.length) {
-        return alert("Sin items");
+        alert("Sin items");
+        return;
     }
 
     const res = await fetch(`/terminal/work-orders/${selectedWorkOrder.id}/requests/submit`, {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             lines: cart,
             mechanic_id: currentMechanic.mechanic_id
@@ -491,21 +552,21 @@ document.getElementById("submitRequestBtn").onclick = async () => {
     }
 };
 
-document.getElementById("loadArticlesBtn").onclick = () => {
+document.getElementById("loadArticlesBtn").onclick = function () {
     loadItems(`/terminal/articles/${selectedWorkOrder.warehouse_id}`, "Solicitar artículo");
 };
 
-document.getElementById("loadToolsBtn").onclick = () => {
+document.getElementById("loadToolsBtn").onclick = function () {
     loadItems(`/terminal/tools/${selectedWorkOrder.warehouse_id}`, "Solicitar herramienta");
 };
 
-document.getElementById("loadBorrowedToolsBtn").onclick = () => {
+document.getElementById("loadBorrowedToolsBtn").onclick = function () {
     loadItems(`/terminal/borrowed-tools/${selectedWorkOrder.id}`, "Devolver herramienta");
 };
 
 document.getElementById("resetTerminalBtn").onclick = resetTerminal;
 
-document.getElementById("itemsSearch").addEventListener("input", function() {
+itemsSearch.addEventListener("input", function () {
     const term = this.value.toLowerCase().trim();
 
     if (!term) {
@@ -513,10 +574,9 @@ document.getElementById("itemsSearch").addEventListener("input", function() {
         return;
     }
 
-    const filtered = currentItems.filter(item => {
+    const filtered = currentItems.filter(function (item) {
         const code = (item.code || "").toLowerCase();
         const name = (item.name || "").toLowerCase();
-
         return code.startsWith(term) || name.startsWith(term);
     });
 
