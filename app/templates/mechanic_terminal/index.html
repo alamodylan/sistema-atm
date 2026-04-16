@@ -139,6 +139,7 @@ const quantityArticleName = document.getElementById("quantityArticleName");
 const quantityInput = document.getElementById("quantityInput");
 const receptionScanHint = document.getElementById("receptionScanHint");
 const scanStatus = document.getElementById("scanStatus");
+const itemsSearch = document.getElementById("itemsSearch");
 
 function keepScannerFocus() {
     if (
@@ -173,6 +174,15 @@ function resetTerminal() {
     document.getElementById("itemsList").innerHTML = "";
     document.getElementById("cartList").innerHTML = "";
     document.getElementById("receptionList").innerHTML = "";
+    document.getElementById("noWorkOrders").classList.add("d-none");
+    document.getElementById("noReception").classList.add("d-none");
+    document.getElementById("noItemsMessage").classList.add("d-none");
+
+    if (itemsSearch) {
+        itemsSearch.value = "";
+    }
+
+    scannerEl.focus();
 }
 
 document.addEventListener("keydown", async function(e) {
@@ -288,19 +298,18 @@ async function loadPendingReceptions() {
     const container = document.getElementById("receptionList");
     container.innerHTML = "";
 
+    document.getElementById("receptionSection").classList.remove("d-none");
+
     if (!res.ok) {
-        document.getElementById("receptionSection").classList.remove("d-none");
         document.getElementById("noReception").classList.remove("d-none");
         return;
     }
 
     if (!data.items || !data.items.length) {
-        document.getElementById("receptionSection").classList.remove("d-none");
         document.getElementById("noReception").classList.remove("d-none");
         return;
     }
 
-    document.getElementById("receptionSection").classList.remove("d-none");
     document.getElementById("noReception").classList.add("d-none");
 
     data.items.forEach(item => {
@@ -346,23 +355,29 @@ async function loadItems(url, title) {
     }
 
     currentItems = data.items || [];
+
+    if (itemsSearch) {
+        itemsSearch.value = "";
+    }
+
     renderItems();
 
     document.getElementById("itemsSection").classList.remove("d-none");
+    document.getElementById("itemsSection").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function renderItems() {
+function renderItemRows(items) {
     const container = document.getElementById("itemsList");
     container.innerHTML = "";
 
-    if (!currentItems.length) {
+    if (!items.length) {
         document.getElementById("noItemsMessage").classList.remove("d-none");
         return;
     }
 
     document.getElementById("noItemsMessage").classList.add("d-none");
 
-    currentItems.forEach(item => {
+    items.forEach(item => {
         const row = document.createElement("div");
         row.className = "border p-2 mb-1 d-flex justify-content-between align-items-center";
 
@@ -378,10 +393,15 @@ function renderItems() {
             quantityInput.value = "";
             quantitySection.classList.remove("d-none");
             quantityInput.focus();
+            quantitySection.scrollIntoView({ behavior: "smooth", block: "center" });
         };
 
         container.appendChild(row);
     });
+}
+
+function renderItems() {
+    renderItemRows(currentItems);
 }
 
 function renderCart() {
@@ -436,10 +456,12 @@ document.getElementById("confirmQuantityBtn").onclick = () => {
 
     quantitySection.classList.add("d-none");
     renderCart();
+    document.getElementById("itemsSection").scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
 document.getElementById("cancelQuantityBtn").onclick = () => {
     quantitySection.classList.add("d-none");
+    document.getElementById("itemsSection").scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
 document.getElementById("submitRequestBtn").onclick = async () => {
@@ -463,10 +485,7 @@ document.getElementById("submitRequestBtn").onclick = async () => {
     const data = await res.json();
 
     if (data.ok) {
-        alert("Solicitud enviada");
-        cart = [];
-        renderCart();
-        document.getElementById("cartSection").classList.add("d-none");
+        resetTerminal();
     } else {
         alert(data.error || "Error al enviar solicitud.");
     }
@@ -494,40 +513,14 @@ document.getElementById("itemsSearch").addEventListener("input", function() {
         return;
     }
 
-    const filtered = currentItems.filter(item =>
-        `${item.code} ${item.name}`.toLowerCase().includes(term)
-    );
+    const filtered = currentItems.filter(item => {
+        const code = (item.code || "").toLowerCase();
+        const name = (item.name || "").toLowerCase();
 
-    const container = document.getElementById("itemsList");
-    container.innerHTML = "";
-
-    if (!filtered.length) {
-        document.getElementById("noItemsMessage").classList.remove("d-none");
-        return;
-    }
-
-    document.getElementById("noItemsMessage").classList.add("d-none");
-
-    filtered.forEach(item => {
-        const row = document.createElement("div");
-        row.className = "border p-2 mb-1 d-flex justify-content-between align-items-center";
-
-        row.innerHTML = `
-            <div>${item.code} - ${item.name}</div>
-            <button class="btn btn-sm btn-success">Agregar</button>
-        `;
-
-        row.querySelector("button").onclick = () => {
-            quantityArticleId.value = item.article_id;
-            quantityArticleName.value = item.name;
-            quantityItemLabel.innerText = item.code + " - " + item.name;
-            quantityInput.value = "";
-            quantitySection.classList.remove("d-none");
-            quantityInput.focus();
-        };
-
-        container.appendChild(row);
+        return code.startsWith(term) || name.startsWith(term);
     });
+
+    renderItemRows(filtered);
 });
 </script>
 {% endblock %}
