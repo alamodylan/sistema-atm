@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid mt-4">
+
+    <h3>Solicitud {{ transfer_request.number }}</h3>
+
+    <div class="mb-3">
+        Estado: <strong>{{ transfer_request.status }}</strong>
+    </div>
+
+    <!-- AGREGAR LÍNEA -->
+    <div class="card mb-4">
+        <div class="card-header">Agregar Artículo</div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('transfers.add_request_line', transfer_request_id=transfer_request.id) }}">
+                <div class="row">
+                    <div class="col-md-4">
+                        <select name="article_id" class="form-control" required>
+                            {% for a in articles %}
+                            <option value="{{ a.id }}">{{ a.code }} - {{ a.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <input name="quantity_requested" class="form-control" placeholder="Cantidad" required>
+                    </div>
+                    <div class="col-md-3">
+                        <input name="notes" class="form-control" placeholder="Nota">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-success w-100">Agregar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TABLA -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Artículo</th>
+                        <th>Solicitado</th>
+                        <th>Aprobado</th>
+                        <th>Stock Origen</th>
+                        <th>Stock Destino</th>
+                        <th>Estado</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in transfer_request.lines %}
+                    <tr>
+                        <td>{{ line.article.code }} - {{ line.article.name }}</td>
+                        <td>{{ line.quantity_requested }}</td>
+                        <td>{{ line.quantity_approved }}</td>
+                        <td>{{ stock_map[line.id].requesting_available_quantity }}</td>
+                        <td>{{ stock_map[line.id].supplying_available_quantity }}</td>
+                        <td>{{ line.line_status }}</td>
+                        <td>
+
+                            <!-- APROBAR -->
+                            <form method="POST" action="{{ url_for('transfers.review_request_line', transfer_request_line_id=line.id) }}" class="d-inline">
+                                <input type="hidden" name="action" value="APROBAR">
+                                <input name="quantity_approved" placeholder="Cant" style="width:70px">
+                                <button class="btn btn-sm btn-success">✔</button>
+                            </form>
+
+                            <!-- RECHAZAR -->
+                            <form method="POST" action="{{ url_for('transfers.review_request_line', transfer_request_line_id=line.id) }}" class="d-inline">
+                                <input type="hidden" name="action" value="RECHAZAR">
+                                <button class="btn btn-sm btn-danger">✖</button>
+                            </form>
+
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="mt-3">
+
+        <form method="POST" action="{{ url_for('transfers.submit_request', transfer_request_id=transfer_request.id) }}" class="d-inline">
+            <button class="btn btn-primary">Enviar Solicitud</button>
+        </form>
+
+        <form method="POST" action="{{ url_for('transfers.finalize_request_review', transfer_request_id=transfer_request.id) }}" class="d-inline">
+            <button class="btn btn-warning">Finalizar Revisión</button>
+        </form>
+
+        <form method="POST" action="{{ url_for('transfers.submit_request_to_warehouse', transfer_request_id=transfer_request.id) }}" class="d-inline">
+            <button class="btn btn-success">Enviar a Bodega</button>
+        </form>
+
+    </div>
+
+</div>
+
+{% endblock %}

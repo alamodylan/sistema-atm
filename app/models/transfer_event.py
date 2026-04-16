@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from app.extensions import db
 
@@ -11,12 +11,12 @@ class TransferEvent(db.Model):
 
     transfer_id = db.Column(
         db.BigInteger,
-        db.ForeignKey("atm.transfers.id", ondelete="CASCADE"),
+        db.ForeignKey("atm.transfers.id"),
         nullable=False,
         index=True,
     )
 
-    event_type = db.Column(db.String(40), nullable=False, index=True)
+    event_type = db.Column(db.String(50), nullable=False)
     event_message = db.Column(db.Text, nullable=True)
 
     performed_by_user_id = db.Column(
@@ -34,7 +34,7 @@ class TransferEvent(db.Model):
 
     transfer = db.relationship(
         "Transfer",
-        back_populates="events",
+        foreign_keys=[transfer_id],
     )
 
     performed_by_user = db.relationship(
@@ -43,4 +43,4 @@ class TransferEvent(db.Model):
     )
 
     def __repr__(self) -> str:
-        return f"<TransferEvent id={self.id} transfer={self.transfer_id} type={self.event_type}>"
+        return f"<TransferEvent id={self.id} transfer_id={self.transfer_id} event_type={self.event_type}>"

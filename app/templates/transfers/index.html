@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Traslados</h3>
+        <a href="{{ url_for('transfers.create_request') }}" class="btn btn-primary">
+            Nueva Solicitud
+        </a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <strong>Solicitudes de Traslado</strong>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Origen</th>
+                        <th>Destino</th>
+                        <th>Estado</th>
+                        <th>Fecha</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in transfer_requests %}
+                    <tr>
+                        <td>{{ r.number }}</td>
+                        <td>{{ r.origin_warehouse.name }}</td>
+                        <td>{{ r.destination_warehouse.name }}</td>
+                        <td>{{ r.status }}</td>
+                        <td>{{ r.created_at }}</td>
+                        <td>
+                            <a href="{{ url_for('transfers.detail_request', transfer_request_id=r.id) }}" class="btn btn-sm btn-outline-primary">
+                                Ver
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <strong>Traslados</strong>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Origen</th>
+                        <th>Destino</th>
+                        <th>Estado</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in transfers %}
+                    <tr>
+                        <td>{{ t.number }}</td>
+                        <td>{{ t.origin_warehouse.name }}</td>
+                        <td>{{ t.destination_warehouse.name }}</td>
+                        <td>{{ t.status }}</td>
+                        <td>
+                            <a href="{{ url_for('transfers.detail_transfer', transfer_id=t.id) }}" class="btn btn-sm btn-outline-success">
+                                Ver
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

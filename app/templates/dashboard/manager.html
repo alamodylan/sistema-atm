@@ -27,9 +27,31 @@
             </div>
         </div>
     </div>
+
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body">
+                <div class="text-secondary small text-uppercase fw-semibold">Solicitudes traslado pendientes</div>
+                <div class="display-6 fw-bold text-dark mt-2">
+                    {{ transfer_pending_requests_count or 0 }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body">
+                <div class="text-secondary small text-uppercase fw-semibold">Líneas traslado por revisar</div>
+                <div class="display-6 fw-bold text-dark mt-2">
+                    {{ transfer_pending_lines_count or 0 }}
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
-<div class="card border-0 shadow-sm rounded-4">
+<div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body">
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
             <div>
@@ -193,6 +215,123 @@
         {% else %}
         <div class="text-muted">
             No hay solicitudes pendientes de revisión en jefatura.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+            <div>
+                <h5 class="fw-bold mb-1">Solicitudes de traslado pendientes de jefatura</h5>
+                <div class="text-muted small">
+                    Aquí se revisan las solicitudes de traslado antes de enviarlas a bodega abastecedora.
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-info border-0 rounded-4 mb-4">
+            <div class="fw-semibold mb-1">Flujo de aprobación de traslados</div>
+            <div class="small mb-0">
+                Las solicitudes de traslado que aparecen aquí aún <strong>no son visibles para bodega</strong>.
+                Jefatura debe revisar sus líneas, aprobar o rechazar según corresponda y luego
+                <strong>enviar a bodega</strong> para que puedan prepararse y convertirse en traslado real.
+            </div>
+        </div>
+
+        {% for req in transfer_pending_requests %}
+        <div class="border rounded-4 p-3 mb-4">
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-lg-8">
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <h6 class="fw-bold mb-0">Solicitud {{ req.number }}</h6>
+                        <span class="badge text-bg-warning text-dark">PENDIENTE JEFATURA</span>
+                        <span class="badge text-bg-secondary">AÚN NO VISIBLE EN BODEGA</span>
+                    </div>
+
+                    <div class="small text-muted">
+                        Bodega solicitante:
+                        <strong class="text-dark">{{ req.origin_warehouse.name if req.origin_warehouse else '-' }}</strong>
+                    </div>
+                    <div class="small text-muted">
+                        Bodega abastecedora:
+                        <strong class="text-dark">{{ req.destination_warehouse.name if req.destination_warehouse else '-' }}</strong>
+                    </div>
+                    <div class="small text-muted">
+                        Prioridad:
+                        <strong class="text-dark">{{ req.priority }}</strong>
+                    </div>
+                    <div class="small text-muted">
+                        Solicitó:
+                        <strong class="text-dark">{{ req.requested_by.full_name if req.requested_by and req.requested_by.full_name else (req.requested_by.username if req.requested_by else '-') }}</strong>
+                    </div>
+                    <div class="small text-muted">
+                        Fecha:
+                        <strong class="text-dark">{{ req.created_at }}</strong>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-4 d-flex justify-content-lg-end align-items-start">
+                    <a href="{{ url_for('transfers.detail_request', transfer_request_id=req.id) }}"
+                       class="btn btn-primary">
+                        Revisar solicitud
+                    </a>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Artículo</th>
+                            <th class="text-end">Cantidad solicitada</th>
+                            <th class="text-end">Cantidad aprobada</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line in req.visible_lines %}
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">{{ line.article.code }} - {{ line.article.name }}</div>
+                                {% if line.notes %}
+                                    <div class="small text-muted">{{ line.notes }}</div>
+                                {% endif %}
+                                {% if line.not_delivered_reason %}
+                                    <div class="small text-danger">Motivo: {{ line.not_delivered_reason }}</div>
+                                {% endif %}
+                            </td>
+
+                            <td class="text-end">{{ line.quantity_requested }}</td>
+                            <td class="text-end">{{ line.quantity_approved or 0 }}</td>
+
+                            <td>
+                                {% if line.manager_decision == "PENDIENTE" %}
+                                    <span class="badge text-bg-secondary">PENDIENTE</span>
+                                {% elif line.manager_decision == "APROBADA" %}
+                                    <span class="badge text-bg-success">APROBADA</span>
+                                {% elif line.manager_decision == "RECHAZADA" %}
+                                    <span class="badge text-bg-danger">RECHAZADA</span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">PENDIENTE</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-4">
+                                Esta solicitud de traslado no tiene líneas visibles.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="text-muted">
+            No hay solicitudes de traslado pendientes de revisión en jefatura.
         </div>
         {% endfor %}
     </div>

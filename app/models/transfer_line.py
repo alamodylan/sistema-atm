@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from app.extensions import db
 
@@ -11,7 +11,7 @@ class TransferLine(db.Model):
 
     transfer_id = db.Column(
         db.BigInteger,
-        db.ForeignKey("atm.transfers.id", ondelete="CASCADE"),
+        db.ForeignKey("atm.transfers.id"),
         nullable=False,
         index=True,
     )
@@ -24,8 +24,9 @@ class TransferLine(db.Model):
     )
 
     quantity_sent = db.Column(db.Numeric(14, 2), nullable=False)
-    quantity_received = db.Column(db.Numeric(14, 2), nullable=True, default=0)
-    line_status = db.Column(db.String(30), nullable=False, default="PENDIENTE", index=True)
+    quantity_received = db.Column(db.Numeric(14, 2), nullable=True)
+
+    line_status = db.Column(db.String(30), nullable=False)
     notes = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(
@@ -36,16 +37,16 @@ class TransferLine(db.Model):
 
     transfer = db.relationship(
         "Transfer",
-        back_populates="lines",
+        foreign_keys=[transfer_id],
     )
 
     article = db.relationship(
         "Article",
-        back_populates="transfer_lines",
+        foreign_keys=[article_id],
     )
 
     def __repr__(self) -> str:
         return (
-            f"<TransferLine id={self.id} "
-            f"transfer={self.transfer_id} article={self.article_id}>"
+            f"<TransferLine id={self.id} transfer_id={self.transfer_id} "
+            f"article_id={self.article_id} line_status={self.line_status}>"
         )

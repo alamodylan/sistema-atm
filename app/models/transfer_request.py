@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from app.extensions import db
 
@@ -8,8 +8,7 @@ class TransferRequest(db.Model):
     __table_args__ = {"schema": "atm"}
 
     id = db.Column(db.BigInteger, primary_key=True)
-
-    number = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    number = db.Column(db.String(50), nullable=False, unique=True)
 
     requested_by_user_id = db.Column(
         db.BigInteger,
@@ -24,7 +23,6 @@ class TransferRequest(db.Model):
         nullable=True,
         index=True,
     )
-
     origin_warehouse_id = db.Column(
         db.BigInteger,
         db.ForeignKey("atm.warehouses.id"),
@@ -38,7 +36,6 @@ class TransferRequest(db.Model):
         nullable=False,
         index=True,
     )
-
     destination_warehouse_id = db.Column(
         db.BigInteger,
         db.ForeignKey("atm.warehouses.id"),
@@ -46,8 +43,8 @@ class TransferRequest(db.Model):
         index=True,
     )
 
-    priority = db.Column(db.String(20), nullable=False, default="NORMAL", index=True)
-    status = db.Column(db.String(30), nullable=False, default="SOLICITADA", index=True)
+    priority = db.Column(db.String(30), nullable=False)
+    status = db.Column(db.String(30), nullable=False)
     notes = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(
@@ -64,39 +61,35 @@ class TransferRequest(db.Model):
     origin_site = db.relationship(
         "Site",
         foreign_keys=[origin_site_id],
-        back_populates="transfer_requests_as_origin",
     )
-
     destination_site = db.relationship(
         "Site",
         foreign_keys=[destination_site_id],
-        back_populates="transfer_requests_as_destination",
     )
 
     origin_warehouse = db.relationship(
         "Warehouse",
         foreign_keys=[origin_warehouse_id],
-        back_populates="transfer_requests_as_origin",
+        back_populates="transfer_requests_as_origin"
     )
-
     destination_warehouse = db.relationship(
         "Warehouse",
         foreign_keys=[destination_warehouse_id],
-        back_populates="transfer_requests_as_destination",
+        back_populates="transfer_requests_as_destination"
     )
 
     lines = db.relationship(
         "TransferRequestLine",
-        back_populates="transfer_request",
-        lazy="dynamic",
+        foreign_keys="TransferRequestLine.transfer_request_id",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     transfers = db.relationship(
         "Transfer",
-        back_populates="created_from_request",
-        lazy="dynamic",
+        foreign_keys="Transfer.created_from_request_id",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:
-        return f"<TransferRequest {self.number} - {self.status}>"
+        return f"<TransferRequest id={self.id} number={self.number} status={self.status}>"

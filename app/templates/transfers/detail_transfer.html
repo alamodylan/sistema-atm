@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid mt-4">
+
+    <h3>Traslado {{ transfer.number }}</h3>
+
+    <div class="mb-3">
+        Estado: <strong>{{ transfer.status }}</strong>
+    </div>
+
+    <form method="POST" action="{{ url_for('transfers.complete_transfer_receipt', transfer_id=transfer.id) }}">
+
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Artículo</th>
+                            <th>Enviado</th>
+                            <th>Recibido</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line in transfer.lines %}
+                        <tr>
+                            <td>{{ line.article.code }} - {{ line.article.name }}</td>
+                            <td>{{ line.quantity_sent }}</td>
+                            <td>
+                                <input name="quantity_received_{{ line.id }}" value="{{ line.quantity_sent }}">
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <button class="btn btn-success">Confirmar Recepción</button>
+        </div>
+
+    </form>
+
+    <div class="mt-3">
+        <form method="POST" action="{{ url_for('transfers.submit_transfer', transfer_id=transfer.id) }}">
+            <button class="btn btn-primary">Enviar Traslado</button>
+        </form>
+    </div>
+
+</div>
+
+{% endblock %}

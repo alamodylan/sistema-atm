@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from app.extensions import db
 
@@ -11,7 +11,7 @@ class TransferRequestLine(db.Model):
 
     transfer_request_id = db.Column(
         db.BigInteger,
-        db.ForeignKey("atm.transfer_requests.id", ondelete="CASCADE"),
+        db.ForeignKey("atm.transfer_requests.id"),
         nullable=False,
         index=True,
     )
@@ -34,16 +34,16 @@ class TransferRequestLine(db.Model):
 
     transfer_request = db.relationship(
         "TransferRequest",
-        back_populates="lines",
+        foreign_keys=[transfer_request_id],
     )
 
     article = db.relationship(
         "Article",
-        back_populates="transfer_request_lines",
+        foreign_keys=[article_id],
     )
 
     def __repr__(self) -> str:
         return (
             f"<TransferRequestLine id={self.id} "
-            f"request={self.transfer_request_id} article={self.article_id}>"
+            f"transfer_request_id={self.transfer_request_id} article_id={self.article_id}>"
         )

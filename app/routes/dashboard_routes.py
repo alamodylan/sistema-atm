@@ -8,6 +8,7 @@ from app.models.waste_act import WasteAct
 from app.models.warehouse import Warehouse
 from app.models.work_order import WorkOrder
 from app.models.work_order_request import WorkOrderRequest
+from app.models.transfer_request import TransferRequest
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -259,6 +260,9 @@ def manager_dashboard():
             pending_requests=[],
             pending_requests_count=0,
             pending_lines_count=0,
+            transfer_pending_requests=[],
+            transfer_pending_requests_count=0,
+            transfer_pending_lines_count=0,
         )
 
     try:
@@ -311,6 +315,44 @@ def manager_dashboard():
 
             req.send_to_warehouse_enabled = all_lines_decided and has_approved_lines
 
+        transfer_pending_requests = (
+            TransferRequest.query
+            .filter(
+                TransferRequest.origin_site_id == active_site_id,
+                TransferRequest.status == "ENVIADA",
+                TransferRequest.sent_to_warehouse_at.is_(None),
+            )
+            .order_by(TransferRequest.created_at.desc())
+            .all()
+        )
+
+        transfer_pending_requests_count = len(transfer_pending_requests)
+        transfer_pending_lines_count = 0
+
+        for req in transfer_pending_requests:
+            req.visible_lines = []
+            has_approved_lines = False
+            all_lines_decided = True
+
+            lines = req.lines
+
+            for line in lines:
+                if line.manager_review_status == "RECHAZADA":
+                    line.manager_decision = "RECHAZADA"
+
+                elif line.manager_review_status == "APROBADA":
+                    line.manager_decision = "APROBADA"
+                    has_approved_lines = True
+
+                else:
+                    line.manager_decision = "PENDIENTE"
+                    all_lines_decided = False
+
+                req.visible_lines.append(line)
+                transfer_pending_lines_count += 1
+
+            req.send_to_warehouse_enabled = all_lines_decided and has_approved_lines
+
         return render_template(
             "dashboard/manager.html",
             title="Dashboard Jefatura",
@@ -318,6 +360,9 @@ def manager_dashboard():
             pending_requests=pending_requests,
             pending_requests_count=pending_requests_count,
             pending_lines_count=pending_lines_count,
+            transfer_pending_requests=transfer_pending_requests,
+            transfer_pending_requests_count=transfer_pending_requests_count,
+            transfer_pending_lines_count=transfer_pending_lines_count,
         )
 
     except Exception as exc:
@@ -329,4 +374,7 @@ def manager_dashboard():
             pending_requests=[],
             pending_requests_count=0,
             pending_lines_count=0,
+            transfer_pending_requests=[],
+            transfer_pending_requests_count=0,
+            transfer_pending_lines_count=0,
         )

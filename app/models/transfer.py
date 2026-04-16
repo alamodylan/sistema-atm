@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from app.extensions import db
 
@@ -8,8 +8,7 @@ class Transfer(db.Model):
     __table_args__ = {"schema": "atm"}
 
     id = db.Column(db.BigInteger, primary_key=True)
-
-    number = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    number = db.Column(db.String(50), nullable=False, unique=True)
 
     created_from_request_id = db.Column(
         db.BigInteger,
@@ -31,7 +30,6 @@ class Transfer(db.Model):
         nullable=False,
         index=True,
     )
-
     origin_warehouse_id = db.Column(
         db.BigInteger,
         db.ForeignKey("atm.warehouses.id"),
@@ -45,7 +43,6 @@ class Transfer(db.Model):
         nullable=False,
         index=True,
     )
-
     destination_warehouse_id = db.Column(
         db.BigInteger,
         db.ForeignKey("atm.warehouses.id"),
@@ -53,7 +50,8 @@ class Transfer(db.Model):
         index=True,
     )
 
-    status = db.Column(db.String(30), nullable=False, default="BORRADOR", index=True)
+    status = db.Column(db.String(30), nullable=False)
+
     sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
     received_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -74,14 +72,13 @@ class Transfer(db.Model):
 
     created_from_request = db.relationship(
         "TransferRequest",
-        back_populates="transfers",
+        foreign_keys=[created_from_request_id],
     )
 
     created_by_user = db.relationship(
         "User",
         foreign_keys=[created_by_user_id],
     )
-
     received_by_user = db.relationship(
         "User",
         foreign_keys=[received_by_user_id],
@@ -90,40 +87,36 @@ class Transfer(db.Model):
     origin_site = db.relationship(
         "Site",
         foreign_keys=[origin_site_id],
-        back_populates="transfers_as_origin",
     )
-
     destination_site = db.relationship(
         "Site",
         foreign_keys=[destination_site_id],
-        back_populates="transfers_as_destination",
     )
 
     origin_warehouse = db.relationship(
         "Warehouse",
         foreign_keys=[origin_warehouse_id],
-        back_populates="transfers_as_origin",
+        back_populates="transfers_as_origin"
     )
-
     destination_warehouse = db.relationship(
         "Warehouse",
         foreign_keys=[destination_warehouse_id],
-        back_populates="transfers_as_destination",
+        back_populates="transfers_as_destination"
     )
 
     lines = db.relationship(
         "TransferLine",
-        back_populates="transfer",
-        lazy="dynamic",
+        foreign_keys="TransferLine.transfer_id",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     events = db.relationship(
         "TransferEvent",
-        back_populates="transfer",
-        lazy="dynamic",
+        foreign_keys="TransferEvent.transfer_id",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:
-        return f"<Transfer {self.number} - {self.status}>"
+        return f"<Transfer id={self.id} number={self.number} status={self.status}>"

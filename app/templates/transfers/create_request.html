@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container mt-4">
+
+    <h3>Nueva Solicitud de Traslado</h3>
+
+    <form method="POST">
+
+        <div class="row">
+
+            <div class="col-md-6 mb-3">
+                <label>Bodega que solicita</label>
+                <select name="origin_warehouse_id" class="form-control" required>
+                    {% for w in accessible_warehouses %}
+                    <option value="{{ w.id }}">{{ w.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label>Bodega a la que se solicita</label>
+                <select name="destination_warehouse_id" class="form-control" required>
+                    {% for w in supplying_warehouses %}
+                    <option value="{{ w.id }}">{{ w.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label>Prioridad</label>
+                <select name="priority" class="form-control">
+                    <option value="NORMAL">Normal</option>
+                    <option value="ALTA">Alta</option>
+                </select>
+            </div>
+
+            <div class="col-md-12 mb-3">
+                <label>Notas</label>
+                <textarea name="notes" class="form-control"></textarea>
+            </div>
+
+        </div>
+
+        <button class="btn btn-primary">Crear</button>
+
+    </form>
+
+</div>
+
+{% endblock %}
