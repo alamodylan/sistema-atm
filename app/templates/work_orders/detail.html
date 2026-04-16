@@ -74,6 +74,7 @@
     <div class="col-12 col-xl-8">
 
         <!-- ===================== SOLICITUDES ===================== -->
+        {% if visible_requests %}
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-body">
                 <div class="d-flex justify-content-between mb-3">
@@ -83,14 +84,6 @@
                             Flujo: mecánico solicita → jefatura revisa → jefatura envía a bodega → bodega prepara → terminal confirma → se agrega a la OT.
                         </div>
                     </div>
-
-                    {% if work_order.status == "EN_PROCESO" and source != "dashboard" %}
-                    <form method="POST" action="{{ url_for('work_order_requests.create_request_action', work_order_id=work_order.id) }}">
-                        <button class="btn btn-sm btn-primary">
-                            Nueva solicitud
-                        </button>
-                    </form>
-                    {% endif %}
                 </div>
 
                 {% for req in visible_requests %}
@@ -169,7 +162,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% set lines = req.filtered_lines if source == "dashboard" else req.lines %}
+                            {% set lines = req.filtered_lines if req.filtered_lines is defined else req.lines %}
                             {% for line in lines %}
                             <tr>
                                 <td>
@@ -308,17 +301,10 @@
                     </table>
 
                 </div>
-                {% else %}
-                <div class="text-muted">
-                    {% if source == "dashboard" %}
-                        No hay solicitudes operativas visibles para bodega aún.
-                    {% else %}
-                        No hay solicitudes aún.
-                    {% endif %}
-                </div>
                 {% endfor %}
             </div>
         </div>
+        {% endif %}
 
         <!-- ===================== LÍNEAS ===================== -->
         <div class="card border-0 shadow-sm rounded-4">
@@ -452,7 +438,21 @@
                 <hr class="my-4">
 
                 <!-- ===================== MECÁNICOS ===================== -->
-                <h6 class="fw-bold mb-3">Mecánicos asignados</h6>
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+                    <h6 class="fw-bold mb-0">Mecánicos asignados</h6>
+
+                    {% if work_order.status == "EN_PROCESO" and available_mechanics %}
+                    <form method="POST" action="{{ url_for('work_orders.add_mechanic_to_work_order_action', work_order_id=work_order.id) }}" class="d-flex flex-wrap gap-2">
+                        <select name="mechanic_id" class="form-select form-select-sm" style="min-width: 260px;" required>
+                            <option value="">Agregar mecánico...</option>
+                            {% for mechanic in available_mechanics %}
+                                <option value="{{ mechanic.id }}">{{ mechanic.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-outline-primary">Agregar</button>
+                    </form>
+                    {% endif %}
+                </div>
 
                 <div class="d-flex flex-wrap gap-2">
                     {% for mechanic in work_order.mechanics %}

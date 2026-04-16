@@ -4,6 +4,7 @@ from flask import Blueprint, flash, redirect, render_template, request, session,
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
+from app.extensions import db
 from app.models.article import Article
 from app.models.deletion_request import WorkOrderLineDeleteRequest
 from app.models.equipment import Equipment
@@ -12,6 +13,7 @@ from app.models.service_catalog import ServiceCatalog
 from app.models.site import Site
 from app.models.warehouse import Warehouse
 from app.models.work_order import WorkOrder
+from app.models.work_order_line import WorkOrderLine
 from app.models.inventory import WarehouseStock
 from app.services.work_order_service import (
     WorkOrderServiceError,
@@ -197,22 +199,28 @@ def get_work_order(work_order_id: int):
             .all()
         )
 
-        if source == "dashboard":
-            visible_requests = []
+        visible_requests = []
 
-            for req in work_order.requests:
-                if not req.sent_to_warehouse_at:
+        for req in work_order.requests:
+            request_lines_for_view = []
+
+            for line in req.lines:
+                existing_ot_line = (
+                    WorkOrderLine.query
+                    .filter_by(request_line_id=line.id)
+                    .first()
+                )
+
+                if existing_ot_line:
                     continue
 
-                req.filtered_lines = []
+                if source == "dashboard":
+                    if not req.sent_to_warehouse_at:
+                        continue
 
-                for line in req.lines:
                     if line.manager_review_status != "APROBADA":
                         continue
 
-                    # =============================
-                    # 🔥 LÓGICA BODEGA
-                    # =============================
                     stock = (
                         WarehouseStock.query
                         .filter_by(
@@ -223,24 +231,34 @@ def get_work_order(work_order_id: int):
                     )
 
                     available_qty = Decimal(str(stock.available_quantity)) if stock and stock.available_quantity else Decimal("0")
-
                     remaining = Decimal(str(line.quantity_requested)) - Decimal(str(line.quantity_attended))
 
-                    # Campos que usa el template
                     line.stock_available = available_qty
                     line.suggested_attend_quantity = min(available_qty, remaining) if remaining > 0 else Decimal("0")
                     line.warehouse_action_enabled = available_qty > 0 and remaining > 0
                     line.location_label = stock.location_name if stock and hasattr(stock, "location_name") else "-"
 
-                    req.filtered_lines.append(line)
+                request_lines_for_view.append(line)
 
-                if not req.filtered_lines:
-                    continue
+            if not request_lines_for_view:
+                continue
 
-                visible_requests.append(req)
+            req.filtered_lines = request_lines_for_view
+            visible_requests.append(req)
 
-        else:
-            visible_requests = list(work_order.requests)
+        available_mechanics = []
+        if work_order.status == "EN_PROCESO":
+            assigned_ids = {mechanic.id for mechanic in work_order.mechanics}
+            available_mechanics = (
+                Mechanic.query
+                .filter(
+                    Mechanic.is_active.is_(True),
+                    Mechanic.site_id == work_order.site_id,
+                    ~Mechanic.id.in_(assigned_ids) if assigned_ids else True,
+                )
+                .order_by(Mechanic.name.asc())
+                .all()
+            )
 
         return render_template(
             "work_orders/detail.html",
@@ -249,6 +267,7 @@ def get_work_order(work_order_id: int):
             work_order=work_order,
             available_articles=available_articles,
             visible_requests=visible_requests,
+            available_mechanics=available_mechanics,
             source=source,
         )
 
@@ -260,6 +279,63 @@ def get_work_order(work_order_id: int):
         print(f"[ERROR OT DETAIL] {exc}")
         flash("Error al cargar la orden de trabajo.", "danger")
         return redirect(url_for("work_orders.list_work_orders"))
+
+
+# =========================================================
+# AGREGAR MECÁNICO A OT
+# =========================================================
+@work_order_bp.route("/<int:work_order_id>/mechanics/add", methods=["POST"])
+@login_required
+def add_mechanic_to_work_order_action(work_order_id: int):
+    try:
+        mechanic_id = request.form.get("mechanic_id")
+
+        if not mechanic_id:
+            raise ValueError("Debe seleccionar un mecánico.")
+
+        work_order = (
+            WorkOrder.query
+            .options(joinedload(WorkOrder.mechanics))
+            .filter(WorkOrder.id == work_order_id)
+            .first()
+        )
+
+        if not work_order:
+            raise ValueError("Orden de trabajo no encontrada.")
+
+        if work_order.status != "EN_PROCESO":
+            raise ValueError("Solo se pueden agregar mecánicos a OTs en proceso.")
+
+        mechanic = (
+            Mechanic.query
+            .filter(
+                Mechanic.id == int(mechanic_id),
+                Mechanic.site_id == work_order.site_id,
+                Mechanic.is_active.is_(True),
+            )
+            .first()
+        )
+
+        if not mechanic:
+            raise ValueError("El mecánico no existe o no pertenece al predio de la OT.")
+
+        if any(existing.id == mechanic.id for existing in work_order.mechanics):
+            raise ValueError("Ese mecánico ya está asignado a la OT.")
+
+        work_order.mechanics.append(mechanic)
+        db.session.commit()
+
+        flash("Mecánico agregado correctamente a la OT.", "success")
+
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+
+    except Exception:
+        db.session.rollback()
+        flash("Error interno al agregar el mecánico a la OT.", "danger")
+
+    return redirect(url_for("work_orders.get_work_order", work_order_id=work_order_id))
 
 
 # =========================================================
