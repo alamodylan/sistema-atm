@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from decimal import Decimal
-
 from flask import (
     Blueprint,
     flash,
@@ -158,6 +156,11 @@ def create_request():
         .order_by(Warehouse.name.asc())
         .all()
     )
+    articles = (
+        Article.query
+        .order_by(Article.code.asc(), Article.name.asc())
+        .all()
+    )
 
     if request.method == "POST":
         try:
@@ -166,14 +169,56 @@ def create_request():
             priority = (request.form.get("priority") or "NORMAL").strip().upper()
             notes = (request.form.get("notes") or "").strip() or None
 
+            article_ids = request.form.getlist("article_id[]")
+            quantities = request.form.getlist("quantity_requested[]")
+            line_notes = request.form.getlist("line_notes[]")
+
+            valid_lines = []
+            for idx, raw_article_id in enumerate(article_ids):
+                raw_article_id = (raw_article_id or "").strip()
+                raw_quantity = (quantities[idx] if idx < len(quantities) else "").strip()
+                raw_note = (line_notes[idx] if idx < len(line_notes) else "").strip() or None
+
+                if not raw_article_id and not raw_quantity:
+                    continue
+
+                if not raw_article_id:
+                    raise TransferServiceError("Falta seleccionar el artículo en una de las líneas.")
+
+                if not raw_quantity:
+                    raise TransferServiceError("Falta la cantidad en una de las líneas.")
+
+                valid_lines.append({
+                    "article_id": int(raw_article_id),
+                    "quantity_requested": raw_quantity,
+                    "notes": raw_note,
+                })
+
+            if not valid_lines:
+                raise TransferServiceError("Debe agregar al menos una línea de artículos.")
+
             request_obj = create_transfer_request(
                 requested_by_user_id=current_user.id,
                 origin_warehouse_id=origin_warehouse_id,
                 destination_warehouse_id=destination_warehouse_id,
                 priority=priority,
                 notes=notes,
-                commit=True,
+                commit=False,
             )
+
+            db.session.flush()
+
+            for line in valid_lines:
+                add_transfer_request_line(
+                    transfer_request_id=request_obj.id,
+                    article_id=line["article_id"],
+                    quantity_requested=line["quantity_requested"],
+                    notes=line["notes"],
+                    performed_by_user_id=current_user.id,
+                    commit=False,
+                )
+
+            db.session.commit()
 
             flash("Solicitud de traslado creada correctamente.", "success")
             return redirect(
@@ -194,6 +239,7 @@ def create_request():
         "transfers/create_request.html",
         accessible_warehouses=accessible_warehouses,
         supplying_warehouses=supplying_warehouses,
+        articles=articles,
     )
 
 

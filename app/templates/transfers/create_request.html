@@ -12,15 +12,22 @@
             <div class="col-md-6 mb-3">
                 <label>Bodega que solicita</label>
                 <select name="origin_warehouse_id" class="form-control" required>
+                    <option value="">Seleccione una bodega</option>
                     {% for w in accessible_warehouses %}
                     <option value="{{ w.id }}">{{ w.name }}</option>
                     {% endfor %}
                 </select>
+                {% if not accessible_warehouses %}
+                <div class="form-text text-danger">
+                    No tienes bodegas asignadas en tus permisos.
+                </div>
+                {% endif %}
             </div>
 
             <div class="col-md-6 mb-3">
                 <label>Bodega a la que se solicita</label>
                 <select name="destination_warehouse_id" class="form-control" required>
+                    <option value="">Seleccione una bodega</option>
                     {% for w in supplying_warehouses %}
                     <option value="{{ w.id }}">{{ w.name }}</option>
                     {% endfor %}
@@ -36,10 +43,62 @@
             </div>
 
             <div class="col-md-12 mb-3">
-                <label>Notas</label>
-                <textarea name="notes" class="form-control"></textarea>
+                <label>Notas generales</label>
+                <textarea name="notes" class="form-control" rows="3"></textarea>
             </div>
+        </div>
 
+        <hr class="my-4">
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">Artículos a solicitar</h5>
+            <small class="text-muted">Puede agregar varias líneas en una sola solicitud</small>
+        </div>
+
+        <div id="request-lines-wrapper">
+            <div class="request-line border rounded p-3 mb-3">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label>Artículo</label>
+                        <select name="article_id[]" class="form-control" required>
+                            <option value="">Seleccione un artículo</option>
+                            {% for a in articles %}
+                            <option value="{{ a.id }}">
+                                {{ a.code }} - {{ a.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-2 mb-3">
+                        <label>Cantidad</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            name="quantity_requested[]"
+                            class="form-control"
+                            required
+                        >
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label>Nota de línea</label>
+                        <input
+                            type="text"
+                            name="line_notes[]"
+                            class="form-control"
+                            placeholder="Opcional"
+                        >
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <button type="button" class="btn btn-outline-secondary" id="add-line-btn">
+                Agregar otra línea
+            </button>
         </div>
 
         <button class="btn btn-primary">Crear</button>
@@ -47,5 +106,23 @@
     </form>
 
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const addLineBtn = document.getElementById("add-line-btn");
+    const wrapper = document.getElementById("request-lines-wrapper");
+
+    addLineBtn.addEventListener("click", function () {
+        const firstLine = wrapper.querySelector(".request-line");
+        const newLine = firstLine.cloneNode(true);
+
+        newLine.querySelectorAll("select, input").forEach(function (field) {
+            field.value = "";
+        });
+
+        wrapper.appendChild(newLine);
+    });
+});
+</script>
 
 {% endblock %}
