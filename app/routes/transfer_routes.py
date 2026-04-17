@@ -50,6 +50,16 @@ def _get_active_site_id() -> int | None:
 
 
 def _get_user_accessible_warehouses():
+    # 🔥 SUPER USUARIO VE TODO
+    if current_user.role and current_user.role.code == "SUPER_USUARIO":
+        return (
+            Warehouse.query
+            .filter(Warehouse.is_active.is_(True))
+            .order_by(Warehouse.name.asc())
+            .all()
+        )
+
+    # 👇 comportamiento normal
     return (
         Warehouse.query
         .join(UserWarehouseAccess, UserWarehouseAccess.warehouse_id == Warehouse.id)
