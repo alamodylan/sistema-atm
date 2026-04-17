@@ -47,6 +47,28 @@ class TransferRequest(db.Model):
     status = db.Column(db.String(30), nullable=False)
     notes = db.Column(db.Text, nullable=True)
 
+    approved_by_user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("atm.users.id"),
+        nullable=True,
+        index=True,
+    )
+    approved_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    sent_to_warehouse_by_user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("atm.users.id"),
+        nullable=True,
+        index=True,
+    )
+    sent_to_warehouse_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -56,6 +78,16 @@ class TransferRequest(db.Model):
     requested_by_user = db.relationship(
         "User",
         foreign_keys=[requested_by_user_id],
+    )
+
+    approved_by_user = db.relationship(
+        "User",
+        foreign_keys=[approved_by_user_id],
+    )
+
+    sent_to_warehouse_by_user = db.relationship(
+        "User",
+        foreign_keys=[sent_to_warehouse_by_user_id],
     )
 
     origin_site = db.relationship(
