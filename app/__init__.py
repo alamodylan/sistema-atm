@@ -36,6 +36,7 @@ def create_app():
     from .routes.mechanic_terminal_routes import terminal_bp
     from app.routes.articles_routes import articles_bp
     from app.routes.inventory_routes import inventory_bp
+    from app.routes.transfer_routes import transfer_bp
 
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(dashboard_bp, url_prefix="/")
@@ -50,6 +51,7 @@ def create_app():
     app.register_blueprint(inventory_bp, url_prefix="/inventory")
     app.register_blueprint(mechanic_bp)
     app.register_blueprint(terminal_bp)
+    app.register_blueprint(transfer_bp)
 
     @app.errorhandler(403)
     def forbidden_error(error):
