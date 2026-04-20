@@ -228,6 +228,12 @@ def create_request():
                     commit=False,
                 )
 
+            print("DEBUG origin_warehouse_id:", origin_warehouse_id)
+            print("DEBUG destination_warehouse_id:", destination_warehouse_id)
+            print("DEBUG valid_lines:", valid_lines)
+            print("DEBUG current_user:", current_user.username)
+            print("DEBUG current_role:", current_user.role.code if current_user.role else None)
+
             db.session.commit()
 
             flash("Solicitud de traslado creada correctamente.", "success")
@@ -241,9 +247,12 @@ def create_request():
         except TransferServiceError as exc:
             db.session.rollback()
             flash(str(exc), "danger")
-        except Exception:
+        except Exception as exc:
             db.session.rollback()
-            flash("No se pudo crear la solicitud de traslado.", "danger")
+            import traceback
+            print("[TRANSFER CREATE ERROR]", repr(exc))
+            traceback.print_exc()
+            flash(f"No se pudo crear la solicitud de traslado: {exc}", "danger")
 
     return render_template(
         "transfers/create_request.html",
