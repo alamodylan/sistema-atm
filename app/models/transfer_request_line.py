@@ -24,6 +24,27 @@ class TransferRequestLine(db.Model):
     )
 
     quantity_requested = db.Column(db.Numeric(14, 2), nullable=False)
+
+    quantity_approved = db.Column(db.Numeric(14, 2), nullable=True)
+    quantity_attended = db.Column(db.Numeric(14, 2), nullable=True)
+
+    manager_review_status = db.Column(db.String(20), nullable=True)
+
+    manager_reviewed_by_user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("atm.users.id"),
+        nullable=True,
+        index=True,
+    )
+
+    manager_reviewed_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    line_status = db.Column(db.String(30), nullable=True)
+    not_delivered_reason = db.Column(db.Text, nullable=True)
+
     notes = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(
@@ -40,6 +61,11 @@ class TransferRequestLine(db.Model):
     article = db.relationship(
         "Article",
         foreign_keys=[article_id],
+    )
+
+    manager_reviewed_by_user = db.relationship(
+        "User",
+        foreign_keys=[manager_reviewed_by_user_id],
     )
 
     def __repr__(self) -> str:
