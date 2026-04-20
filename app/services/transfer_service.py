@@ -14,6 +14,7 @@ from app.models.transfer_request_line import TransferRequestLine
 from app.models.user_warehouse_access import UserWarehouseAccess
 from app.models.warehouse import Warehouse
 from app.services.audit_service import log_action
+from app.models.user import User
 
 
 class TransferServiceError(Exception):
@@ -94,6 +95,11 @@ def _get_user_accessible_warehouse_ids(user_id: int) -> set[int]:
 
 
 def _validate_user_warehouse_access(user_id: int, warehouse_id: int) -> None:
+    user = User.query.get(user_id)
+
+    if user and user.role and user.role.code == "SUPER_USUARIO":
+        return
+
     allowed_ids = _get_user_accessible_warehouse_ids(user_id)
     if warehouse_id not in allowed_ids:
         raise TransferServiceError("El usuario no tiene acceso a la bodega seleccionada.")
