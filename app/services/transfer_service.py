@@ -15,6 +15,7 @@ from app.models.user_warehouse_access import UserWarehouseAccess
 from app.models.warehouse import Warehouse
 from app.services.audit_service import log_action
 from app.models.user import User
+from sqlalchemy import func
 
 
 class TransferServiceError(Exception):
@@ -68,10 +69,51 @@ def _to_decimal(value, *, field_name: str = "cantidad") -> Decimal:
 
 def _build_number(prefix: str) -> str:
     """
-    Generador simple de consecutivo temporal.
-    No inventa columnas; solo llena el campo 'number' que ya existe.
+    Genera consecutivos por prefijo sin tocar la BD:
+    STR-0000001, STR-0000002, TRS-0000001, etc.
+    Si supera 7 dígitos, el número sigue creciendo naturalmente.
     """
-    return f"{prefix}-{_now().strftime('%Y%m%d%H%M%S%f')}"
+    prefix = (prefix or "").strip().upper()
+    if not prefix:
+        raise TransferServiceError("Prefijo inválido para generar consecutivo.")
+
+    like_pattern = f"{prefix}-%"
+
+    if prefix == "STR":
+        model = TransferRequest
+    elif prefix == "TRS":
+        model = Transfer
+    else:
+        raise TransferServiceError("Prefijo no soportado para consecutivo.")
+
+    rows = (
+        db.session.query(model.number)
+        .filter(model.number.like(like_pattern))
+        .all()
+    )
+
+    max_seq = 0
+
+    for (number,) in rows:
+        if not number:
+            continue
+
+        parts = str(number).split("-", 1)
+        if len(parts) != 2:
+            continue
+
+        seq_part = parts[1].strip()
+        if not seq_part.isdigit():
+            continue
+
+        seq_value = int(seq_part)
+        if seq_value > max_seq:
+            max_seq = seq_value
+
+    next_seq = max_seq + 1
+    seq_str = str(next_seq).zfill(7)
+
+    return f"{prefix}-{seq_str}"
 
 
 def _append_note(base: str | None, extra: str | None) -> str | None:
