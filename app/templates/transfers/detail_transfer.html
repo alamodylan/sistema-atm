@@ -70,7 +70,7 @@
     <div class="alert alert-warning border-0 rounded-4">
         Este traslado se encuentra en <strong>borrador</strong>. Revise las líneas antes de ponerlo en tránsito.
     </div>
-    {% elif transfer.status == "EN_TRANSITO" %}
+    {% elif transfer.status == "EN_TRANSITO" and is_destination_site %}
     <div class="alert alert-info border-0 rounded-4">
         Este traslado ya fue despachado y está pendiente de <strong>confirmación de recepción</strong>.
     </div>

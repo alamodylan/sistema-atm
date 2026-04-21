@@ -634,6 +634,8 @@ def create_transfer_draft(transfer_request_id: int):
 def detail_transfer(transfer_id: int):
     transfer = _get_transfer_or_404(transfer_id)
 
+    active_site_id = _get_active_site_id()
+
     from app.services.transfer_service import _get_available_quantity
 
     stock_map = {}
@@ -650,11 +652,19 @@ def detail_transfer(transfer_id: int):
         if line.quantity_sent > available:
             can_send = False
 
+    # 🔥 VALIDACIÓN CLAVE
+    is_destination_site = (
+        active_site_id is not None
+        and transfer.destination_warehouse is not None
+        and transfer.destination_warehouse.site_id == active_site_id
+    )
+
     return render_template(
         "transfers/detail_transfer.html",
         transfer=transfer,
         stock_map=stock_map,
         can_send=can_send,
+        is_destination_site=is_destination_site,  # 👈 nuevo
     )
 
 
