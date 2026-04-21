@@ -329,6 +329,7 @@ def create_request():
 def detail_request(transfer_request_id: int):
     request_obj = _get_request_or_404(transfer_request_id)
     stock_map = _build_request_line_stock_map(request_obj)
+    active_site_id = _get_active_site_id()
 
     articles = (
         Article.query
@@ -336,11 +337,44 @@ def detail_request(transfer_request_id: int):
         .all()
     )
 
+    is_destination_site_view = (
+        active_site_id is not None
+        and request_obj.destination_site_id == active_site_id
+    )
+
+    can_operate_as_supplying_warehouse = (
+        is_destination_site_view
+        and request_obj.sent_to_warehouse_at is not None
+        and request_obj.status in {"APROBADA", "ATENDIDA_PARCIAL"}
+    )
+
+    visible_lines = list(request_obj.lines)
+
+    if can_operate_as_supplying_warehouse:
+        visible_lines = []
+        for line in request_obj.lines:
+            manager_status = (line.manager_review_status or "").strip().upper()
+            qty_approved = line.quantity_approved or 0
+            qty_attended = line.quantity_attended or 0
+            qty_pending = qty_approved - qty_attended
+
+            if manager_status != "APROBADA":
+                continue
+            if qty_approved <= 0:
+                continue
+            if qty_pending <= 0:
+                continue
+
+            line.pending_transfer_quantity = qty_pending
+            visible_lines.append(line)
+
     return render_template(
         "transfers/detail_request.html",
         transfer_request=request_obj,
         stock_map=stock_map,
         articles=articles,
+        visible_lines=visible_lines,
+        can_operate_as_supplying_warehouse=can_operate_as_supplying_warehouse,
     )
 
 
@@ -567,7 +601,6 @@ def create_transfer_draft(transfer_request_id: int):
 def detail_transfer(transfer_id: int):
     transfer = _get_transfer_or_404(transfer_id)
 
-    # 🔥 calcular stock por línea (NO inventado, usa lógica existente)
     from app.services.transfer_service import _get_available_quantity
 
     stock_map = {}

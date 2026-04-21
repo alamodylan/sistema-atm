@@ -13,8 +13,11 @@
     {% set is_sent = transfer_request.status == 'ENVIADA' %}
     {% set is_reviewed = transfer_request.status in ['APROBADA', 'RECHAZADA', 'ATENDIDA_PARCIAL', 'ATENDIDA'] %}
 
-    {% if is_draft %}
-    <!-- AGREGAR LÍNEA SOLO EN BORRADOR -->
+    {% if can_operate_as_supplying_warehouse %}
+    <div class="alert alert-success">
+        La solicitud ya fue aprobada por jefatura y enviada a bodega. Aquí solo se muestran las líneas aprobadas pendientes por convertir en traslado.
+    </div>
+    {% elif is_draft %}
     <div class="card mb-4">
         <div class="card-header">Agregar Artículo</div>
         <div class="card-body">
@@ -58,7 +61,6 @@
     </div>
     {% endif %}
 
-    <!-- TABLA -->
     <div class="card">
         <div class="table-responsive">
             <table class="table table-sm">
@@ -73,11 +75,17 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for line in transfer_request.lines %}
+                    {% for line in visible_lines %}
                     <tr>
                         <td>{{ line.article.code }} - {{ line.article.name }}</td>
                         <td>{{ line.quantity_requested }}</td>
-                        <td>{{ line.quantity_approved if line.quantity_approved is not none else '-' }}</td>
+                        <td>
+                            {% if can_operate_as_supplying_warehouse %}
+                                {{ line.pending_transfer_quantity }}
+                            {% else %}
+                                {{ line.quantity_approved if line.quantity_approved is not none else '-' }}
+                            {% endif %}
+                        </td>
                         <td>{{ stock_map[line.id].requesting_available_quantity }}</td>
                         <td>{{ stock_map[line.id].supplying_available_quantity }}</td>
                         <td>{{ line.line_status or '-' }}</td>
@@ -96,6 +104,16 @@
         {% if is_draft %}
         <form method="POST" action="{{ url_for('transfers.submit_request', transfer_request_id=transfer_request.id) }}" class="d-inline">
             <button class="btn btn-primary">Enviar Solicitud</button>
+        </form>
+        {% endif %}
+
+        {% if can_operate_as_supplying_warehouse and visible_lines %}
+        <form method="POST" action="{{ url_for('transfers.create_transfer_draft', transfer_request_id=transfer_request.id) }}" class="d-inline">
+            {% for line in visible_lines %}
+                <input type="hidden" name="transfer_request_line_id" value="{{ line.id }}">
+                <input type="hidden" name="quantity_sent_{{ line.id }}" value="{{ line.pending_transfer_quantity }}">
+            {% endfor %}
+            <button class="btn btn-success">Convertir en traslado</button>
         </form>
         {% endif %}
     </div>
