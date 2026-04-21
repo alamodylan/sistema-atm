@@ -9,9 +9,12 @@
     <div class="col-12 col-md-6 col-xl-3">
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body">
-                <div class="text-secondary small text-uppercase fw-semibold">Solicitudes pendientes</div>
+                <div class="text-secondary small text-uppercase fw-semibold">Solicitudes OT pendientes</div>
                 <div class="display-6 fw-bold text-dark mt-2">
                     {{ pending_requests_count }}
+                </div>
+                <div class="small text-muted mt-2">
+                    Solicitudes de órdenes de trabajo en espera de revisión.
                 </div>
             </div>
         </div>
@@ -20,9 +23,12 @@
     <div class="col-12 col-md-6 col-xl-3">
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body">
-                <div class="text-secondary small text-uppercase fw-semibold">Líneas por revisar</div>
+                <div class="text-secondary small text-uppercase fw-semibold">Líneas OT por revisar</div>
                 <div class="display-6 fw-bold text-dark mt-2">
                     {{ pending_lines_count }}
+                </div>
+                <div class="small text-muted mt-2">
+                    Detalle de artículos solicitados por taller para aprobación.
                 </div>
             </div>
         </div>
@@ -35,6 +41,9 @@
                 <div class="display-6 fw-bold text-dark mt-2">
                     {{ transfer_pending_requests_count or 0 }}
                 </div>
+                <div class="small text-muted mt-2">
+                    Solicitudes entre bodegas pendientes de autorización.
+                </div>
             </div>
         </div>
     </div>
@@ -46,24 +55,28 @@
                 <div class="display-6 fw-bold text-dark mt-2">
                     {{ transfer_pending_lines_count or 0 }}
                 </div>
+                <div class="small text-muted mt-2">
+                    Líneas de traslado pendientes de decisión por jefatura.
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <div class="card border-0 shadow-sm rounded-4 mb-4">
-    <div class="card-body">
+    <div class="card-body p-4">
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
             <div>
-                <h5 class="fw-bold mb-1">Solicitudes pendientes de jefatura</h5>
+                <div class="text-primary small fw-semibold text-uppercase mb-1">Módulo de jefatura</div>
+                <h5 class="fw-bold mb-1">Solicitudes de órdenes de trabajo</h5>
                 <div class="text-muted small">
-                    Aquí se revisan las líneas antes de enviarlas a bodega.
+                    Aquí se revisan las solicitudes generadas desde OT antes de que lleguen a bodega.
                 </div>
             </div>
         </div>
 
         <div class="alert alert-info border-0 rounded-4 mb-4">
-            <div class="fw-semibold mb-1">Flujo de aprobación</div>
+            <div class="fw-semibold mb-1">Flujo de aprobación de OT</div>
             <div class="small mb-0">
                 Las solicitudes que aparecen aquí aún <strong>no son visibles para bodega</strong>.
                 Bodega solo verá la solicitud después de que jefatura revise las líneas y presione
@@ -73,33 +86,41 @@
         </div>
 
         {% for req in pending_requests %}
-        <div class="border rounded-4 p-3 mb-4">
+        <div class="border rounded-4 p-3 p-lg-4 mb-4 bg-white">
             <div class="row g-3 mb-3">
                 <div class="col-12 col-lg-8">
-                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                        <h6 class="fw-bold mb-0">Solicitud #{{ req.id }}</h6>
-                        <span class="badge text-bg-warning text-dark">PENDIENTE JEFATURA</span>
-                        <span class="badge text-bg-secondary">AÚN NO VISIBLE EN BODEGA</span>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                        <span class="badge rounded-pill text-bg-primary">SOLICITUD OT</span>
+                        <span class="badge rounded-pill text-bg-warning text-dark">PENDIENTE JEFATURA</span>
+                        <span class="badge rounded-pill text-bg-secondary">AÚN NO VISIBLE EN BODEGA</span>
                     </div>
 
-                    <div class="small text-muted">
-                        OT: <strong class="text-dark">{{ req.work_order_number }}</strong>
-                    </div>
-                    <div class="small text-muted">
-                        Equipo: <strong class="text-dark">{{ req.equipment_code_snapshot or 'Sin equipo' }}</strong>
-                    </div>
-                    <div class="small text-muted">
-                        Solicitó: <strong class="text-dark">{{ req.requested_by_name }}</strong>
-                    </div>
-                    <div class="small text-muted">
-                        Fecha: <strong class="text-dark">{{ req.created_at }}</strong>
+                    <h6 class="fw-bold mb-2">Solicitud #{{ req.id }}</h6>
+
+                    <div class="row g-2 small">
+                        <div class="col-12 col-md-6">
+                            <div class="text-muted">OT</div>
+                            <div class="fw-semibold text-dark">{{ req.work_order_number }}</div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <div class="text-muted">Equipo</div>
+                            <div class="fw-semibold text-dark">{{ req.equipment_code_snapshot or 'Sin equipo' }}</div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <div class="text-muted">Solicitó</div>
+                            <div class="fw-semibold text-dark">{{ req.requested_by_name }}</div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <div class="text-muted">Fecha</div>
+                            <div class="fw-semibold text-dark">{{ req.created_at }}</div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="col-12 col-lg-4 d-flex justify-content-lg-end align-items-start">
                     {% if req.send_to_warehouse_enabled %}
                     <form method="POST" action="{{ url_for('work_order_requests.send_request_to_warehouse_action', request_id=req.id) }}">
-                        <button class="btn btn-primary">
+                        <button class="btn btn-primary rounded-3 px-4">
                             Enviar a bodega
                         </button>
                     </form>
@@ -108,7 +129,7 @@
             </div>
 
             <div class="table-responsive">
-                <table class="table align-middle">
+                <table class="table align-middle mb-0">
                     <thead class="table-light">
                         <tr>
                             <th>Artículo</th>
@@ -123,10 +144,10 @@
                             <td>
                                 <div class="fw-semibold">{{ line.article.code }} - {{ line.article.name }}</div>
                                 {% if line.notes %}
-                                    <div class="small text-muted">{{ line.notes }}</div>
+                                    <div class="small text-muted mt-1">{{ line.notes }}</div>
                                 {% endif %}
                                 {% if line.not_delivered_reason %}
-                                    <div class="small text-danger">Motivo: {{ line.not_delivered_reason }}</div>
+                                    <div class="small text-danger mt-1">Motivo: {{ line.not_delivered_reason }}</div>
                                 {% endif %}
                             </td>
 
@@ -134,13 +155,13 @@
 
                             <td>
                                 {% if line.manager_decision == "PENDIENTE" %}
-                                    <span class="badge text-bg-secondary">PENDIENTE</span>
+                                    <span class="badge text-bg-secondary rounded-pill">PENDIENTE</span>
                                 {% elif line.manager_decision == "APROBADA" %}
-                                    <span class="badge text-bg-success">APROBADA</span>
+                                    <span class="badge text-bg-success rounded-pill">APROBADA</span>
                                 {% elif line.manager_decision == "RECHAZADA" %}
-                                    <span class="badge text-bg-danger">RECHAZADA</span>
+                                    <span class="badge text-bg-danger rounded-pill">RECHAZADA</span>
                                 {% else %}
-                                    <span class="badge text-bg-secondary">PENDIENTE</span>
+                                    <span class="badge text-bg-secondary rounded-pill">PENDIENTE</span>
                                 {% endif %}
                             </td>
 
@@ -157,7 +178,7 @@
                                             class="form-control form-control-sm"
                                             style="width: 120px;"
                                         >
-                                        <button class="btn btn-sm btn-outline-success">
+                                        <button class="btn btn-sm btn-outline-success rounded-3">
                                             Aprobar / Ajustar
                                         </button>
                                     </form>
@@ -168,9 +189,9 @@
                                             name="reason"
                                             class="form-control form-control-sm"
                                             placeholder="Motivo rechazo"
-                                            style="width: 160px;"
+                                            style="width: 180px;"
                                         >
-                                        <button class="btn btn-sm btn-outline-danger">
+                                        <button class="btn btn-sm btn-outline-danger rounded-3">
                                             Rechazar
                                         </button>
                                     </form>
@@ -180,7 +201,7 @@
                                 <div class="d-flex flex-column flex-lg-row gap-2 align-items-start">
                                     <span class="text-success small fw-semibold">Línea aprobada por jefatura</span>
                                     <form method="POST" action="{{ url_for('work_order_requests.undo_manager_decision_action', line_id=line.id) }}">
-                                        <button class="btn btn-sm btn-outline-secondary">
+                                        <button class="btn btn-sm btn-outline-secondary rounded-3">
                                             Deshacer
                                         </button>
                                     </form>
@@ -190,7 +211,7 @@
                                 <div class="d-flex flex-column flex-lg-row gap-2 align-items-start">
                                     <span class="text-danger small fw-semibold">Línea rechazada por jefatura</span>
                                     <form method="POST" action="{{ url_for('work_order_requests.undo_manager_decision_action', line_id=line.id) }}">
-                                        <button class="btn btn-sm btn-outline-secondary">
+                                        <button class="btn btn-sm btn-outline-secondary rounded-3">
                                             Deshacer
                                         </button>
                                     </form>
@@ -221,12 +242,13 @@
 </div>
 
 <div class="card border-0 shadow-sm rounded-4">
-    <div class="card-body">
+    <div class="card-body p-4">
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
             <div>
+                <div class="text-success small fw-semibold text-uppercase mb-1">Módulo de traslados</div>
                 <h5 class="fw-bold mb-1">Solicitudes de traslado pendientes de jefatura</h5>
                 <div class="text-muted small">
-                    Aquí se revisan las solicitudes de traslado antes de enviarlas a bodega abastecedora.
+                    Aquí se revisan las solicitudes entre bodegas antes de que pasen al flujo operativo de abastecimiento.
                 </div>
             </div>
         </div>
@@ -241,47 +263,69 @@
         </div>
 
         {% for req in transfer_pending_requests %}
-        <div class="border rounded-4 p-3 mb-4">
+        <div class="border rounded-4 p-3 p-lg-4 mb-4 bg-white">
             <div class="row g-3 mb-3">
                 <div class="col-12 col-lg-8">
-                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                        <h6 class="fw-bold mb-0">Solicitud {{ req.number }}</h6>
-                        <span class="badge text-bg-warning text-dark">PENDIENTE JEFATURA</span>
-                        <span class="badge text-bg-secondary">AÚN NO VISIBLE EN BODEGA</span>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                        <span class="badge rounded-pill text-bg-success">SOLICITUD DE TRASLADO</span>
+                        <span class="badge rounded-pill text-bg-warning text-dark">PENDIENTE JEFATURA</span>
+                        <span class="badge rounded-pill text-bg-secondary">AÚN NO VISIBLE EN BODEGA</span>
                     </div>
 
-                    <div class="small text-muted">
-                        Bodega solicitante:
-                        <strong class="text-dark">{{ req.origin_warehouse.name if req.origin_warehouse else '-' }}</strong>
-                    </div>
-                    <div class="small text-muted">
-                        Bodega abastecedora:
-                        <strong class="text-dark">{{ req.destination_warehouse.name if req.destination_warehouse else '-' }}</strong>
-                    </div>
-                    <div class="small text-muted">
-                        Prioridad:
-                        <strong class="text-dark">{{ req.priority }}</strong>
-                    </div>
-                    <div class="small text-muted">
-                        Solicitó:
-                        <strong class="text-dark">{{ req.requested_by.full_name if req.requested_by and req.requested_by.full_name else (req.requested_by.username if req.requested_by else '-') }}</strong>
-                    </div>
-                    <div class="small text-muted">
-                        Fecha:
-                        <strong class="text-dark">{{ req.created_at }}</strong>
+                    <h6 class="fw-bold mb-2">Solicitud {{ req.number }}</h6>
+
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <div class="border rounded-4 p-3 h-100 bg-light-subtle">
+                                <div class="small text-uppercase text-muted fw-semibold mb-1">Bodega de origen</div>
+                                <div class="fw-bold text-dark">
+                                    {{ req.origin_warehouse.name if req.origin_warehouse else '-' }}
+                                </div>
+                                <div class="small text-muted mt-1">
+                                    Bodega que realizó la solicitud.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <div class="border rounded-4 p-3 h-100 bg-light-subtle">
+                                <div class="small text-uppercase text-muted fw-semibold mb-1">Bodega abastecedora</div>
+                                <div class="fw-bold text-dark">
+                                    {{ req.destination_warehouse.name if req.destination_warehouse else '-' }}
+                                </div>
+                                <div class="small text-muted mt-1">
+                                    Bodega a la que se le solicita el traslado.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <div class="small text-muted">Prioridad</div>
+                            <div class="fw-semibold text-dark">{{ req.priority }}</div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <div class="small text-muted">Solicitó</div>
+                            <div class="fw-semibold text-dark">
+                                {{ req.requested_by.full_name if req.requested_by and req.requested_by.full_name else (req.requested_by.username if req.requested_by else '-') }}
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <div class="small text-muted">Fecha</div>
+                            <div class="fw-semibold text-dark">{{ req.created_at }}</div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="col-12 col-lg-4 d-flex justify-content-lg-end align-items-start">
                     <a href="{{ url_for('transfers.detail_request', transfer_request_id=req.id) }}"
-                       class="btn btn-primary">
+                       class="btn btn-primary rounded-3 px-4">
                         Revisar solicitud
                     </a>
                 </div>
             </div>
 
             <div class="table-responsive">
-                <table class="table align-middle">
+                <table class="table align-middle mb-0">
                     <thead class="table-light">
                         <tr>
                             <th>Artículo</th>
@@ -296,10 +340,10 @@
                             <td>
                                 <div class="fw-semibold">{{ line.article.code }} - {{ line.article.name }}</div>
                                 {% if line.notes %}
-                                    <div class="small text-muted">{{ line.notes }}</div>
+                                    <div class="small text-muted mt-1">{{ line.notes }}</div>
                                 {% endif %}
                                 {% if line.not_delivered_reason %}
-                                    <div class="small text-danger">Motivo: {{ line.not_delivered_reason }}</div>
+                                    <div class="small text-danger mt-1">Motivo: {{ line.not_delivered_reason }}</div>
                                 {% endif %}
                             </td>
 
@@ -308,13 +352,13 @@
 
                             <td>
                                 {% if line.manager_decision == "PENDIENTE" %}
-                                    <span class="badge text-bg-secondary">PENDIENTE</span>
+                                    <span class="badge text-bg-secondary rounded-pill">PENDIENTE</span>
                                 {% elif line.manager_decision == "APROBADA" %}
-                                    <span class="badge text-bg-success">APROBADA</span>
+                                    <span class="badge text-bg-success rounded-pill">APROBADA</span>
                                 {% elif line.manager_decision == "RECHAZADA" %}
-                                    <span class="badge text-bg-danger">RECHAZADA</span>
+                                    <span class="badge text-bg-danger rounded-pill">RECHAZADA</span>
                                 {% else %}
-                                    <span class="badge text-bg-secondary">PENDIENTE</span>
+                                    <span class="badge text-bg-secondary rounded-pill">PENDIENTE</span>
                                 {% endif %}
                             </td>
                         </tr>

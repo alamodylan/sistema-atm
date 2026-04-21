@@ -247,6 +247,7 @@ def dashboard_work_orders_partial():
         work_orders_in_process_list=work_orders
     )
 
+
 @dashboard_bp.route("/dashboard/jefatura")
 @login_required
 def manager_dashboard():
@@ -318,7 +319,7 @@ def manager_dashboard():
         transfer_pending_requests = (
             TransferRequest.query
             .filter(
-                TransferRequest.origin_site_id == active_site_id,
+                TransferRequest.destination_site_id == active_site_id,
                 TransferRequest.status == "ENVIADA",
                 TransferRequest.sent_to_warehouse_at.is_(None),
             )
