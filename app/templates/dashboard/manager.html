@@ -65,23 +65,13 @@
 
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body p-4">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
             <div>
                 <div class="text-primary small fw-semibold text-uppercase mb-1">Módulo de jefatura</div>
                 <h5 class="fw-bold mb-1">Solicitudes de órdenes de trabajo</h5>
                 <div class="text-muted small">
-                    Aquí se revisan las solicitudes generadas desde OT antes de que lleguen a bodega.
+                    Revise las solicitudes generadas desde OT antes de que lleguen a bodega.
                 </div>
-            </div>
-        </div>
-
-        <div class="alert alert-info border-0 rounded-4 mb-4">
-            <div class="fw-semibold mb-1">Flujo de aprobación de OT</div>
-            <div class="small mb-0">
-                Las solicitudes que aparecen aquí aún <strong>no son visibles para bodega</strong>.
-                Bodega solo verá la solicitud después de que jefatura revise las líneas y presione
-                <strong>“Enviar a bodega”</strong>. Si jefatura rechaza una línea o toda la solicitud,
-                bodega no debe enterarse de esa etapa inicial.
             </div>
         </div>
 
@@ -92,7 +82,6 @@
                     <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
                         <span class="badge rounded-pill text-bg-primary">SOLICITUD OT</span>
                         <span class="badge rounded-pill text-bg-warning text-dark">PENDIENTE JEFATURA</span>
-                        <span class="badge rounded-pill text-bg-secondary">AÚN NO VISIBLE EN BODEGA</span>
                     </div>
 
                     <h6 class="fw-bold mb-2">Solicitud #{{ req.id }}</h6>
@@ -198,23 +187,13 @@
                                 </div>
 
                                 {% elif line.manager_decision == "APROBADA" %}
-                                <div class="d-flex flex-column flex-lg-row gap-2 align-items-start">
-                                    <span class="text-success small fw-semibold">Línea aprobada por jefatura</span>
-                                    <form method="POST" action="{{ url_for('work_order_requests.undo_manager_decision_action', line_id=line.id) }}">
-                                        <button class="btn btn-sm btn-outline-secondary rounded-3">
-                                            Deshacer
-                                        </button>
-                                    </form>
+                                <div class="text-success small fw-semibold">
+                                    Línea aprobada por jefatura
                                 </div>
 
                                 {% elif line.manager_decision == "RECHAZADA" %}
-                                <div class="d-flex flex-column flex-lg-row gap-2 align-items-start">
-                                    <span class="text-danger small fw-semibold">Línea rechazada por jefatura</span>
-                                    <form method="POST" action="{{ url_for('work_order_requests.undo_manager_decision_action', line_id=line.id) }}">
-                                        <button class="btn btn-sm btn-outline-secondary rounded-3">
-                                            Deshacer
-                                        </button>
-                                    </form>
+                                <div class="text-danger small fw-semibold">
+                                    Línea rechazada por jefatura
                                 </div>
 
                                 {% else %}
@@ -243,22 +222,13 @@
 
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
             <div>
                 <div class="text-success small fw-semibold text-uppercase mb-1">Módulo de traslados</div>
                 <h5 class="fw-bold mb-1">Solicitudes de traslado pendientes de jefatura</h5>
                 <div class="text-muted small">
-                    Aquí se revisan las solicitudes entre bodegas antes de que pasen al flujo operativo de abastecimiento.
+                    Revise, apruebe o rechace cada línea y luego envíe la solicitud a bodega abastecedora.
                 </div>
-            </div>
-        </div>
-
-        <div class="alert alert-info border-0 rounded-4 mb-4">
-            <div class="fw-semibold mb-1">Flujo de aprobación de traslados</div>
-            <div class="small mb-0">
-                Las solicitudes de traslado que aparecen aquí aún <strong>no son visibles para bodega</strong>.
-                Jefatura debe revisar sus líneas, aprobar o rechazar según corresponda y luego
-                <strong>enviar a bodega</strong> para que puedan prepararse y convertirse en traslado real.
             </div>
         </div>
 
@@ -268,8 +238,12 @@
                 <div class="col-12 col-lg-8">
                     <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
                         <span class="badge rounded-pill text-bg-success">SOLICITUD DE TRASLADO</span>
-                        <span class="badge rounded-pill text-bg-warning text-dark">PENDIENTE JEFATURA</span>
-                        <span class="badge rounded-pill text-bg-secondary">AÚN NO VISIBLE EN BODEGA</span>
+
+                        {% if req.status == 'ENVIADA' %}
+                            <span class="badge rounded-pill text-bg-warning text-dark">PENDIENTE JEFATURA</span>
+                        {% elif req.status == 'APROBADA' %}
+                            <span class="badge rounded-pill text-bg-primary">APROBADA</span>
+                        {% endif %}
                     </div>
 
                     <h6 class="fw-bold mb-2">Solicitud {{ req.number }}</h6>
@@ -314,11 +288,27 @@
                     </div>
                 </div>
 
-                <div class="col-12 col-lg-4 d-flex justify-content-lg-end align-items-start">
+                <div class="col-12 col-lg-4 d-flex flex-column flex-lg-row justify-content-lg-end align-items-start gap-2">
                     <a href="{{ url_for('transfers.detail_request', transfer_request_id=req.id) }}"
-                       class="btn btn-primary rounded-3 px-4">
-                        Revisar solicitud
+                       class="btn btn-outline-secondary rounded-3 px-4">
+                        Ver detalle
                     </a>
+
+                    {% if req.finalize_review_enabled %}
+                    <form method="POST" action="{{ url_for('transfers.finalize_request_review', transfer_request_id=req.id) }}">
+                        <button class="btn btn-warning rounded-3 px-4">
+                            Finalizar revisión
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    {% if req.send_to_warehouse_enabled %}
+                    <form method="POST" action="{{ url_for('transfers.submit_request_to_warehouse', transfer_request_id=req.id) }}">
+                        <button class="btn btn-primary rounded-3 px-4">
+                            Enviar a bodega
+                        </button>
+                    </form>
+                    {% endif %}
                 </div>
             </div>
 
@@ -332,6 +322,7 @@
                             <th class="text-end">Stock abastecedora</th>
                             <th class="text-end">Cantidad aprobada</th>
                             <th>Estado</th>
+                            <th style="min-width: 320px;">Acción jefatura</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -379,10 +370,56 @@
                                     <span class="badge text-bg-secondary rounded-pill">PENDIENTE</span>
                                 {% endif %}
                             </td>
+
+                            <td>
+                                {% if req.status == 'ENVIADA' %}
+                                <div class="d-flex flex-column flex-lg-row gap-2">
+                                    <form method="POST" action="{{ url_for('transfers.review_request_line', transfer_request_line_id=line.id) }}" class="d-flex flex-wrap gap-2">
+                                        <input type="hidden" name="action" value="APROBAR">
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0.01"
+                                            name="quantity_approved"
+                                            value="{{ line.quantity_approved if line.quantity_approved is not none else line.quantity_requested }}"
+                                            class="form-control form-control-sm"
+                                            style="width: 120px;"
+                                        >
+                                        <button class="btn btn-sm btn-outline-success rounded-3">
+                                            Aprobar / Ajustar
+                                        </button>
+                                    </form>
+
+                                    <form method="POST" action="{{ url_for('transfers.review_request_line', transfer_request_line_id=line.id) }}" class="d-flex flex-wrap gap-2">
+                                        <input type="hidden" name="action" value="RECHAZAR">
+                                        <input
+                                            type="text"
+                                            name="rejection_reason"
+                                            class="form-control form-control-sm"
+                                            placeholder="Motivo rechazo"
+                                            style="width: 180px;"
+                                        >
+                                        <button class="btn btn-sm btn-outline-danger rounded-3">
+                                            Rechazar
+                                        </button>
+                                    </form>
+                                </div>
+                                {% elif line.manager_decision == "APROBADA" %}
+                                <div class="text-success small fw-semibold">
+                                    Línea aprobada por jefatura
+                                </div>
+                                {% elif line.manager_decision == "RECHAZADA" %}
+                                <div class="text-danger small fw-semibold">
+                                    Línea rechazada por jefatura
+                                </div>
+                                {% else %}
+                                <span class="text-muted small">—</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="6" class="text-center text-muted py-4">
+                            <td colspan="7" class="text-center text-muted py-4">
                                 Esta solicitud de traslado no tiene líneas visibles.
                             </td>
                         </tr>

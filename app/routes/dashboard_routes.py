@@ -321,7 +321,7 @@ def manager_dashboard():
             TransferRequest.query
             .filter(
                 TransferRequest.destination_site_id == active_site_id,
-                TransferRequest.status == "ENVIADA",
+                TransferRequest.status.in_(["ENVIADA", "APROBADA"]),
                 TransferRequest.sent_to_warehouse_at.is_(None),
             )
             .order_by(TransferRequest.created_at.desc())
@@ -367,7 +367,12 @@ def manager_dashboard():
                 req.visible_lines.append(line)
                 transfer_pending_lines_count += 1
 
-            req.send_to_warehouse_enabled = all_lines_decided and has_approved_lines
+            req.finalize_review_enabled = (
+                req.status == "ENVIADA" and all_lines_decided
+            )
+            req.send_to_warehouse_enabled = (
+                req.status == "APROBADA" and has_approved_lines
+            )
 
         return render_template(
             "dashboard/manager.html",
