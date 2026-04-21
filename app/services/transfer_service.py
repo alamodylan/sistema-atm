@@ -69,22 +69,26 @@ def _to_decimal(value, *, field_name: str = "cantidad") -> Decimal:
 
 def _build_number(prefix: str) -> str:
     """
-    Genera consecutivos por prefijo sin tocar la BD:
+    Genera consecutivos legibles por prefijo:
     STR-0000001, STR-0000002, TRS-0000001, etc.
-    Si supera 7 dígitos, el número sigue creciendo naturalmente.
+
+    Importante:
+    - ignora consecutivos viejos largos tipo timestamp
+    - solo toma como base los números de hasta 7 dígitos
+    - si más adelante supera 7 dígitos, seguirá creciendo naturalmente
     """
     prefix = (prefix or "").strip().upper()
     if not prefix:
         raise TransferServiceError("Prefijo inválido para generar consecutivo.")
-
-    like_pattern = f"{prefix}-%"
 
     if prefix == "STR":
         model = TransferRequest
     elif prefix == "TRS":
         model = Transfer
     else:
-        raise TransferServiceError("Prefijo no soportado para consecutivo.")
+        raise TransferServiceError("Prefijo no soportado para generar consecutivo.")
+
+    like_pattern = f"{prefix}-%"
 
     rows = (
         db.session.query(model.number)
@@ -103,7 +107,13 @@ def _build_number(prefix: str) -> str:
             continue
 
         seq_part = parts[1].strip()
+
         if not seq_part.isdigit():
+            continue
+
+        # Ignora formatos viejos larguísimos tipo timestamp
+        # y usa como base solo consecutivos humanos.
+        if len(seq_part) > 7:
             continue
 
         seq_value = int(seq_part)

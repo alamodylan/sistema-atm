@@ -136,12 +136,26 @@ def index():
 
     if active_site_id:
         request_query = request_query.filter(
-            (TransferRequest.origin_site_id == active_site_id)
-            | (TransferRequest.destination_site_id == active_site_id)
+            db.or_(
+                db.and_(
+                    TransferRequest.status == "BORRADOR",
+                    TransferRequest.origin_site_id == active_site_id,
+                ),
+                db.and_(
+                    TransferRequest.status != "BORRADOR",
+                    db.or_(
+                        TransferRequest.origin_site_id == active_site_id,
+                        TransferRequest.destination_site_id == active_site_id,
+                    ),
+                ),
+            )
         )
+
         transfer_query = transfer_query.filter(
-            (Transfer.origin_site_id == active_site_id)
-            | (Transfer.destination_site_id == active_site_id)
+            db.or_(
+                Transfer.origin_site_id == active_site_id,
+                Transfer.destination_site_id == active_site_id,
+            )
         )
 
     transfer_requests = (
