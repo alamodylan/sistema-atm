@@ -9,6 +9,7 @@ from app.models.warehouse import Warehouse
 from app.models.work_order import WorkOrder
 from app.models.work_order_request import WorkOrderRequest
 from app.models.transfer_request import TransferRequest
+from app.services.transfer_service import get_request_line_stock_context
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -332,8 +333,16 @@ def manager_dashboard():
 
         for req in transfer_pending_requests:
             req.visible_lines = []
+            req.stock_map = {}
             has_approved_lines = False
             all_lines_decided = True
+
+            req.requested_by_name = "-"
+            if req.requested_by:
+                if getattr(req.requested_by, "full_name", None):
+                    req.requested_by_name = req.requested_by.full_name
+                elif getattr(req.requested_by, "username", None):
+                    req.requested_by_name = req.requested_by.username
 
             lines = req.lines
 
@@ -348,6 +357,12 @@ def manager_dashboard():
                 else:
                     line.manager_decision = "PENDIENTE"
                     all_lines_decided = False
+
+                req.stock_map[line.id] = get_request_line_stock_context(
+                    requesting_warehouse_id=req.origin_warehouse_id,
+                    supplying_warehouse_id=req.destination_warehouse_id,
+                    article_id=line.article_id,
+                )
 
                 req.visible_lines.append(line)
                 transfer_pending_lines_count += 1

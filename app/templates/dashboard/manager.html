@@ -305,9 +305,7 @@
                         </div>
                         <div class="col-12 col-md-4">
                             <div class="small text-muted">Solicitó</div>
-                            <div class="fw-semibold text-dark">
-                                {{ req.requested_by.full_name if req.requested_by and req.requested_by.full_name else (req.requested_by.username if req.requested_by else '-') }}
-                            </div>
+                            <div class="fw-semibold text-dark">{{ req.requested_by_name }}</div>
                         </div>
                         <div class="col-12 col-md-4">
                             <div class="small text-muted">Fecha</div>
@@ -330,12 +328,17 @@
                         <tr>
                             <th>Artículo</th>
                             <th class="text-end">Cantidad solicitada</th>
+                            <th class="text-end">Stock origen</th>
+                            <th class="text-end">Stock abastecedora</th>
                             <th class="text-end">Cantidad aprobada</th>
                             <th>Estado</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for line in req.visible_lines %}
+                        {% set line_stock = req.stock_map.get(line.id) %}
+                        {% set origin_stock = line_stock.requesting_available_quantity if line_stock else 0 %}
+                        {% set supplying_stock = line_stock.supplying_available_quantity if line_stock else 0 %}
                         <tr>
                             <td>
                                 <div class="fw-semibold">{{ line.article.code }} - {{ line.article.name }}</div>
@@ -348,6 +351,21 @@
                             </td>
 
                             <td class="text-end">{{ line.quantity_requested }}</td>
+
+                            <td class="text-end text-muted">
+                                {{ origin_stock }}
+                            </td>
+
+                            <td class="text-end">
+                                {% if supplying_stock >= line.quantity_requested %}
+                                    <span class="fw-semibold text-success">{{ supplying_stock }}</span>
+                                {% elif supplying_stock > 0 %}
+                                    <span class="fw-semibold text-warning">{{ supplying_stock }}</span>
+                                {% else %}
+                                    <span class="fw-semibold text-danger">{{ supplying_stock }}</span>
+                                {% endif %}
+                            </td>
+
                             <td class="text-end">{{ line.quantity_approved or 0 }}</td>
 
                             <td>
@@ -364,7 +382,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4" class="text-center text-muted py-4">
+                            <td colspan="6" class="text-center text-muted py-4">
                                 Esta solicitud de traslado no tiene líneas visibles.
                             </td>
                         </tr>
