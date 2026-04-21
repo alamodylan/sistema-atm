@@ -338,11 +338,11 @@ def manager_dashboard():
             all_lines_decided = True
 
             req.requested_by_name = "-"
-            if req.requested_by:
-                if getattr(req.requested_by, "full_name", None):
-                    req.requested_by_name = req.requested_by.full_name
-                elif getattr(req.requested_by, "username", None):
-                    req.requested_by_name = req.requested_by.username
+            if req.requested_by_user:
+                if getattr(req.requested_by_user, "full_name", None):
+                    req.requested_by_name = req.requested_by_user.full_name
+                elif getattr(req.requested_by_user, "username", None):
+                    req.requested_by_name = req.requested_by_user.username
 
             lines = req.lines
 
