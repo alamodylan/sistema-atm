@@ -571,6 +571,15 @@ def create_transfer_draft(transfer_request_id: int):
         selected_lines = _parse_selected_lines_from_form()
         notes = (request.form.get("notes") or "").strip() or None
 
+        current_app.logger.warning(
+            "[TRANSFER DRAFT][START] request_id=%s user_id=%s username=%s selected_lines=%s notes=%s",
+            transfer_request_id,
+            current_user.id,
+            getattr(current_user, "username", None),
+            selected_lines,
+            notes,
+        )
+
         transfer = create_transfer_draft_from_request(
             transfer_request_id=transfer_request_id,
             created_by_user_id=current_user.id,
@@ -578,6 +587,14 @@ def create_transfer_draft(transfer_request_id: int):
             notes=notes,
             commit=True,
         )
+
+        current_app.logger.warning(
+            "[TRANSFER DRAFT][SUCCESS] request_id=%s transfer_id=%s number=%s",
+            transfer_request_id,
+            transfer.id,
+            transfer.number,
+        )
+
         flash("Traslado borrador creado correctamente.", "success")
 
         return redirect(
@@ -586,10 +603,26 @@ def create_transfer_draft(transfer_request_id: int):
 
     except TransferServiceError as exc:
         db.session.rollback()
+        current_app.logger.warning(
+            "[TRANSFER DRAFT][BUSINESS ERROR] request_id=%s user_id=%s username=%s form=%s error=%s",
+            transfer_request_id,
+            getattr(current_user, "id", None),
+            getattr(current_user, "username", None),
+            request.form.to_dict(flat=False),
+            str(exc),
+        )
         flash(str(exc), "danger")
-    except Exception:
+
+    except Exception as exc:
         db.session.rollback()
-        flash("No se pudo crear el traslado borrador.", "danger")
+        current_app.logger.exception(
+            "[TRANSFER DRAFT][UNEXPECTED ERROR] request_id=%s user_id=%s username=%s form=%s",
+            transfer_request_id,
+            getattr(current_user, "id", None),
+            getattr(current_user, "username", None),
+            request.form.to_dict(flat=False),
+        )
+        flash(f"No se pudo crear el traslado borrador: {exc}", "danger")
 
     return redirect(
         url_for("transfers.detail_request", transfer_request_id=transfer_request_id)
