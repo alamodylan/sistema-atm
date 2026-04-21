@@ -74,13 +74,17 @@
     <div class="alert alert-info border-0 rounded-4">
         Este traslado ya fue despachado y está pendiente de <strong>confirmación de recepción</strong>.
     </div>
+    {% elif transfer.status == "EN_TRANSITO" and not is_destination_site %}
+    <div class="alert alert-secondary border-0 rounded-4">
+        Este traslado ya fue despachado y se encuentra en tránsito hacia la bodega destino.
+    </div>
     {% elif transfer.status == "RECIBIDO" %}
     <div class="alert alert-success border-0 rounded-4">
         Este traslado ya fue <strong>recibido</strong> y cerrado operativamente.
     </div>
     {% endif %}
 
-    {% if transfer.status == "EN_TRANSITO" %}
+    {% if transfer.status == "EN_TRANSITO" and is_destination_site %}
     <form method="POST" action="{{ url_for('transfers.complete_transfer_receipt', transfer_id=transfer.id) }}">
         <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body">
@@ -104,36 +108,30 @@
                         </thead>
                         <tbody>
                             {% for line in transfer.lines %}
-                            {% set available = stock_map.get(line.id, 0) %}
-                            {% set qty = line.quantity_sent %}
-
-                            {% if transfer.status == "BORRADOR" and available < qty %}
-                                <tr class="table-danger">
-                            {% else %}
-                                <tr>
-                            {% endif %}
-
+                            <tr>
                                 <td>
                                     <div class="fw-semibold">{{ line.article.code }} - {{ line.article.name }}</div>
                                     {% if line.notes %}
                                         <div class="small text-muted mt-1">{{ line.notes }}</div>
                                     {% endif %}
                                 </td>
-
-                                <td class="text-end">{{ qty }}</td>
-
+                                <td class="text-end">{{ line.quantity_sent }}</td>
                                 <td>
-                                    {% if transfer.status == "BORRADOR" %}
-                                        {% if available < qty %}
-                                            <span class="text-danger fw-bold">SIN STOCK ({{ available }})</span>
-                                        {% else %}
-                                            <span class="text-success">OK ({{ available }})</span>
-                                        {% endif %}
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endif %}
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0.01"
+                                        name="quantity_received_{{ line.id }}"
+                                        value="{{ line.quantity_sent }}"
+                                        class="form-control"
+                                    >
                                 </td>
-
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted py-4">
+                                    Este traslado no tiene líneas registradas.
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
