@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from flask import (
     Blueprint,
+    current_app,
     flash,
     redirect,
     render_template,
@@ -50,7 +51,6 @@ def _get_active_site_id() -> int | None:
 
 
 def _get_user_accessible_warehouses():
-    # 🔥 SUPER USUARIO VE TODO
     if current_user.role and current_user.role.code == "SUPER_USUARIO":
         return (
             Warehouse.query
@@ -59,7 +59,6 @@ def _get_user_accessible_warehouses():
             .all()
         )
 
-    # 👇 comportamiento normal
     return (
         Warehouse.query
         .join(UserWarehouseAccess, UserWarehouseAccess.warehouse_id == Warehouse.id)
@@ -173,9 +172,20 @@ def create_request():
     )
 
     if request.method == "POST":
+        request_obj = None
+
         try:
-            origin_warehouse_id = int(request.form.get("origin_warehouse_id"))
-            destination_warehouse_id = int(request.form.get("destination_warehouse_id"))
+            raw_origin_warehouse_id = request.form.get("origin_warehouse_id")
+            raw_destination_warehouse_id = request.form.get("destination_warehouse_id")
+
+            if not raw_origin_warehouse_id or not str(raw_origin_warehouse_id).strip():
+                raise TransferServiceError("Debe seleccionar la bodega que solicita.")
+
+            if not raw_destination_warehouse_id or not str(raw_destination_warehouse_id).strip():
+                raise TransferServiceError("Debe seleccionar la bodega a la que se solicita.")
+
+            origin_warehouse_id = int(raw_origin_warehouse_id)
+            destination_warehouse_id = int(raw_destination_warehouse_id)
             priority = (request.form.get("priority") or "NORMAL").strip().upper()
             notes = (request.form.get("notes") or "").strip() or None
 
@@ -198,14 +208,29 @@ def create_request():
                 if not raw_quantity:
                     raise TransferServiceError("Falta la cantidad en una de las líneas.")
 
-                valid_lines.append({
-                    "article_id": int(raw_article_id),
-                    "quantity_requested": raw_quantity,
-                    "notes": raw_note,
-                })
+                valid_lines.append(
+                    {
+                        "article_id": int(raw_article_id),
+                        "quantity_requested": raw_quantity,
+                        "notes": raw_note,
+                    }
+                )
 
             if not valid_lines:
                 raise TransferServiceError("Debe agregar al menos una línea de artículos.")
+
+            current_app.logger.warning(
+                "[TRANSFER CREATE][START] user_id=%s username=%s role=%s origin_warehouse_id=%s "
+                "destination_warehouse_id=%s priority=%s valid_lines=%s accessible_warehouse_ids=%s",
+                current_user.id,
+                getattr(current_user, "username", None),
+                getattr(getattr(current_user, "role", None), "code", None),
+                origin_warehouse_id,
+                destination_warehouse_id,
+                priority,
+                valid_lines,
+                [w.id for w in accessible_warehouses],
+            )
 
             request_obj = create_transfer_request(
                 requested_by_user_id=current_user.id,
@@ -216,9 +241,23 @@ def create_request():
                 commit=False,
             )
 
+            current_app.logger.warning(
+                "[TRANSFER CREATE][HEADER OK] request_id=%s number=%s",
+                request_obj.id,
+                request_obj.number,
+            )
+
             db.session.flush()
 
             for line in valid_lines:
+                current_app.logger.warning(
+                    "[TRANSFER CREATE][ADDING LINE] request_id=%s article_id=%s quantity_requested=%s notes=%s",
+                    request_obj.id,
+                    line["article_id"],
+                    line["quantity_requested"],
+                    line["notes"],
+                )
+
                 add_transfer_request_line(
                     transfer_request_id=request_obj.id,
                     article_id=line["article_id"],
@@ -228,13 +267,13 @@ def create_request():
                     commit=False,
                 )
 
-            print("DEBUG origin_warehouse_id:", origin_warehouse_id)
-            print("DEBUG destination_warehouse_id:", destination_warehouse_id)
-            print("DEBUG valid_lines:", valid_lines)
-            print("DEBUG current_user:", current_user.username)
-            print("DEBUG current_role:", current_user.role.code if current_user.role else None)
-
             db.session.commit()
+
+            current_app.logger.warning(
+                "[TRANSFER CREATE][SUCCESS] request_id=%s number=%s",
+                request_obj.id,
+                request_obj.number,
+            )
 
             flash("Solicitud de traslado creada correctamente.", "success")
             return redirect(
@@ -246,12 +285,26 @@ def create_request():
 
         except TransferServiceError as exc:
             db.session.rollback()
+            current_app.logger.warning(
+                "[TRANSFER CREATE][BUSINESS ERROR] user_id=%s username=%s role=%s form=%s error=%s",
+                getattr(current_user, "id", None),
+                getattr(current_user, "username", None),
+                getattr(getattr(current_user, "role", None), "code", None),
+                request.form.to_dict(flat=False),
+                str(exc),
+            )
             flash(str(exc), "danger")
+
         except Exception as exc:
             db.session.rollback()
-            import traceback
-            print("[TRANSFER CREATE ERROR]", repr(exc))
-            traceback.print_exc()
+            current_app.logger.exception(
+                "[TRANSFER CREATE][UNEXPECTED ERROR] user_id=%s username=%s role=%s form=%s request_id=%s",
+                getattr(current_user, "id", None),
+                getattr(current_user, "username", None),
+                getattr(getattr(current_user, "role", None), "code", None),
+                request.form.to_dict(flat=False),
+                getattr(request_obj, "id", None),
+            )
             flash(f"No se pudo crear la solicitud de traslado: {exc}", "danger")
 
     return render_template(
