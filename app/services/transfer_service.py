@@ -783,12 +783,6 @@ def create_transfer_draft_from_request(
         if qty > remaining_qty:
             raise TransferServiceError("No puede trasladar más de lo aprobado pendiente por atender.")
 
-        available = _get_available_quantity(supplying_warehouse.id, request_line.article_id)
-        if qty > available:
-            raise TransferServiceError(
-                f"No hay stock suficiente para el artículo {request_line.article.code if request_line.article else request_line.article_id}."
-            )
-
         new_attended_qty = attended_qty + qty
         request_line.quantity_attended = new_attended_qty
 

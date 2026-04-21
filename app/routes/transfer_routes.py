@@ -117,6 +117,15 @@ def _parse_selected_lines_from_form():
     return selected_lines
 
 
+def _redirect_after_request_action(transfer_request_id: int):
+    referrer = request.referrer or ""
+    if "/dashboard/jefatura" in referrer:
+        return redirect(url_for("dashboard.manager_dashboard"))
+    return redirect(
+        url_for("transfers.detail_request", transfer_request_id=transfer_request_id)
+    )
+
+
 @transfer_bp.route("/", methods=["GET"])
 @login_required
 def index():
@@ -473,9 +482,7 @@ def review_request_line(transfer_request_line_id: int):
         db.session.rollback()
         flash("No se pudo revisar la línea.", "danger")
 
-    return redirect(
-        url_for("transfers.detail_request", transfer_request_id=line.transfer_request_id)
-    )
+    return _redirect_after_request_action(line.transfer_request_id)
 
 
 @transfer_bp.route("/requests/<int:transfer_request_id>/finalize-review", methods=["POST"])
@@ -499,9 +506,7 @@ def finalize_request_review(transfer_request_id: int):
         db.session.rollback()
         flash("No se pudo finalizar la revisión.", "danger")
 
-    return redirect(
-        url_for("transfers.detail_request", transfer_request_id=transfer_request_id)
-    )
+    return _redirect_after_request_action(transfer_request_id)
 
 
 @transfer_bp.route("/requests/<int:transfer_request_id>/send-to-warehouse", methods=["POST"])
@@ -522,9 +527,7 @@ def submit_request_to_warehouse(transfer_request_id: int):
         db.session.rollback()
         flash("No se pudo enviar la solicitud a bodega.", "danger")
 
-    return redirect(
-        url_for("transfers.detail_request", transfer_request_id=transfer_request_id)
-    )
+    return _redirect_after_request_action(transfer_request_id)
 
 
 @transfer_bp.route("/requests/<int:transfer_request_id>/create-transfer-draft", methods=["POST"])
@@ -564,9 +567,28 @@ def create_transfer_draft(transfer_request_id: int):
 def detail_transfer(transfer_id: int):
     transfer = _get_transfer_or_404(transfer_id)
 
+    # 🔥 calcular stock por línea (NO inventado, usa lógica existente)
+    from app.services.transfer_service import _get_available_quantity
+
+    stock_map = {}
+    can_send = True
+
+    for line in transfer.lines:
+        available = _get_available_quantity(
+            transfer.origin_warehouse_id,
+            line.article_id
+        )
+
+        stock_map[line.id] = available
+
+        if line.quantity_sent > available:
+            can_send = False
+
     return render_template(
         "transfers/detail_transfer.html",
         transfer=transfer,
+        stock_map=stock_map,
+        can_send=can_send,
     )
 
 
