@@ -1,107 +1,247 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Acta de Desecho</title>
-    <style>
-        body { font-family: Arial, sans-serif; color: #111827; margin: 40px; }
-        h1, h2, h3, p { margin: 0; }
-        .header { margin-bottom: 24px; }
-        .section { margin-bottom: 24px; }
-        .table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-        .table th, .table td { border: 1px solid #d1d5db; padding: 8px; font-size: 14px; }
-        .table th { background: #f3f4f6; text-align: left; }
-        .signatures { margin-top: 50px; display: flex; justify-content: space-between; gap: 30px; }
-        .signature-box { width: 30%; text-align: center; }
-        .line { border-top: 1px solid #111827; margin-top: 40px; padding-top: 6px; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>Acta de Desecho</h1>
-        <p><strong>Número:</strong> {{ waste_act.number }}</p>
-        <p><strong>Predio:</strong> {{ waste_act.site.name if waste_act.site else "-" }}</p>
-        <p><strong>Bodega:</strong> {{ waste_act.warehouse.name if waste_act.warehouse else "-" }}</p>
-        <p><strong>Rango:</strong> {{ waste_act.date_from }} a {{ waste_act.date_to }}</p>
-        <p><strong>Estado:</strong> {{ waste_act.status }}</p>
+{% extends 'base.html' %}
+
+{% block title %}Impresión acta de desecho | Sistema de Bodega{% endblock %}
+
+{% block content %}
+<style>
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+
+        body {
+            background: #ffffff !important;
+        }
+
+        .print-sheet {
+            box-shadow: none !important;
+            border: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .table th,
+        .table td {
+            font-size: 12px !important;
+        }
+    }
+
+    .print-sheet {
+        background: #ffffff;
+        border-radius: 1rem;
+        box-shadow: 0 0.125rem 0.75rem rgba(0, 0, 0, 0.08);
+        padding: 2rem;
+    }
+
+    .print-header-logo {
+        max-height: 70px;
+        max-width: 220px;
+        object-fit: contain;
+    }
+
+    .document-title {
+        font-size: 1.4rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .document-subtitle {
+        color: #6c757d;
+        font-size: 0.95rem;
+    }
+
+    .info-label {
+        font-size: 0.8rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .info-value {
+        font-weight: 600;
+        font-size: 0.98rem;
+    }
+
+    .signature-box {
+        min-height: 90px;
+        border-top: 1px solid #212529;
+        padding-top: 0.5rem;
+        margin-top: 3rem;
+        text-align: center;
+    }
+
+    .signature-label {
+        font-weight: 600;
+    }
+
+    .table thead th {
+        white-space: nowrap;
+    }
+</style>
+
+<div class="no-print d-flex justify-content-end gap-2 mb-3">
+    <a href="{{ url_for('waste.waste_candidates', waste_act_id=waste_act.id) }}" class="btn btn-light border">
+        Volver
+    </a>
+    <button type="button" class="btn btn-dark" onclick="window.print()">
+        Imprimir
+    </button>
+</div>
+
+<div class="print-sheet">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-4 mb-4">
+        <div class="d-flex align-items-center gap-3">
+            <div>
+                <img
+                    src="{{ url_for('static', filename='img/logo.png') }}"
+                    alt="Logo empresa"
+                    class="print-header-logo"
+                    onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';"
+                >
+                <div id="logo-fallback" style="display:none; font-size:1.1rem; font-weight:700;">
+                    Álamo Terminales Marítimos
+                </div>
+            </div>
+        </div>
+
+        <div class="text-md-end">
+            <div class="document-title">Acta de Desecho</div>
+            <div class="document-subtitle">Documento de control interno de desechos</div>
+        </div>
     </div>
 
-    <div class="section">
-        <h3>Detalle de artículos</h3>
-        <table class="table">
-            <thead>
+    <div class="row g-4 mb-4">
+        <div class="col-12 col-md-3">
+            <div class="info-label">Número de acta</div>
+            <div class="info-value">{{ waste_act.number }}</div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <div class="info-label">Estado</div>
+            <div class="info-value">{{ waste_act.status }}</div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <div class="info-label">Predio</div>
+            <div class="info-value">{{ waste_act.site.name if waste_act.site else "-" }}</div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <div class="info-label">Bodega</div>
+            <div class="info-value">{{ waste_act.warehouse.name if waste_act.warehouse else "-" }}</div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <div class="info-label">Fecha inicial</div>
+            <div class="info-value">{{ waste_act.date_from }}</div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <div class="info-label">Fecha final</div>
+            <div class="info-value">{{ waste_act.date_to }}</div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <div class="info-label">Creado por</div>
+            <div class="info-value">
+                {{ waste_act.created_by_user.full_name if waste_act.created_by_user and waste_act.created_by_user.full_name else '-' }}
+            </div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <div class="info-label">Fecha de creación</div>
+            <div class="info-value">
+                {{ waste_act.created_at.strftime('%Y-%m-%d %H:%M') if waste_act.created_at else '-' }}
+            </div>
+        </div>
+    </div>
+
+    {% if waste_act.notes %}
+        <div class="mb-4">
+            <div class="info-label mb-1">Observaciones</div>
+            <div>{{ waste_act.notes }}</div>
+        </div>
+    {% endif %}
+
+    <div class="mb-3">
+        <div class="document-title" style="font-size: 1.1rem;">Listado de desechos</div>
+        <div class="document-subtitle">Detalle de artículos incluidos en el acta</div>
+    </div>
+
+    <div class="table-responsive mb-4">
+        <table class="table table-bordered align-middle">
+            <thead class="table-light">
                 <tr>
+                    <th>#</th>
                     <th>Fecha</th>
                     <th>OT</th>
                     <th>Equipo</th>
                     <th>Código</th>
                     <th>Artículo</th>
                     <th>Cantidad</th>
-                    <th>Confirmado</th>
+                    <th>Confirmación</th>
+                    <th>Notas</th>
                 </tr>
             </thead>
             <tbody>
-                {% if waste_act.lines %}
-                    {% for line in waste_act.lines %}
+                {% if added_lines %}
+                    {% for line in added_lines %}
                         <tr>
+                            <td>{{ loop.index }}</td>
                             <td>
-                                {% if line.work_order_line and line.work_order_line.delivered_at %}
-                                    {{ line.work_order_line.delivered_at.strftime('%Y-%m-%d') }}
-                                {% else %}
-                                    -
-                                {% endif %}
+                                {{ line.work_order_line.delivered_at.strftime('%Y-%m-%d') if line.work_order_line and line.work_order_line.delivered_at else '-' }}
                             </td>
                             <td>
-                                {{ line.work_order.number if line.work_order else "-" }}
+                                {{ line.work_order.number if line.work_order else '-' }}
                             </td>
                             <td>
-                                {% if line.work_order and line.work_order.equipment_code_snapshot %}
-                                    {{ line.work_order.equipment_code_snapshot }}
-                                {% else %}
-                                    -
-                                {% endif %}
+                                {{ line.work_order.equipment_code_snapshot if line.work_order and line.work_order.equipment_code_snapshot else '-' }}
                             </td>
                             <td>
-                                {{ line.article.code if line.article else "-" }}
+                                {{ line.article.code if line.article else '-' }}
                             </td>
                             <td>
-                                {{ line.article.name if line.article else "-" }}
+                                {{ line.article.name if line.article else '-' }}
                             </td>
-                            <td>
+                            <td class="fw-semibold">
                                 {{ line.quantity }}
                             </td>
                             <td>
                                 {% if line.confirmed_for_disposal %}
-                                    Sí
+                                    Confirmado
                                 {% else %}
-                                    No
+                                    Pendiente
                                 {% endif %}
+                            </td>
+                            <td>
+                                {{ line.notes or '-' }}
                             </td>
                         </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="7" style="text-align:center;">Sin líneas registradas</td>
+                        <td colspan="9" class="text-center text-muted py-4">
+                            No hay líneas agregadas a esta acta.
+                        </td>
                     </tr>
                 {% endif %}
             </tbody>
         </table>
     </div>
 
-    <div class="section">
-        <p><strong>Observaciones:</strong> {{ waste_act.notes or "-" }}</p>
+    <div class="row g-5 mt-5">
+        <div class="col-12 col-md-6">
+            <div class="signature-box">
+                <div class="signature-label">Firma de quien realiza</div>
+                <div class="text-secondary small">Nombre, firma y fecha</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6">
+            <div class="signature-box">
+                <div class="signature-label">Firma de quien revisa</div>
+                <div class="text-secondary small">Nombre, firma y fecha</div>
+            </div>
+        </div>
     </div>
-
-    <div class="signatures">
-        <div class="signature-box">
-            <div class="line">Bodega</div>
-        </div>
-        <div class="signature-box">
-            <div class="line">Auditoría</div>
-        </div>
-        <div class="signature-box">
-            <div class="line">Aprobación</div>
-        </div>
-    </div>
-</body>
-</html>
+</div>
+{% endblock %}

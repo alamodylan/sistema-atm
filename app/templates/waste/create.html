@@ -4,37 +4,24 @@
 
 {% block content %}
 {% set title = "Nueva Acta de Desecho" %}
-{% set subtitle = "Defina el rango de fechas y filtros para consultar productos candidatos a desecho." %}
+{% set subtitle = "Defina el rango de fechas y la bodega del predio activo para consultar productos candidatos a desecho." %}
 {% include 'components/page_header.html' with context %}
 
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
         <form method="POST" action="{{ url_for('waste.create_waste_act_action') }}">
             <div class="row g-4">
-                <div class="col-12 col-md-3">
-                    <label class="form-label fw-semibold">Número de acta</label>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Consecutivo del acta</label>
                     <input
                         type="text"
                         class="form-control"
-                        name="number"
-                        placeholder="AD-00001"
-                        required
+                        value="Se generará automáticamente al crear el acta"
+                        disabled
                     >
                 </div>
 
-                <div class="col-12 col-md-3">
-                    <label class="form-label fw-semibold">Predio</label>
-                    <select class="form-select" name="site_id" required>
-                        <option value="">Seleccione...</option>
-                        {% if sites %}
-                            {% for site in sites %}
-                                <option value="{{ site.id }}">{{ site.name }}</option>
-                            {% endfor %}
-                        {% endif %}
-                    </select>
-                </div>
-
-                <div class="col-12 col-md-3">
+                <div class="col-12 col-md-4">
                     <label class="form-label fw-semibold">Bodega</label>
                     <select class="form-select" name="warehouse_id" required>
                         <option value="">Seleccione...</option>
@@ -46,7 +33,7 @@
                     </select>
                 </div>
 
-                <div class="col-12 col-md-3">
+                <div class="col-12 col-md-4">
                     <label class="form-label fw-semibold">Creado por</label>
                     <input
                         type="text"

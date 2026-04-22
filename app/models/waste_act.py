@@ -46,6 +46,8 @@ class WasteAct(db.Model):
 
     notes = db.Column(db.Text, nullable=True)
 
+    signed_pdf_path = db.Column(db.String(500), nullable=True)
+
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
