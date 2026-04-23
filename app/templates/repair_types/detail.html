@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+
+{% block title %}Detalle tipo de reparación | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% set title = "Detalle de Tipo de Reparación" %}
+{% set subtitle = "Consulte la información del tipo de reparación y administre sus especialidades." %}
+{% include 'components/page_header.html' with context %}
+
+<div class="row g-4">
+
+    <!-- ===================== INFO GENERAL ===================== -->
+    <div class="col-12 col-xl-5">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-3">Información general</h5>
+
+                <div class="mb-3">
+                    <div class="text-secondary small">Código</div>
+                    <div class="fw-semibold fs-5">{{ repair_type.code }}</div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="text-secondary small">Nombre</div>
+                    <div class="fw-semibold">{{ repair_type.name }}</div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="text-secondary small">Estado</div>
+                    <div>
+                        {% if repair_type.is_active %}
+                            <span class="badge text-bg-success">Activo</span>
+                        {% else %}
+                            <span class="badge text-bg-secondary">Inactivo</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="text-secondary small">Descripción</div>
+                    <div class="fw-semibold">{{ repair_type.description or '-' }}</div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="text-secondary small">Fecha de creación</div>
+                    <div class="fw-semibold">
+                        {{ repair_type.created_at.strftime('%Y-%m-%d %H:%M') if repair_type.created_at else '-' }}
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2 mt-4">
+                    <a href="{{ url_for('repair_types.toggle', repair_type_id=repair_type.id) }}"
+                       class="btn btn-outline-warning">
+                        {% if repair_type.is_active %}Desactivar{% else %}Activar{% endif %}
+                    </a>
+
+                    <a href="{{ url_for('repair_types.index') }}"
+                       class="btn btn-light border">
+                        Volver
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== ESPECIALIDADES ===================== -->
+    <div class="col-12 col-xl-7">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h5 class="fw-bold mb-1">Especialidades permitidas</h5>
+                        <div class="text-secondary small">
+                            Seleccione una o varias especialidades para este tipo de reparación.
+                        </div>
+                    </div>
+                </div>
+
+                <form method="POST" action="{{ url_for('repair_types.update_specialties', repair_type_id=repair_type.id) }}">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <select
+                                name="specialty_ids"
+                                class="form-select"
+                                multiple
+                                size="10"
+                            >
+                                {% if specialties %}
+                                    {% for specialty in specialties %}
+                                        <option
+                                            value="{{ specialty.id }}"
+                                            {% if specialty.id in assigned_specialty_ids %}selected{% endif %}
+                                        >
+                                            {{ specialty.code }} - {{ specialty.name }}
+                                        </option>
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+
+                            <div class="form-text mt-2">
+                                Use Ctrl o Cmd para seleccionar varias opciones.
+                            </div>
+                        </div>
+
+                        <div class="col-12 d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary px-4">
+                                Guardar especialidades
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <hr class="my-4">
+
+                <h6 class="fw-bold mb-3">Especialidades asignadas actualmente</h6>
+
+                <div class="d-flex flex-wrap gap-2">
+                    {% if specialties and assigned_specialty_ids %}
+                        {% for specialty in specialties %}
+                            {% if specialty.id in assigned_specialty_ids %}
+                                <span class="badge rounded-pill text-bg-dark px-3 py-2">
+                                    {{ specialty.name }}
+                                </span>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-muted">Este tipo de reparación no tiene especialidades asignadas.</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -16,10 +16,10 @@ class WorkOrderTaskLine(db.Model):
         index=True,
     )
 
-    specialty_id = db.Column(
+    repair_type_id = db.Column(
         db.BigInteger,
-        db.ForeignKey("atm.mechanic_specialties.id"),
-        nullable=False,
+        db.ForeignKey("atm.repair_types.id"),
+        nullable=True,
         index=True,
     )
 
@@ -75,8 +75,8 @@ class WorkOrderTaskLine(db.Model):
         back_populates="task_lines",
     )
 
-    specialty = db.relationship(
-        "MechanicSpecialty",
+    repair_type = db.relationship(
+        "RepairType",
         back_populates="task_lines",
     )
 
@@ -108,5 +108,5 @@ class WorkOrderTaskLine(db.Model):
     def __repr__(self) -> str:
         return (
             f"<WorkOrderTaskLine "
-            f"wo={self.work_order_id} specialty={self.specialty_id} status={self.status}>"
+            f"wo={self.work_order_id} repair_type={self.repair_type_id} status={self.status}>"
         )

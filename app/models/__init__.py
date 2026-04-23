@@ -7,14 +7,25 @@ from .inventory_entry import InventoryEntry
 from .inventory_entry_line import InventoryEntryLine
 from .item_category import ItemCategory
 from .mechanic import Mechanic
+from .mechanic_specialty import MechanicSpecialty
+from .mechanic_specialty_assignment import MechanicSpecialtyAssignment
 from .notification import Notification
+from .pending_article import PendingArticle
 from .physical_inventory import PhysicalInventory
 from .physical_inventory_line import PhysicalInventoryLine
 from .purchase_order import PurchaseOrder
+from .purchase_order_approval import PurchaseOrderApproval
+from .purchase_order_line import PurchaseOrderLine
 from .purchase_request import PurchaseRequest
+from .purchase_request_line import PurchaseRequestLine
+from .quotation_batch import QuotationBatch
+from .quotation_line import QuotationLine
+from .repair_type import RepairType
+from .repair_type_specialty import RepairTypeSpecialty
 from .role import Role
 from .service_catalog import ServiceCatalog
 from .site import Site
+from .supplier import Supplier
 from .tool_loan import ToolLoan
 from .toolbox import Toolbox
 from .transfer import Transfer
@@ -35,15 +46,6 @@ from .work_order_line import WorkOrderLine
 from .work_order_request import WorkOrderRequest
 from .work_order_request_line import WorkOrderRequestLine
 from .work_order_service import WorkOrderService
-from .supplier import Supplier
-from .purchase_request_line import PurchaseRequestLine
-from .purchase_order_line import PurchaseOrderLine
-from .purchase_order_approval import PurchaseOrderApproval
-from .quotation_batch import QuotationBatch
-from .quotation_line import QuotationLine
-from .pending_article import PendingArticle
-from .mechanic_specialty import MechanicSpecialty
-from .mechanic_specialty_assignment import MechanicSpecialtyAssignment
 from .work_order_task_line import WorkOrderTaskLine
 from .work_order_task_line_assignment import WorkOrderTaskLineAssignment
 from .work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
@@ -71,6 +73,10 @@ __all__ = [
     "Site",
     "Equipment",
     "Mechanic",
+    "MechanicSpecialty",
+    "MechanicSpecialtyAssignment",
+    "RepairType",
+    "RepairTypeSpecialty",
     "ToolLoan",
     "Toolbox",
     "WorkOrderService",
@@ -96,8 +102,6 @@ __all__ = [
     "QuotationBatch",
     "QuotationLine",
     "PendingArticle",
-    "MechanicSpecialty",
-    "MechanicSpecialtyAssignment",
     "WorkOrderTaskLine",
     "WorkOrderTaskLineAssignment",
     "WorkOrderTaskLineFinishRequest",

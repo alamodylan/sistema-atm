@@ -2,24 +2,30 @@ from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
 from app.models.article import Article
 from app.models.deletion_request import WorkOrderLineDeleteRequest
 from app.models.equipment import Equipment
 from app.models.mechanic import Mechanic
+from app.models.mechanic_specialty import MechanicSpecialty
 from app.models.service_catalog import ServiceCatalog
 from app.models.site import Site
 from app.models.warehouse import Warehouse
 from app.models.work_order import WorkOrder
 from app.models.work_order_line import WorkOrderLine
+from app.models.work_order_task_line import WorkOrderTaskLine
 from app.models.inventory import WarehouseStock
 from app.services.work_order_service import (
     WorkOrderServiceError,
     close_work_order,
     create_work_order,
     finalize_work_order,
+)
+from app.services.work_order_task_service import (
+    WorkOrderTaskServiceError,
+    create_task_line,
 )
 
 work_order_bp = Blueprint("work_orders", __name__)
@@ -260,6 +266,24 @@ def get_work_order(work_order_id: int):
                 .all()
             )
 
+        specialties = (
+            MechanicSpecialty.query
+            .filter(MechanicSpecialty.is_active.is_(True))
+            .order_by(MechanicSpecialty.name.asc())
+            .all()
+        )
+
+        task_lines = (
+            WorkOrderTaskLine.query
+            .options(
+                selectinload(WorkOrderTaskLine.assigned_mechanic),
+                selectinload(WorkOrderTaskLine.specialty),
+            )
+            .filter(WorkOrderTaskLine.work_order_id == work_order.id)
+            .order_by(WorkOrderTaskLine.created_at.asc())
+            .all()
+        )
+
         return render_template(
             "work_orders/detail.html",
             title="Detalle de Orden de Trabajo",
@@ -268,6 +292,8 @@ def get_work_order(work_order_id: int):
             available_articles=available_articles,
             visible_requests=visible_requests,
             available_mechanics=available_mechanics,
+            specialties=specialties,
+            task_lines=task_lines,
             source=source,
         )
 
@@ -279,6 +305,45 @@ def get_work_order(work_order_id: int):
         print(f"[ERROR OT DETAIL] {exc}")
         flash("Error al cargar la orden de trabajo.", "danger")
         return redirect(url_for("work_orders.list_work_orders"))
+
+
+# =========================================================
+# CREAR LÍNEA DE TRABAJO EN OT
+# =========================================================
+@work_order_bp.route("/<int:work_order_id>/tasks", methods=["POST"])
+@login_required
+def create_task_line_action(work_order_id: int):
+    try:
+        title = (request.form.get("title") or "").strip()
+        specialty_id = request.form.get("specialty_id")
+        mechanic_id = request.form.get("mechanic_id")
+        description = request.form.get("description")
+
+        if not title:
+            raise ValueError("El título del trabajo es obligatorio.")
+
+        if not specialty_id:
+            raise ValueError("Debe seleccionar una especialidad.")
+
+        create_task_line(
+            work_order_id=work_order_id,
+            specialty_id=int(specialty_id),
+            title=title,
+            description=description,
+            assigned_mechanic_id=int(mechanic_id) if mechanic_id else None,
+            created_by_user_id=current_user.id,
+            commit=True,
+        )
+
+        flash("Línea de trabajo creada correctamente.", "success")
+
+    except (WorkOrderTaskServiceError, ValueError) as exc:
+        flash(str(exc), "danger")
+
+    except Exception:
+        flash("Error interno al crear la línea de trabajo.", "danger")
+
+    return redirect(url_for("work_orders.get_work_order", work_order_id=work_order_id))
 
 
 # =========================================================

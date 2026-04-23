@@ -4,67 +4,69 @@
 
 {% block content %}
 {% set title = "Detalle de Orden de Trabajo" %}
-{% set subtitle = "Consulte la información general, líneas, solicitudes, mecánicos y acciones disponibles." %}
+{% set subtitle = "Consulte la información general, líneas, solicitudes, trabajos y acciones disponibles." %}
 {% include 'components/page_header.html' with context %}
 
 <div class="row g-4">
     <!-- ===================== INFO GENERAL ===================== -->
     <div class="col-12 col-xl-4">
         <div class="card border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body">
+            <div class="card-body p-4">
                 <h5 class="fw-bold mb-3">Información general</h5>
 
-                <div class="mb-2">
-                    <span class="text-secondary">OT:</span>
-                    <strong>{{ work_order.number }}</strong>
+                <div class="mb-3">
+                    <div class="text-secondary small">OT</div>
+                    <div class="fw-semibold fs-5">{{ work_order.number }}</div>
                 </div>
 
-                <div class="mb-2">
-                    <span class="text-secondary">Estado:</span>
-                    {% if work_order.status == "EN_PROCESO" %}
-                        <span class="badge text-bg-warning">{{ work_order.status }}</span>
-                    {% elif work_order.status == "FINALIZADA" %}
-                        <span class="badge text-bg-primary">{{ work_order.status }}</span>
-                    {% elif work_order.status == "CERRADA" %}
-                        <span class="badge text-bg-dark">{{ work_order.status }}</span>
-                    {% else %}
-                        <span class="badge text-bg-secondary">{{ work_order.status }}</span>
-                    {% endif %}
+                <div class="mb-3">
+                    <div class="text-secondary small">Estado</div>
+                    <div>
+                        {% if work_order.status == "EN_PROCESO" %}
+                            <span class="badge text-bg-warning">{{ work_order.status }}</span>
+                        {% elif work_order.status == "FINALIZADA" %}
+                            <span class="badge text-bg-primary">{{ work_order.status }}</span>
+                        {% elif work_order.status == "CERRADA" %}
+                            <span class="badge text-bg-dark">{{ work_order.status }}</span>
+                        {% else %}
+                            <span class="badge text-bg-secondary">{{ work_order.status }}</span>
+                        {% endif %}
+                    </div>
                 </div>
 
-                <div class="mb-2">
-                    <span class="text-secondary">Bodega:</span>
-                    {{ work_order.warehouse.name if work_order.warehouse else '-' }}
+                <div class="mb-3">
+                    <div class="text-secondary small">Bodega</div>
+                    <div class="fw-semibold">{{ work_order.warehouse.name if work_order.warehouse else '-' }}</div>
                 </div>
 
-                <div class="mb-2">
-                    <span class="text-secondary">Responsable:</span>
-                    {{ work_order.responsible_user.full_name if work_order.responsible_user else '-' }}
+                <div class="mb-3">
+                    <div class="text-secondary small">Responsable</div>
+                    <div class="fw-semibold">{{ work_order.responsible_user.full_name if work_order.responsible_user else '-' }}</div>
                 </div>
 
-                <div class="mb-2">
-                    <span class="text-secondary">Equipo:</span>
-                    {{ work_order.equipment_code_snapshot or '-' }}
+                <div class="mb-3">
+                    <div class="text-secondary small">Equipo</div>
+                    <div class="fw-semibold">{{ work_order.equipment_code_snapshot or '-' }}</div>
                 </div>
 
-                <div class="mb-2">
-                    <span class="text-secondary">Fecha creación:</span>
-                    {{ work_order.created_at }}
+                <div class="mb-3">
+                    <div class="text-secondary small">Fecha creación</div>
+                    <div class="fw-semibold">{{ work_order.created_at }}</div>
                 </div>
 
-                <div class="mb-2">
-                    <span class="text-secondary">Fecha finalización:</span>
-                    {{ work_order.finalized_at or '-' }}
+                <div class="mb-3">
+                    <div class="text-secondary small">Fecha finalización</div>
+                    <div class="fw-semibold">{{ work_order.finalized_at or '-' }}</div>
                 </div>
 
-                <div class="mb-2">
-                    <span class="text-secondary">Fecha cierre:</span>
-                    {{ work_order.closed_at or '-' }}
+                <div class="mb-3">
+                    <div class="text-secondary small">Fecha cierre</div>
+                    <div class="fw-semibold">{{ work_order.closed_at or '-' }}</div>
                 </div>
 
                 <div class="mb-0">
-                    <span class="text-secondary">Descripción:</span>
-                    {{ work_order.description or '-' }}
+                    <div class="text-secondary small">Descripción</div>
+                    <div class="fw-semibold">{{ work_order.description or '-' }}</div>
                 </div>
             </div>
         </div>
@@ -76,39 +78,59 @@
         <!-- ===================== SOLICITUDES ===================== -->
         {% if visible_requests %}
         <div class="card border-0 shadow-sm rounded-4 mb-4">
-            <div class="card-body">
-                <div class="d-flex justify-content-between mb-3">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
                     <div>
-                        <h5 class="fw-bold mb-0">Solicitudes de artículos</h5>
-                        <div class="small text-muted mt-1">
-                            Flujo: mecánico solicita → jefatura revisa → jefatura envía a bodega → bodega prepara → terminal confirma → se agrega a la OT.
-                        </div>
+                        <h5 class="fw-bold mb-1">Solicitudes de artículos</h5>
                     </div>
                 </div>
 
                 {% for req in visible_requests %}
-                <div class="border rounded p-3 mb-3">
-
-                    <div class="d-flex justify-content-between mb-2">
+                <div class="border rounded-4 p-3 mb-3">
+                    <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-2">
                         <div>
-                            <strong>Solicitud #{{ req.id }}</strong>
+                            <div class="fw-semibold">
+                                Solicitud #{{ req.id }}
 
-                            {% if req.request_status == "ABIERTA" %}
-                                <span class="badge text-bg-secondary">ABIERTA</span>
-                            {% elif req.request_status == "ENVIADA" and not req.sent_to_warehouse_at %}
-                                <span class="badge text-bg-warning text-dark">PENDIENTE JEFATURA</span>
-                            {% elif req.request_status == "ENVIADA" and req.sent_to_warehouse_at %}
-                                <span class="badge text-bg-primary">EN BODEGA</span>
-                            {% elif req.request_status == "ATENDIDA" %}
-                                <span class="badge text-bg-success">ATENDIDA</span>
-                            {% elif req.request_status == "CANCELADA" %}
-                                <span class="badge text-bg-danger">CANCELADA</span>
-                            {% else %}
-                                <span class="badge text-bg-secondary">{{ req.request_status }}</span>
+                                {% if req.request_status == "ABIERTA" %}
+                                    <span class="badge text-bg-secondary">ABIERTA</span>
+                                {% elif req.request_status == "ENVIADA" and not req.sent_to_warehouse_at %}
+                                    <span class="badge text-bg-warning text-dark">PENDIENTE JEFATURA</span>
+                                {% elif req.request_status == "ENVIADA" and req.sent_to_warehouse_at %}
+                                    <span class="badge text-bg-primary">EN BODEGA</span>
+                                {% elif req.request_status == "ATENDIDA" %}
+                                    <span class="badge text-bg-success">ATENDIDA</span>
+                                {% elif req.request_status == "CANCELADA" %}
+                                    <span class="badge text-bg-danger">CANCELADA</span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">{{ req.request_status }}</span>
+                                {% endif %}
+                            </div>
+
+                            <div class="small text-muted mt-1">
+                                Creada por:
+                                <strong>{{ req.requested_by_user.full_name if req.requested_by_user else '-' }}</strong>
+                                · {{ req.created_at }}
+                            </div>
+
+                            {% if req.approved_by_user %}
+                            <div class="small text-muted mt-1">
+                                Aprobó jefatura:
+                                <strong>{{ req.approved_by_user.full_name }}</strong>
+                                {% if req.approved_at %}· {{ req.approved_at }}{% endif %}
+                            </div>
+                            {% endif %}
+
+                            {% if req.sent_to_warehouse_at %}
+                            <div class="small text-muted mt-1">
+                                Enviada a bodega:
+                                <strong>{{ req.sent_to_warehouse_by_user.full_name if req.sent_to_warehouse_by_user else '-' }}</strong>
+                                · {{ req.sent_to_warehouse_at }}
+                            </div>
                             {% endif %}
                         </div>
 
-                        <div class="d-flex gap-2">
+                        <div class="d-flex flex-wrap gap-2">
                             {% if req.request_status == "ABIERTA" and source != "dashboard" %}
                             <form method="POST" action="{{ url_for('work_order_requests.send_request_action', request_id=req.id) }}">
                                 <button class="btn btn-sm btn-success">
@@ -127,102 +149,112 @@
                         </div>
                     </div>
 
-                    <div class="small text-muted mb-2">
-                        Creada por:
-                        <strong>{{ req.requested_by_user.full_name if req.requested_by_user else '-' }}</strong>
-                        · {{ req.created_at }}
-                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Artículo</th>
+                                    <th class="text-end">Solicitado</th>
+                                    <th class="text-end">Atendido</th>
+                                    <th class="text-end">Stock</th>
+                                    <th>Ubicación</th>
+                                    <th>Estado</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% set lines = req.filtered_lines if req.filtered_lines is defined else req.lines %}
+                                {% for line in lines %}
+                                <tr>
+                                    <td>
+                                        <div>{{ line.article.code }} - {{ line.article.name }}</div>
+                                        {% if line.notes %}
+                                            <div class="small text-muted">{{ line.notes }}</div>
+                                        {% endif %}
+                                        {% if line.not_delivered_reason %}
+                                            <div class="small text-danger">Motivo: {{ line.not_delivered_reason }}</div>
+                                        {% endif %}
+                                    </td>
 
-                    {% if req.approved_by_user %}
-                    <div class="small text-muted mb-1">
-                        Aprobó jefatura:
-                        <strong>{{ req.approved_by_user.full_name }}</strong>
-                        {% if req.approved_at %}· {{ req.approved_at }}{% endif %}
-                    </div>
-                    {% endif %}
+                                    <td class="text-end">{{ line.quantity_requested }}</td>
+                                    <td class="text-end">{{ line.quantity_attended }}</td>
 
-                    {% if req.sent_to_warehouse_at %}
-                    <div class="small text-muted mb-2">
-                        Enviada a bodega:
-                        <strong>{{ req.sent_to_warehouse_by_user.full_name if req.sent_to_warehouse_by_user else '-' }}</strong>
-                        · {{ req.sent_to_warehouse_at }}
-                    </div>
-                    {% endif %}
+                                    <td class="text-end">
+                                        {% if line.stock_available is defined %}
+                                            {{ line.stock_available }}
+                                        {% elif line.available_quantity is defined %}
+                                            {{ line.available_quantity }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
 
-                    <table class="table table-sm align-middle">
-                        <thead>
-                            <tr>
-                                <th>Artículo</th>
-                                <th class="text-end">Solicitado</th>
-                                <th class="text-end">Atendido</th>
-                                <th class="text-end">Stock</th>
-                                <th>Ubicación</th>
-                                <th>Estado</th>
-                                <th>Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% set lines = req.filtered_lines if req.filtered_lines is defined else req.lines %}
-                            {% for line in lines %}
-                            <tr>
-                                <td>
-                                    <div>{{ line.article.code }} - {{ line.article.name }}</div>
-                                    {% if line.notes %}
-                                        <div class="small text-muted">{{ line.notes }}</div>
-                                    {% endif %}
-                                    {% if line.not_delivered_reason %}
-                                        <div class="small text-danger">Motivo: {{ line.not_delivered_reason }}</div>
-                                    {% endif %}
-                                </td>
+                                    <td>
+                                        {% if line.location_label is defined and line.location_label %}
+                                            {{ line.location_label }}
+                                        {% elif line.warehouse_location_name is defined and line.warehouse_location_name %}
+                                            {{ line.warehouse_location_name }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
 
-                                <td class="text-end">{{ line.quantity_requested }}</td>
-                                <td class="text-end">{{ line.quantity_attended }}</td>
+                                    <td>
+                                        {% if line.line_status == "SOLICITADA" %}
+                                            <span class="badge text-bg-secondary">SOLICITADA</span>
+                                        {% elif line.line_status == "ATENDIDA_PARCIAL" %}
+                                            <span class="badge text-bg-warning text-dark">ATENDIDA PARCIAL</span>
+                                        {% elif line.line_status == "ENTREGADA" %}
+                                            <span class="badge text-bg-success">ENTREGADA</span>
+                                        {% elif line.line_status == "NO_ENTREGADA" %}
+                                            <span class="badge text-bg-danger">NO ENTREGADA</span>
+                                        {% elif line.line_status == "CANCELADA" %}
+                                            <span class="badge text-bg-dark">RECHAZADA</span>
+                                        {% elif line.line_status == "PRESTADA" %}
+                                            <span class="badge text-bg-primary">PRESTADA</span>
+                                        {% else %}
+                                            <span class="badge text-bg-secondary">{{ line.line_status }}</span>
+                                        {% endif %}
+                                    </td>
 
-                                <td class="text-end">
-                                    {% if line.stock_available is defined %}
-                                        {{ line.stock_available }}
-                                    {% elif line.available_quantity is defined %}
-                                        {{ line.available_quantity }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
+                                    <td>
+                                        <div class="d-flex flex-column gap-2">
+                                            {% if req.request_status == "ENVIADA" and not req.sent_to_warehouse_at and line.line_status == "SOLICITADA" and line.manager_review_enabled is defined and line.manager_review_enabled and source != "dashboard" %}
+                                            <div class="border rounded-3 p-2 bg-light-subtle">
+                                                <div class="small fw-semibold mb-2">Jefatura</div>
+                                                <div class="d-flex flex-column flex-md-row gap-2">
+                                                    <form method="POST" action="{{ url_for('work_order_requests.approve_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2">
+                                                        <input
+                                                            name="quantity"
+                                                            class="form-control form-control-sm"
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0.01"
+                                                            max="{{ line.stock_available if line.stock_available is defined else '' }}"
+                                                            value="{{ line.suggested_attend_quantity if line.suggested_attend_quantity is defined else line.quantity_requested }}"
+                                                            style="width: 110px;"
+                                                            {% if line.force_exact_attend is defined and line.force_exact_attend %}readonly{% endif %}
+                                                        >
+                                                        <button class="btn btn-sm btn-outline-success">Aprobar</button>
+                                                    </form>
 
-                                <td>
-                                    {% if line.location_label is defined and line.location_label %}
-                                        {{ line.location_label }}
-                                    {% elif line.warehouse_location_name is defined and line.warehouse_location_name %}
-                                        {{ line.warehouse_location_name }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
+                                                    <form method="POST" action="{{ url_for('work_order_requests.reject_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2">
+                                                        <input
+                                                            name="reason"
+                                                            class="form-control form-control-sm"
+                                                            placeholder="Motivo rechazo"
+                                                            style="width: 150px;"
+                                                        >
+                                                        <button class="btn btn-sm btn-outline-danger">Rechazar</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                            {% endif %}
 
-                                <td>
-                                    {% if line.line_status == "SOLICITADA" %}
-                                        <span class="badge text-bg-secondary">SOLICITADA</span>
-                                    {% elif line.line_status == "ATENDIDA_PARCIAL" %}
-                                        <span class="badge text-bg-warning text-dark">ATENDIDA PARCIAL</span>
-                                    {% elif line.line_status == "ENTREGADA" %}
-                                        <span class="badge text-bg-success">ENTREGADA</span>
-                                    {% elif line.line_status == "NO_ENTREGADA" %}
-                                        <span class="badge text-bg-danger">NO ENTREGADA</span>
-                                    {% elif line.line_status == "CANCELADA" %}
-                                        <span class="badge text-bg-dark">RECHAZADA</span>
-                                    {% elif line.line_status == "PRESTADA" %}
-                                        <span class="badge text-bg-primary">PRESTADA</span>
-                                    {% else %}
-                                        <span class="badge text-bg-secondary">{{ line.line_status }}</span>
-                                    {% endif %}
-                                </td>
-
-                                <td>
-                                    <div class="d-flex flex-column gap-2">
-                                        {% if req.request_status == "ENVIADA" and not req.sent_to_warehouse_at and line.line_status == "SOLICITADA" and line.manager_review_enabled is defined and line.manager_review_enabled and source != "dashboard" %}
-                                        <div class="border rounded-3 p-2 bg-light-subtle">
-                                            <div class="small fw-semibold mb-2">Jefatura</div>
-                                            <div class="d-flex flex-column flex-md-row gap-2">
-                                                <form method="POST" action="{{ url_for('work_order_requests.approve_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2">
+                                            {% if req.sent_to_warehouse_at and req.request_status in ["ENVIADA", "ATENDIDA"] and line.line_status in ["SOLICITADA", "ATENDIDA_PARCIAL"] and line.warehouse_action_enabled is defined and line.warehouse_action_enabled %}
+                                            <div class="border rounded-3 p-2 bg-light-subtle">
+                                                <div class="small fw-semibold mb-2">Bodega</div>
+                                                <form method="POST" action="{{ url_for('work_order_requests.attend_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2 align-items-center">
                                                     <input
                                                         name="quantity"
                                                         class="form-control form-control-sm"
@@ -232,83 +264,162 @@
                                                         max="{{ line.stock_available if line.stock_available is defined else '' }}"
                                                         value="{{ line.suggested_attend_quantity if line.suggested_attend_quantity is defined else line.quantity_requested }}"
                                                         style="width: 110px;"
-                                                        {% if line.force_exact_attend is defined and line.force_exact_attend %}readonly{% endif %}
                                                     >
-                                                    <button class="btn btn-sm btn-outline-success">Aprobar</button>
-                                                </form>
-
-                                                <form method="POST" action="{{ url_for('work_order_requests.reject_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2">
-                                                    <input
-                                                        name="reason"
-                                                        class="form-control form-control-sm"
-                                                        placeholder="Motivo rechazo"
-                                                        style="width: 150px;"
-                                                    >
-                                                    <button class="btn btn-sm btn-outline-danger">Rechazar</button>
+                                                    <button class="btn btn-sm btn-outline-primary">Preparar</button>
                                                 </form>
                                             </div>
-                                        </div>
-                                        {% endif %}
+                                            {% endif %}
 
-                                        {% if req.sent_to_warehouse_at and req.request_status in ["ENVIADA", "ATENDIDA"] and line.line_status in ["SOLICITADA", "ATENDIDA_PARCIAL"] and line.warehouse_action_enabled is defined and line.warehouse_action_enabled %}
-                                        <div class="border rounded-3 p-2 bg-light-subtle">
-                                            <div class="small fw-semibold mb-2">Bodega</div>
-                                            <form method="POST" action="{{ url_for('work_order_requests.attend_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2 align-items-center">
-                                                <input
-                                                    name="quantity"
-                                                    class="form-control form-control-sm"
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0.01"
-                                                    max="{{ line.stock_available if line.stock_available is defined else '' }}"
-                                                    value="{{ line.suggested_attend_quantity if line.suggested_attend_quantity is defined else line.quantity_requested }}"
-                                                    style="width: 110px;"
-                                                >
-                                                <button class="btn btn-sm btn-outline-primary">Preparar</button>
-                                            </form>
-                                            <div class="small text-muted mt-2">
-                                                No se puede preparar más de lo disponible en stock.
+                                            {% if line.line_status == "ENTREGADA" %}
+                                            <div class="small text-success fw-semibold">
+                                                Lista para confirmación en terminal taller.
                                             </div>
-                                        </div>
-                                        {% endif %}
+                                            {% endif %}
 
-                                        {% if line.line_status == "ENTREGADA" %}
-                                        <div class="small text-success fw-semibold">
-                                            Lista para confirmación en terminal taller.
-                                        </div>
-                                        {% endif %}
+                                            {% if line.line_status == "CANCELADA" and not req.sent_to_warehouse_at %}
+                                            <div class="small text-danger fw-semibold">
+                                                Línea rechazada por jefatura.
+                                            </div>
+                                            {% endif %}
 
-                                        {% if line.line_status == "CANCELADA" and not req.sent_to_warehouse_at %}
-                                        <div class="small text-danger fw-semibold">
-                                            Línea rechazada por jefatura.
+                                            {% if line.line_status == "NO_ENTREGADA" %}
+                                            <div class="small text-danger fw-semibold">
+                                                Línea no atendida.
+                                            </div>
+                                            {% endif %}
                                         </div>
-                                        {% endif %}
-
-                                        {% if line.line_status == "NO_ENTREGADA" %}
-                                        <div class="small text-danger fw-semibold">
-                                            Línea no atendida.
-                                        </div>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="7" class="text-muted text-center">Sin líneas</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-muted text-center">Sin líneas</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
 
+        <!-- ===================== TRABAJOS OT ===================== -->
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+                    <h5 class="fw-bold mb-0">Trabajos de la OT</h5>
+                </div>
+
+                {% if work_order.status == "EN_PROCESO" %}
+                <div class="border rounded-4 p-3 bg-light-subtle mb-4">
+                    <form method="POST" action="{{ url_for('work_orders.create_task_line_action', work_order_id=work_order.id) }}" class="row g-3">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Trabajo</label>
+                            <input name="title" class="form-control" required>
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Especialidad</label>
+                            <select name="specialty_id" class="form-select" required>
+                                <option value="">Seleccione...</option>
+                                {% for sp in specialties %}
+                                    <option value="{{ sp.id }}">{{ sp.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Mecánico</label>
+                            <select name="mechanic_id" class="form-select">
+                                <option value="">Asignar luego</option>
+                                {% for m in work_order.mechanics %}
+                                    <option value="{{ m.id }}">{{ m.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Descripción</label>
+                            <textarea name="description" class="form-control" rows="2"></textarea>
+                        </div>
+
+                        <div class="col-12 text-end">
+                            <button class="btn btn-primary">Agregar trabajo</button>
+                        </div>
+                    </form>
+                </div>
+                {% endif %}
+
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Trabajo</th>
+                                <th>Especialidad</th>
+                                <th>Mecánico</th>
+                                <th>Inicio</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in task_lines %}
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold">{{ t.title }}</div>
+                                    {% if t.description %}
+                                        <div class="small text-muted">{{ t.description }}</div>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ t.specialty.name if t.specialty else '-' }}
+                                </td>
+
+                                <td>
+                                    {% if t.assigned_mechanic %}
+                                        {{ t.assigned_mechanic.name }}
+                                    {% else %}
+                                        <span class="text-muted">Sin asignar</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>{{ t.started_at or '-' }}</td>
+
+                                <td>
+                                    {% if t.status == "PENDIENTE" %}
+                                        <span class="badge text-bg-secondary">PENDIENTE</span>
+                                    {% elif t.status == "EN_PROCESO" %}
+                                        <span class="badge text-bg-warning text-dark">EN PROCESO</span>
+                                    {% elif t.status == "PAUSADA" %}
+                                        <span class="badge text-bg-dark">PAUSADA</span>
+                                    {% elif t.status == "FINALIZACION_SOLICITADA" %}
+                                        <span class="badge text-bg-primary">PENDIENTE JEFATURA</span>
+                                    {% elif t.status == "FINALIZADA" %}
+                                        <span class="badge text-bg-success">FINALIZADA</span>
+                                    {% elif t.status == "CANCELADA" %}
+                                        <span class="badge text-bg-danger">CANCELADA</span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">{{ t.status }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    No hay trabajos registrados para esta OT.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- ===================== LÍNEAS ===================== -->
         <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-body">
+            <div class="card-body p-4">
 
                 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
                     <h5 class="fw-bold mb-0">Líneas de la OT</h5>
@@ -338,12 +449,12 @@
 
                 {% if work_order.status == "EN_PROCESO" %}
                 <div class="alert alert-warning">
-                    Las líneas deben generarse desde solicitudes confirmadas en terminal (flujo controlado).
+                    Las líneas deben generarse desde solicitudes confirmadas en terminal.
                 </div>
                 {% endif %}
 
                 <div class="table-responsive">
-                    <table class="table align-middle">
+                    <table class="table align-middle mb-0">
                         <thead class="table-light">
                             <tr>
                                 <th>Artículo</th>

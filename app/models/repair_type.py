@@ -3,14 +3,14 @@ from datetime import UTC, datetime
 from app.extensions import db
 
 
-class MechanicSpecialty(db.Model):
-    __tablename__ = "mechanic_specialties"
+class RepairType(db.Model):
+    __tablename__ = "repair_types"
     __table_args__ = {"schema": "atm"}
 
     id = db.Column(db.BigInteger, primary_key=True)
 
     code = db.Column(db.String(50), nullable=False, unique=True, index=True)
-    name = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    name = db.Column(db.String(150), nullable=False, unique=True, index=True)
     description = db.Column(db.Text, nullable=True)
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
@@ -21,19 +21,18 @@ class MechanicSpecialty(db.Model):
         default=lambda: datetime.now(UTC),
     )
 
-    mechanic_assignments = db.relationship(
-        "MechanicSpecialtyAssignment",
-        back_populates="specialty",
+    specialty_assignments = db.relationship(
+        "RepairTypeSpecialty",
+        back_populates="repair_type",
         cascade="all, delete-orphan",
         lazy="selectin",
     )
 
-    repair_type_assignments = db.relationship(
-        "RepairTypeSpecialty",
-        back_populates="specialty",
-        cascade="all, delete-orphan",
+    task_lines = db.relationship(
+        "WorkOrderTaskLine",
+        back_populates="repair_type",
         lazy="selectin",
     )
 
     def __repr__(self) -> str:
-        return f"<MechanicSpecialty {self.code} - {self.name}>"
+        return f"<RepairType {self.code} - {self.name}>"
