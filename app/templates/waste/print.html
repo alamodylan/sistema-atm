@@ -144,7 +144,7 @@
         <div class="col-12 col-md-3">
             <div class="info-label">Creado por</div>
             <div class="info-value">
-                {{ waste_act.created_by_user.full_name if waste_act.created_by_user and waste_act.created_by_user.full_name else '-' }}
+                {{ waste_act.created_by_user.full_name if waste_act.created_by_user else '-' }}
             </div>
         </div>
 
@@ -179,7 +179,9 @@
                     <th>Código</th>
                     <th>Artículo</th>
                     <th>Cantidad</th>
-                    <th>Confirmación</th>
+                    <th>Tipo</th>
+                    <th>Costo Unitario</th>
+                    <th>Costo Total</th>
                     <th>Notas</th>
                 </tr>
             </thead>
@@ -195,7 +197,7 @@
                                 {{ line.work_order.number if line.work_order else '-' }}
                             </td>
                             <td>
-                                {{ line.work_order.equipment_code_snapshot if line.work_order and line.work_order.equipment_code_snapshot else '-' }}
+                                {{ line.work_order.equipment_code_snapshot if line.work_order else '-' }}
                             </td>
                             <td>
                                 {{ line.article.code if line.article else '-' }}
@@ -207,20 +209,22 @@
                                 {{ line.quantity }}
                             </td>
                             <td>
-                                {% if line.confirmed_for_disposal %}
+                                {% if line.disposal_type == "CONFIRMADO" %}
                                     Confirmado
+                                {% elif line.disposal_type == "CONSUMIBLE" %}
+                                    Consumible
                                 {% else %}
                                     Pendiente
                                 {% endif %}
                             </td>
-                            <td>
-                                {{ line.notes or '-' }}
-                            </td>
+                            <td>{{ line.unit_cost }}</td>
+                            <td>{{ line.total_cost }}</td>
+                            <td>{{ line.notes or '-' }}</td>
                         </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="9" class="text-center text-muted py-4">
+                        <td colspan="11" class="text-center text-muted py-4">
                             No hay líneas agregadas a esta acta.
                         </td>
                     </tr>

@@ -5,6 +5,7 @@ from datetime import date, datetime, time, timedelta, UTC
 from decimal import Decimal, InvalidOperation
 
 from app.extensions import db
+from app.models.inventory import WarehouseStock
 from app.models.warehouse import Warehouse
 from app.models.waste_act import WasteAct
 from app.models.waste_act_line import WasteActLine
@@ -152,7 +153,6 @@ def get_waste_candidates(
         WorkOrderLine.query
         .join(WorkOrder, WorkOrder.id == WorkOrderLine.work_order_id)
         .filter(WorkOrder.status.in_(["FINALIZADA", "CERRADA"]))
-        .filter(WorkOrderLine.quantity > 0)
         .filter(WorkOrderLine.inventory_posted.is_(True))
         .filter(WorkOrderLine.line_status == "ACTIVE")
         .filter(WorkOrderLine.delivered_at.isnot(None))
@@ -178,7 +178,7 @@ def add_line_to_waste_act(
     waste_act_id: int,
     work_order_line_id: int,
     quantity: Decimal | int | float,
-    confirmed_for_disposal: bool,
+    disposal_type: str,
     notes: str | None,
     performed_by_user_id: int,
     commit: bool = True,
@@ -234,11 +234,25 @@ def add_line_to_waste_act(
 
     line_qty = Decimal(str(line.quantity or 0))
 
-    if qty <= 0:
-        raise WasteServiceError("La cantidad debe ser mayor a cero.")
+    if qty < 0:
+        raise WasteServiceError("La cantidad no puede ser negativa.")
 
     if qty > line_qty:
         raise WasteServiceError("La cantidad no puede ser mayor a la registrada en la línea.")
+
+    normalized_disposal_type = (disposal_type or "").strip().upper()
+    allowed_disposal_types = {"PENDIENTE", "CONFIRMADO", "CONSUMIBLE"}
+
+    if normalized_disposal_type not in allowed_disposal_types:
+        raise WasteServiceError("El tipo de disposición no es válido.")
+
+    stock = WarehouseStock.query.filter_by(
+        warehouse_id=waste_act.warehouse_id,
+        article_id=line.article_id,
+    ).first()
+
+    unit_cost = Decimal(str(stock.avg_unit_cost or 0)) if stock else Decimal("0")
+    total_cost = unit_cost * qty
 
     waste_line = WasteActLine(
         waste_act_id=waste_act.id,
@@ -246,7 +260,9 @@ def add_line_to_waste_act(
         work_order_line_id=line.id,
         article_id=line.article_id,
         quantity=qty,
-        confirmed_for_disposal=confirmed_for_disposal,
+        unit_cost=unit_cost,
+        total_cost=total_cost,
+        disposal_type=normalized_disposal_type,
         notes=(notes or "").strip() or None,
     )
 
@@ -267,7 +283,9 @@ def add_line_to_waste_act(
             "work_order_line_id": line.id,
             "article_id": line.article_id,
             "quantity": str(qty),
-            "confirmed_for_disposal": confirmed_for_disposal,
+            "unit_cost": str(unit_cost),
+            "total_cost": str(total_cost),
+            "disposal_type": normalized_disposal_type,
             "waste_act_status": waste_act.status,
         },
         commit=False,

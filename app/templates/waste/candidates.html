@@ -136,7 +136,9 @@
                         <th>Código</th>
                         <th>Artículo</th>
                         <th>Cantidad desecho</th>
-                        <th>Confirmación</th>
+                        <th>Tipo</th>
+                        <th>Costo unitario</th>
+                        <th>Costo total</th>
                         <th>Notas</th>
                     </tr>
                 </thead>
@@ -160,18 +162,26 @@
                                     {{ waste_line.quantity }}
                                 </td>
                                 <td>
-                                    {% if waste_line.confirmed_for_disposal %}
+                                    {% if waste_line.disposal_type == "CONFIRMADO" %}
                                         <span class="badge text-bg-success">Confirmado</span>
+                                    {% elif waste_line.disposal_type == "CONSUMIBLE" %}
+                                        <span class="badge text-bg-dark">Consumible</span>
                                     {% else %}
                                         <span class="badge text-bg-warning">Pendiente</span>
                                     {% endif %}
+                                </td>
+                                <td>
+                                    {{ waste_line.unit_cost }}
+                                </td>
+                                <td>
+                                    {{ waste_line.total_cost }}
                                 </td>
                                 <td>{{ waste_line.notes or "-" }}</td>
                             </tr>
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="7" class="text-center text-muted py-4">
+                            <td colspan="9" class="text-center text-muted py-4">
                                 Aún no se han agregado líneas a esta acta.
                             </td>
                         </tr>
@@ -241,11 +251,11 @@
                                               class="row g-2 align-items-center">
                                             <input type="hidden" name="work_order_line_id" value="{{ line.id }}">
 
-                                            <div class="col-12 col-xl-4">
+                                            <div class="col-12 col-xl-3">
                                                 <input
                                                     type="number"
                                                     step="0.01"
-                                                    min="0.01"
+                                                    min="0"
                                                     max="{{ line.quantity }}"
                                                     name="quantity"
                                                     value="{{ line.quantity }}"
@@ -255,13 +265,14 @@
                                             </div>
 
                                             <div class="col-12 col-xl-4">
-                                                <select name="confirmed_for_disposal" class="form-select form-select-sm">
-                                                    <option value="true">Confirmado</option>
-                                                    <option value="false">Pendiente</option>
+                                                <select name="disposal_type" class="form-select form-select-sm">
+                                                    <option value="PENDIENTE">Pendiente</option>
+                                                    <option value="CONFIRMADO">Confirmado</option>
+                                                    <option value="CONSUMIBLE">Consumible</option>
                                                 </select>
                                             </div>
 
-                                            <div class="col-12 col-xl-4 d-grid">
+                                            <div class="col-12 col-xl-5 d-grid">
                                                 <button type="submit" class="btn btn-sm btn-primary">
                                                     Agregar
                                                 </button>

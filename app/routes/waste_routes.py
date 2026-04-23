@@ -204,11 +204,16 @@ def add_waste_act_line(waste_act_id: int):
         active_site_id = _get_active_site_id()
         waste_act = _get_waste_act_for_active_site_or_error(waste_act_id, active_site_id)
 
+        disposal_type = (request.form.get("disposal_type") or "").strip().upper()
+
+        if disposal_type not in {"PENDIENTE", "CONFIRMADO", "CONSUMIBLE"}:
+            raise ValueError("Tipo de disposición inválido.")
+
         add_line_to_waste_act(
             waste_act_id=waste_act.id,
             work_order_line_id=int(request.form.get("work_order_line_id")),
             quantity=request.form.get("quantity"),
-            confirmed_for_disposal=request.form.get("confirmed_for_disposal") in ["true", "1"],
+            disposal_type=disposal_type,
             notes=request.form.get("notes"),
             performed_by_user_id=current_user.id,
             commit=True,

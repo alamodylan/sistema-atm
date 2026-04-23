@@ -42,7 +42,18 @@ class WasteActLine(db.Model):
 
     quantity = db.Column(db.Numeric(14, 2), nullable=False)
 
-    confirmed_for_disposal = db.Column(db.Boolean, nullable=False, default=False)
+    unit_cost = db.Column(db.Numeric(14, 4), nullable=False, default=0)
+    total_cost = db.Column(db.Numeric(14, 4), nullable=False, default=0)
+
+    disposal_type = db.Column(
+        db.String(20),
+        nullable=False,
+        default="PENDIENTE",
+        index=True,
+    )
+    # Valores oficiales:
+    # PENDIENTE, CONFIRMADO, CONSUMIBLE
+
     notes = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(
