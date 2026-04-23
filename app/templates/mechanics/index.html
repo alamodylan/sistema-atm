@@ -149,6 +149,7 @@
                     <tr>
                         <th>Nombre</th>
                         <th>Código</th>
+                        <th>Especialidades</th>
                         <th>Estado</th>
                         <th class="text-end">Acciones</th>
                     </tr>
@@ -159,6 +160,21 @@
                             <tr>
                                 <td class="fw-semibold">{{ m.name }}</td>
                                 <td>{{ m.code }}</td>
+                                <td>
+                                    {% if m.specialty_assignments %}
+                                        <div class="d-flex flex-wrap gap-1">
+                                            {% for assignment in m.specialty_assignments %}
+                                                {% if assignment.specialty %}
+                                                    <span class="badge text-bg-dark">
+                                                        {{ assignment.specialty.name }}
+                                                    </span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted small">Sin especialidades</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     {% if m.is_active %}
                                         <span class="badge text-bg-success">Activo</span>
@@ -182,7 +198,7 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="4" class="text-center text-muted py-4">
+                            <td colspan="5" class="text-center text-muted py-4">
                                 No hay mecánicos registrados en el predio activo.
                             </td>
                         </tr>

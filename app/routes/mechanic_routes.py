@@ -6,6 +6,7 @@ from app.models.mechanic import Mechanic
 from app.models.mechanic_specialty import MechanicSpecialty
 from app.models.mechanic_specialty_assignment import MechanicSpecialtyAssignment
 from app.services.badge_pdf_service import build_mechanic_badge_pdf
+from sqlalchemy.orm import selectinload
 
 mechanic_bp = Blueprint("mechanics", __name__, url_prefix="/mechanics")
 
@@ -32,7 +33,12 @@ def index():
         active_site_id = _get_active_site_id()
 
         mechanics = (
-            Mechanic.query.filter_by(site_id=active_site_id)
+            Mechanic.query
+            .options(
+                selectinload(Mechanic.specialty_assignments)
+                .selectinload(MechanicSpecialtyAssignment.specialty)
+            )
+            .filter_by(site_id=active_site_id)
             .order_by(Mechanic.name.asc())
             .all()
         )
