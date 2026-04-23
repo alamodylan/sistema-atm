@@ -43,5 +43,33 @@ class Mechanic(db.Model):
         lazy="subquery",
     )
 
+    specialty_assignments = db.relationship(
+        "MechanicSpecialtyAssignment",
+        back_populates="mechanic",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    task_lines_assigned = db.relationship(
+        "WorkOrderTaskLine",
+        foreign_keys="WorkOrderTaskLine.assigned_mechanic_id",
+        back_populates="assigned_mechanic",
+        lazy="selectin",
+    )
+
+    task_line_assignments = db.relationship(
+        "WorkOrderTaskLineAssignment",
+        back_populates="mechanic",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    task_line_finish_requests = db.relationship(
+        "WorkOrderTaskLineFinishRequest",
+        foreign_keys="WorkOrderTaskLineFinishRequest.requested_by_mechanic_id",
+        back_populates="requested_by_mechanic",
+        lazy="selectin",
+    )
+
     def __repr__(self) -> str:
         return f"<Mechanic site={self.site_id} code={self.code} - {self.name}>"

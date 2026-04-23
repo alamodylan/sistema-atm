@@ -139,5 +139,12 @@ class WorkOrder(db.Model):
         lazy="subquery",
     )
 
+    task_lines = db.relationship(
+        "WorkOrderTaskLine",
+        back_populates="work_order",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
     def __repr__(self) -> str:
         return f"<WorkOrder {self.number} - {self.status}>"

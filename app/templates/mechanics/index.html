@@ -1,51 +1,195 @@
 {% extends 'base.html' %}
 
+{% block title %}Mecánicos | Sistema de Bodega{% endblock %}
+
 {% block content %}
-<div class="container">
+{% set title = "Mecánicos" %}
+{% set subtitle = "Gestione mecánicos del predio activo y sus especialidades." %}
+{% include 'components/page_header.html' with context %}
 
-    <h4 class="mb-3">Mecánicos</h4>
+<div class="row g-4">
+    <div class="col-12 col-xl-7">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-4">
+                <h5 class="mb-3">Crear mecánico</h5>
 
-    <form method="POST" action="{{ url_for('mechanics.create') }}" class="row g-2 mb-4">
-        <div class="col">
-            <input name="name" class="form-control" placeholder="Nombre">
-        </div>
-        <div class="col">
-            <input name="code" class="form-control" placeholder="Código">
-        </div>
-        <div class="col-auto">
-            <button class="btn btn-primary">Crear</button>
-        </div>
-    </form>
+                <form method="POST" action="{{ url_for('mechanics.create') }}" class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fw-semibold">Nombre</label>
+                        <input
+                            name="name"
+                            class="form-control"
+                            placeholder="Nombre completo"
+                            required
+                        >
+                    </div>
 
-    <table class="table table-sm">
-        <thead>
-            <tr>
-                <th>Nombre</th>
-                <th>Código</th>
-                <th>Estado</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for m in mechanics %}
-            <tr>
-                <td>{{ m.name }}</td>
-                <td>{{ m.code }}</td>
-                <td>
-                    {% if m.is_active %}
-                        <span class="badge bg-success">Activo</span>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fw-semibold">Código</label>
+                        <input
+                            name="code"
+                            class="form-control"
+                            placeholder="Código de mecánico"
+                            required
+                        >
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Especialidades</label>
+                        <select
+                            name="specialty_ids"
+                            class="form-select"
+                            multiple
+                            size="6"
+                        >
+                            {% if specialties %}
+                                {% for specialty in specialties %}
+                                    <option value="{{ specialty.id }}">
+                                        {{ specialty.code }} - {{ specialty.name }}
+                                    </option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        <div class="form-text">
+                            Puede seleccionar una o varias especialidades.
+                        </div>
+                    </div>
+
+                    <div class="col-12 d-flex justify-content-end">
+                        <button class="btn btn-primary px-4">Crear mecánico</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-5">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-4">
+                <h5 class="mb-3">Crear especialidad</h5>
+
+                <form method="POST" action="{{ url_for('mechanics.create_specialty') }}" class="row g-3">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label fw-semibold">Código</label>
+                        <input
+                            name="code"
+                            class="form-control"
+                            placeholder="Ej. SOLD"
+                            required
+                        >
+                    </div>
+
+                    <div class="col-12 col-md-8">
+                        <label class="form-label fw-semibold">Nombre</label>
+                        <input
+                            name="name"
+                            class="form-control"
+                            placeholder="Ej. Soldador"
+                            required
+                        >
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Descripción</label>
+                        <textarea
+                            name="description"
+                            class="form-control"
+                            rows="3"
+                            placeholder="Descripción opcional de la especialidad"
+                        ></textarea>
+                    </div>
+
+                    <div class="col-12 d-flex justify-content-end">
+                        <button class="btn btn-outline-dark px-4">Crear especialidad</button>
+                    </div>
+                </form>
+
+                <hr class="my-4">
+
+                <h6 class="mb-3">Especialidades registradas</h6>
+
+                <div class="border rounded-4 p-3 bg-light-subtle" style="max-height: 280px; overflow-y: auto;">
+                    {% if specialties %}
+                        <div class="d-flex flex-column gap-2">
+                            {% for specialty in specialties %}
+                                <div class="d-flex justify-content-between align-items-center border rounded-3 bg-white px-3 py-2">
+                                    <div>
+                                        <div class="fw-semibold">{{ specialty.name }}</div>
+                                        <div class="small text-secondary">{{ specialty.code }}</div>
+                                    </div>
+                                    {% if specialty.is_active %}
+                                        <span class="badge text-bg-success">Activa</span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">Inactiva</span>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
                     {% else %}
-                        <span class="badge bg-secondary">Inactivo</span>
+                        <div class="text-muted small">
+                            No hay especialidades registradas todavía.
+                        </div>
                     {% endif %}
-                </td>
-                <td>
-                    <a href="{{ url_for('mechanics.detail', mechanic_id=m.id) }}" class="btn btn-sm btn-outline-dark">Ver</a>
-                    <a href="{{ url_for('mechanics.toggle', mechanic_id=m.id) }}" class="btn btn-sm btn-outline-warning">Toggle</a>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
+<div class="card border-0 shadow-sm rounded-4 mt-4">
+    <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">Listado de mecánicos</h5>
+            <div class="small text-secondary">Predio activo</div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Código</th>
+                        <th>Estado</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if mechanics %}
+                        {% for m in mechanics %}
+                            <tr>
+                                <td class="fw-semibold">{{ m.name }}</td>
+                                <td>{{ m.code }}</td>
+                                <td>
+                                    {% if m.is_active %}
+                                        <span class="badge text-bg-success">Activo</span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">Inactivo</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-flex justify-content-end gap-2">
+                                        <a href="{{ url_for('mechanics.detail', mechanic_id=m.id) }}"
+                                           class="btn btn-sm btn-outline-dark">
+                                            Ver
+                                        </a>
+                                        <a href="{{ url_for('mechanics.toggle', mechanic_id=m.id) }}"
+                                           class="btn btn-sm btn-outline-warning">
+                                            Toggle
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-4">
+                                No hay mecánicos registrados en el predio activo.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 {% endblock %}

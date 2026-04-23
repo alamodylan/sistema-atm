@@ -42,6 +42,11 @@ from .purchase_order_approval import PurchaseOrderApproval
 from .quotation_batch import QuotationBatch
 from .quotation_line import QuotationLine
 from .pending_article import PendingArticle
+from .mechanic_specialty import MechanicSpecialty
+from .mechanic_specialty_assignment import MechanicSpecialtyAssignment
+from .work_order_task_line import WorkOrderTaskLine
+from .work_order_task_line_assignment import WorkOrderTaskLineAssignment
+from .work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 
 __all__ = [
     "Role",
@@ -91,4 +96,9 @@ __all__ = [
     "QuotationBatch",
     "QuotationLine",
     "PendingArticle",
+    "MechanicSpecialty",
+    "MechanicSpecialtyAssignment",
+    "WorkOrderTaskLine",
+    "WorkOrderTaskLineAssignment",
+    "WorkOrderTaskLineFinishRequest",
 ]
