@@ -582,7 +582,7 @@ def reject_task_finish(task_id):
         )
 
         if finish_request:
-            finish_request.status = "RECHAZADA"
+            finish_request.status = "DESESTIMADA"
             if hasattr(finish_request, "reviewed_by_user_id"):
                 finish_request.reviewed_by_user_id = current_user.id
             if hasattr(finish_request, "reviewed_at"):
