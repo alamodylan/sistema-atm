@@ -37,6 +37,20 @@
     <div class="col-12 col-md-6 col-xl-3">
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body">
+                <div class="text-secondary small text-uppercase fw-semibold">Trabajos por aprobar</div>
+                <div class="display-6 fw-bold text-dark mt-2">
+                    {{ task_finish_requests_count or 0 }}
+                </div>
+                <div class="small text-muted mt-2">
+                    Finalizaciones de trabajo pendientes de jefatura.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body">
                 <div class="text-secondary small text-uppercase fw-semibold">Solicitudes traslado pendientes</div>
                 <div class="display-6 fw-bold text-dark mt-2">
                     {{ transfer_pending_requests_count or 0 }}
@@ -47,28 +61,14 @@
             </div>
         </div>
     </div>
-
-    <div class="col-12 col-md-6 col-xl-3">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body">
-                <div class="text-secondary small text-uppercase fw-semibold">Líneas traslado por revisar</div>
-                <div class="display-6 fw-bold text-dark mt-2">
-                    {{ transfer_pending_lines_count or 0 }}
-                </div>
-                <div class="small text-muted mt-2">
-                    Líneas de traslado pendientes de decisión por jefatura.
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body p-4">
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
             <div>
-                <div class="text-primary small fw-semibold text-uppercase mb-1">Módulo de jefatura</div>
-                <h5 class="fw-bold mb-1">Solicitudes de órdenes de trabajo</h5>
+                <div class="text-primary small fw-semibold text-uppercase mb-1">Órdenes de trabajo</div>
+                <h5 class="fw-bold mb-1">Solicitudes de artículos</h5>
                 <div class="text-muted small">
                     Revise las solicitudes generadas desde OT antes de que lleguen a bodega.
                 </div>
@@ -215,6 +215,108 @@
         {% else %}
         <div class="text-muted">
             No hay solicitudes pendientes de revisión en jefatura.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body p-4">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+            <div>
+                <div class="text-warning small fw-semibold text-uppercase mb-1">Control de trabajos</div>
+                <h5 class="fw-bold mb-1">Trabajos pendientes de aprobación</h5>
+                <div class="text-muted small">
+                    Revise las finalizaciones solicitadas por los mecánicos antes de cerrar los trabajos.
+                </div>
+            </div>
+        </div>
+
+        {% for req in task_finish_requests %}
+        <div class="border rounded-4 p-3 p-lg-4 mb-4 bg-white">
+            <div class="row g-3 align-items-center">
+                <div class="col-12 col-lg-8">
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                        <span class="badge rounded-pill text-bg-warning text-dark">
+                            PENDIENTE APROBACIÓN
+                        </span>
+                    </div>
+
+                    <h6 class="fw-bold mb-2">
+                        OT {{ req.task_line.work_order.number if req.task_line and req.task_line.work_order else '-' }}
+                    </h6>
+
+                    <div class="row g-2 small">
+                        <div class="col-12 col-md-6">
+                            <div class="text-muted">Trabajo</div>
+                            <div class="fw-semibold text-dark">
+                                {{ req.task_line.title if req.task_line else '-' }}
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <div class="text-muted">Tipo de reparación</div>
+                            <div class="fw-semibold text-dark">
+                                {{ req.task_line.repair_type.name if req.task_line and req.task_line.repair_type else '-' }}
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <div class="text-muted">Mecánico</div>
+                            <div class="fw-semibold text-dark">
+                                {{ req.requested_by_mechanic.name if req.requested_by_mechanic else '-' }}
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <div class="text-muted">Tiempo trabajado</div>
+                            <div class="fw-semibold text-dark">
+                                {{ req.task_line.effective_seconds if req.task_line else 0 }} seg
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <div class="text-muted">Fecha solicitud</div>
+                            <div class="fw-semibold text-dark">
+                                {{ req.requested_at if req.requested_at else req.created_at }}
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <div class="text-muted">Estado</div>
+                            <div>
+                                <span class="badge text-bg-warning text-dark rounded-pill">
+                                    {{ req.status }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-4 d-flex flex-column flex-lg-row justify-content-lg-end gap-2">
+                    {% if req.task_line %}
+                    <form method="POST"
+                          action="{{ url_for('work_orders.approve_task_finish', task_id=req.task_line.id) }}">
+                        <button class="btn btn-success rounded-3 px-4 w-100">
+                            Aprobar
+                        </button>
+                    </form>
+
+                    <form method="POST"
+                          action="{{ url_for('work_orders.reject_task_finish', task_id=req.task_line.id) }}">
+                        <button class="btn btn-outline-danger rounded-3 px-4 w-100">
+                            Rechazar
+                        </button>
+                    </form>
+                    {% else %}
+                    <span class="text-muted small">Sin línea asociada</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="text-muted">
+            No hay trabajos pendientes de aprobación.
         </div>
         {% endfor %}
     </div>

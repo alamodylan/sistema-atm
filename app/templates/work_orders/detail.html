@@ -320,22 +320,19 @@
                         </div>
 
                         <div class="col-12 col-md-4">
-                            <label class="form-label fw-semibold">Especialidad</label>
-                            <select name="specialty_id" class="form-select" required>
+                            <label class="form-label fw-semibold">Tipo de reparación</label>
+                            <select name="repair_type_id" id="repairTypeSelect" class="form-select" required>
                                 <option value="">Seleccione...</option>
-                                {% for sp in specialties %}
-                                    <option value="{{ sp.id }}">{{ sp.name }}</option>
+                                {% for rt in repair_types %}
+                                    <option value="{{ rt.id }}">{{ rt.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
 
                         <div class="col-12 col-md-4">
                             <label class="form-label fw-semibold">Mecánico</label>
-                            <select name="mechanic_id" class="form-select">
-                                <option value="">Asignar luego</option>
-                                {% for m in work_order.mechanics %}
-                                    <option value="{{ m.id }}">{{ m.name }}</option>
-                                {% endfor %}
+                            <select name="mechanic_id" id="mechanicSelect" class="form-select">
+                                <option value="">Seleccione tipo primero...</option>
                             </select>
                         </div>
 
@@ -356,7 +353,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Trabajo</th>
-                                <th>Especialidad</th>
+                                <th>Tipo de reparación</th>
                                 <th>Mecánico</th>
                                 <th>Inicio</th>
                                 <th>Estado</th>
@@ -373,7 +370,7 @@
                                 </td>
 
                                 <td>
-                                    {{ t.specialty.name if t.specialty else '-' }}
+                                    {{ t.repair_type.name if t.repair_type else '-' }}
                                 </td>
 
                                 <td>
@@ -558,18 +555,6 @@
                 <!-- ===================== MECÁNICOS ===================== -->
                 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
                     <h6 class="fw-bold mb-0">Mecánicos asignados</h6>
-
-                    {% if work_order.status == "EN_PROCESO" and available_mechanics %}
-                    <form method="POST" action="{{ url_for('work_orders.add_mechanic_to_work_order_action', work_order_id=work_order.id) }}" class="d-flex flex-wrap gap-2">
-                        <select name="mechanic_id" class="form-select form-select-sm" style="min-width: 260px;" required>
-                            <option value="">Agregar mecánico...</option>
-                            {% for mechanic in available_mechanics %}
-                                <option value="{{ mechanic.id }}">{{ mechanic.name }}</option>
-                            {% endfor %}
-                        </select>
-                        <button type="submit" class="btn btn-sm btn-outline-primary">Agregar</button>
-                    </form>
-                    {% endif %}
                 </div>
 
                 <div class="d-flex flex-wrap gap-2">
@@ -587,4 +572,41 @@
 
     </div>
 </div>
+
+<script>
+    const repairTypeSelect = document.getElementById("repairTypeSelect");
+    const mechanicSelect = document.getElementById("mechanicSelect");
+
+    const repairTypeMechanicsMap = JSON.parse(
+        '{{ repair_type_mechanics_map | default({}) | tojson | safe }}'
+    );
+
+    if (repairTypeSelect && mechanicSelect) {
+        repairTypeSelect.addEventListener("change", function () {
+            const repairTypeId = this.value;
+            const mechanics = repairTypeMechanicsMap[repairTypeId] || [];
+
+            mechanicSelect.innerHTML = "";
+
+            if (!repairTypeId) {
+                mechanicSelect.innerHTML = '<option value="">Seleccione tipo primero...</option>';
+                return;
+            }
+
+            if (mechanics.length === 0) {
+                mechanicSelect.innerHTML = '<option value="">Sin mecánicos compatibles</option>';
+                return;
+            }
+
+            mechanicSelect.innerHTML = '<option value="">Asignar luego</option>';
+
+            mechanics.forEach(function (mechanic) {
+                const option = document.createElement("option");
+                option.value = mechanic.id;
+                option.textContent = mechanic.name;
+                mechanicSelect.appendChild(option);
+            });
+        });
+    }
+</script>
 {% endblock %}

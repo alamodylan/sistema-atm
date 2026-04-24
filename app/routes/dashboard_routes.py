@@ -9,6 +9,8 @@ from app.models.warehouse import Warehouse
 from app.models.work_order import WorkOrder
 from app.models.work_order_request import WorkOrderRequest
 from app.models.transfer_request import TransferRequest
+from app.models.work_order_task_line import WorkOrderTaskLine
+from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 from app.services.transfer_service import get_request_line_stock_context
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -374,6 +376,24 @@ def manager_dashboard():
                 req.status == "APROBADA" and has_approved_lines
             )
 
+        # ==============================
+        # TRABAJOS PENDIENTES JEFATURA
+        # ==============================
+
+        task_finish_requests = (
+            WorkOrderTaskLineFinishRequest.query
+            .join(WorkOrderTaskLine, WorkOrderTaskLine.id == WorkOrderTaskLineFinishRequest.task_line_id)
+            .join(WorkOrder, WorkOrder.id == WorkOrderTaskLine.work_order_id)
+            .filter(
+                WorkOrder.site_id == active_site_id,
+                WorkOrderTaskLineFinishRequest.status == "PENDIENTE"
+            )
+            .order_by(WorkOrderTaskLineFinishRequest.created_at.desc())
+            .all()
+        )
+
+        task_finish_requests_count = len(task_finish_requests)
+
         return render_template(
             "dashboard/manager.html",
             title="Dashboard Jefatura",
@@ -384,6 +404,8 @@ def manager_dashboard():
             transfer_pending_requests=transfer_pending_requests,
             transfer_pending_requests_count=transfer_pending_requests_count,
             transfer_pending_lines_count=transfer_pending_lines_count,
+            task_finish_requests=task_finish_requests,
+            task_finish_requests_count=task_finish_requests_count,
         )
 
     except Exception as exc:

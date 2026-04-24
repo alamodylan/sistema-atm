@@ -59,11 +59,23 @@
                 <div class="card-body">
                     <h5 id="selectedWorkOrderLabel"></h5>
 
-                    <div class="d-flex gap-2">
+                    <div class="d-flex flex-wrap gap-2">
                         <button class="btn btn-primary" id="loadArticlesBtn">Solicitar artículo</button>
                         <button class="btn btn-warning" id="loadToolsBtn">Solicitar herramienta</button>
                         <button class="btn btn-outline-dark" id="loadBorrowedToolsBtn">Devolver herramienta</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="taskSection" class="card border-0 shadow-sm rounded-4 mb-4 d-none">
+            <div class="card-body">
+                <h5 class="mb-3">Mis trabajos en esta OT</h5>
+
+                <div id="taskList"></div>
+
+                <div id="noTasks" class="text-muted d-none">
+                    No tienes trabajos asignados en esta OT.
                 </div>
             </div>
         </div>
@@ -127,6 +139,7 @@ let currentMechanic = null;
 let currentWorkOrders = [];
 let selectedWorkOrder = null;
 let currentItems = [];
+let currentTasks = [];
 let cart = [];
 let pendingReceptionRequestId = null;
 let receptionMode = false;
@@ -186,6 +199,7 @@ function resetTerminal() {
     currentWorkOrders = [];
     selectedWorkOrder = null;
     currentItems = [];
+    currentTasks = [];
     cart = [];
     pendingReceptionRequestId = null;
     receptionMode = false;
@@ -194,10 +208,12 @@ function resetTerminal() {
     document.getElementById("cartSection").classList.add("d-none");
     document.getElementById("itemsSection").classList.add("d-none");
     document.getElementById("selectedWorkOrderSection").classList.add("d-none");
+    document.getElementById("taskSection").classList.add("d-none");
     document.getElementById("receptionSection").classList.add("d-none");
     document.getElementById("noWorkOrders").classList.add("d-none");
     document.getElementById("noReception").classList.add("d-none");
     document.getElementById("noItemsMessage").classList.add("d-none");
+    document.getElementById("noTasks").classList.add("d-none");
 
     quantitySection.classList.add("d-none");
     receptionScanHint.classList.add("d-none");
@@ -207,6 +223,7 @@ function resetTerminal() {
     document.getElementById("itemsList").innerHTML = "";
     document.getElementById("cartList").innerHTML = "";
     document.getElementById("receptionList").innerHTML = "";
+    document.getElementById("taskList").innerHTML = "";
 
     if (itemsSearch) {
         itemsSearch.value = "";
@@ -321,13 +338,20 @@ function renderWorkOrders() {
             </button>
         `;
 
-        col.querySelector("button").onclick = function () {
+        col.querySelector("button").onclick = async function () {
             selectedWorkOrder = ot;
             cart = [];
+            currentTasks = [];
             renderCart();
 
             document.getElementById("selectedWorkOrderSection").classList.remove("d-none");
             document.getElementById("selectedWorkOrderLabel").innerText = `OT ${ot.number} | Equipo: ${equipo}`;
+
+            document.getElementById("itemsSection").classList.add("d-none");
+            document.getElementById("cartSection").classList.add("d-none");
+            document.getElementById("quantitySection").classList.add("d-none");
+
+            await loadMyTasks();
         };
 
         container.appendChild(col);
@@ -390,6 +414,107 @@ async function loadPendingReceptions() {
 
         container.appendChild(row);
     });
+}
+
+async function loadMyTasks() {
+    if (!selectedWorkOrder || !currentMechanic || !currentMechanic.mechanic_id) {
+        return;
+    }
+
+    const res = await fetch(`/terminal/work-order/${selectedWorkOrder.id}/tasks/${currentMechanic.mechanic_id}`);
+    const data = await res.json();
+
+    const container = document.getElementById("taskList");
+    container.innerHTML = "";
+
+    document.getElementById("taskSection").classList.remove("d-none");
+
+    if (!res.ok) {
+        document.getElementById("noTasks").classList.remove("d-none");
+        return;
+    }
+
+    currentTasks = data.items || [];
+
+    if (!currentTasks.length) {
+        document.getElementById("noTasks").classList.remove("d-none");
+        return;
+    }
+
+    document.getElementById("noTasks").classList.add("d-none");
+
+    currentTasks.forEach(function (task) {
+        const row = document.createElement("div");
+        row.className = "border rounded-3 p-3 mb-2 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3";
+
+        const seconds = Number(task.effective_seconds || 0);
+        const minutes = Math.floor(seconds / 60);
+        const timeLabel = minutes > 0 ? `${minutes} min` : `${seconds} seg`;
+
+        let statusBadge = `<span class="badge text-bg-secondary">${task.status}</span>`;
+        let actionHtml = "";
+
+        if (task.status === "EN_PROCESO") {
+            statusBadge = `<span class="badge text-bg-warning text-dark">EN PROCESO</span>`;
+            actionHtml = `<button class="btn btn-sm btn-success">Solicitar finalizar</button>`;
+        } else if (task.status === "FINALIZACION_SOLICITADA") {
+            statusBadge = `<span class="badge text-bg-primary">PENDIENTE JEFATURA</span>`;
+        } else if (task.status === "FINALIZADA") {
+            statusBadge = `<span class="badge text-bg-success">FINALIZADA</span>`;
+        } else if (task.status === "PAUSADA") {
+            statusBadge = `<span class="badge text-bg-dark">PAUSADA</span>`;
+        }
+
+        const startedAt = task.started_at ? task.started_at.replace("T", " ").slice(0, 16) : "-";
+        const repairType = task.repair_type ? task.repair_type : "-";
+
+        row.innerHTML = `
+            <div>
+                <div class="fw-semibold">${task.title}</div>
+                <div class="small text-muted">Tipo: ${repairType}</div>
+                <div class="small text-muted">Inicio: ${startedAt}</div>
+                <div class="small text-muted">Tiempo acumulado: ${timeLabel}</div>
+            </div>
+            <div class="d-flex flex-column flex-md-row align-items-md-center gap-2">
+                ${statusBadge}
+                ${actionHtml}
+            </div>
+        `;
+
+        const finishBtn = row.querySelector("button");
+
+        if (finishBtn) {
+            finishBtn.onclick = async function () {
+                await requestFinishTask(task.task_id);
+            };
+        }
+
+        container.appendChild(row);
+    });
+}
+
+async function requestFinishTask(taskId) {
+    if (!currentMechanic || !currentMechanic.mechanic_id) {
+        alert("No hay mecánico escaneado.");
+        return;
+    }
+
+    const res = await fetch(`/terminal/tasks/${taskId}/request-finish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            mechanic_id: currentMechanic.mechanic_id
+        })
+    });
+
+    const data = await res.json();
+
+    if (data.ok) {
+        scanStatus.innerText = data.message || "Solicitud de finalización enviada.";
+        await loadMyTasks();
+    } else {
+        alert(data.error || "Error al solicitar finalización.");
+    }
 }
 
 async function loadItems(url, title) {

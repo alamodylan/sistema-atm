@@ -17,6 +17,7 @@ from app.models.work_order import WorkOrder
 from app.models.work_order_line import WorkOrderLine
 from app.models.work_order_task_line import WorkOrderTaskLine
 from app.models.inventory import WarehouseStock
+from app.models.repair_type import RepairType
 from app.services.work_order_service import (
     WorkOrderServiceError,
     close_work_order,
@@ -266,10 +267,10 @@ def get_work_order(work_order_id: int):
                 .all()
             )
 
-        specialties = (
-            MechanicSpecialty.query
-            .filter(MechanicSpecialty.is_active.is_(True))
-            .order_by(MechanicSpecialty.name.asc())
+        repair_types = (
+            RepairType.query
+            .filter(RepairType.is_active.is_(True))
+            .order_by(RepairType.name.asc())
             .all()
         )
 
@@ -277,7 +278,7 @@ def get_work_order(work_order_id: int):
             WorkOrderTaskLine.query
             .options(
                 selectinload(WorkOrderTaskLine.assigned_mechanic),
-                selectinload(WorkOrderTaskLine.specialty),
+                selectinload(WorkOrderTaskLine.repair_type),
             )
             .filter(WorkOrderTaskLine.work_order_id == work_order.id)
             .order_by(WorkOrderTaskLine.created_at.asc())
@@ -292,7 +293,7 @@ def get_work_order(work_order_id: int):
             available_articles=available_articles,
             visible_requests=visible_requests,
             available_mechanics=available_mechanics,
-            specialties=specialties,
+            repair_types=repair_types,
             task_lines=task_lines,
             source=source,
         )
@@ -315,19 +316,19 @@ def get_work_order(work_order_id: int):
 def create_task_line_action(work_order_id: int):
     try:
         title = (request.form.get("title") or "").strip()
-        specialty_id = request.form.get("specialty_id")
+        repair_type_id = request.form.get("repair_type_id")
         mechanic_id = request.form.get("mechanic_id")
         description = request.form.get("description")
 
         if not title:
             raise ValueError("El título del trabajo es obligatorio.")
 
-        if not specialty_id:
-            raise ValueError("Debe seleccionar una especialidad.")
+        if not repair_type_id:
+            raise ValueError("Debe seleccionar un tipo de reparación para el trabajo.")
 
         create_task_line(
             work_order_id=work_order_id,
-            specialty_id=int(specialty_id),
+            repair_type_id=int(repair_type_id),
             title=title,
             description=description,
             assigned_mechanic_id=int(mechanic_id) if mechanic_id else None,
