@@ -177,11 +177,12 @@ def create_work_order_action():
         warehouse_id = request.form.get("warehouse_id")
         repair_type_id = request.form.get("repair_type_id")
         mechanic_id = request.form.get("mechanic_id")
-        task_title = (request.form.get("task_title") or "").strip()
-        task_description = request.form.get("task_description")
         description = request.form.get("description")
         equipment_id = request.form.get("equipment_id")
         equipment_code_snapshot = request.form.get("equipment_code_snapshot")
+        repair_type = RepairType.query.get(int(repair_type_id))
+        task_title = repair_type.name if repair_type else "Trabajo"
+        task_description = None
 
         if not site_id:
             raise ValueError("No hay un predio activo seleccionado.")
@@ -207,7 +208,7 @@ def create_work_order_action():
             repair_type_id=int(repair_type_id),
             mechanic_id=int(mechanic_id),
             task_title=task_title,
-            task_description=task_description,
+            task_description=None,
             description=description,
             equipment_id=int(equipment_id) if equipment_id else None,
             equipment_code_snapshot=equipment_code_snapshot,

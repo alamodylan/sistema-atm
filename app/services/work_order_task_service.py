@@ -8,6 +8,9 @@ from app.models.repair_type_specialty import RepairTypeSpecialty
 from app.models.work_order import WorkOrder
 from app.models.work_order_task_line import WorkOrderTaskLine
 from app.models.work_order_task_line_assignment import WorkOrderTaskLineAssignment
+from datetime import datetime, UTC
+from app.models.work_order_task_line import WorkOrderTaskLine
+from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 
 
 class WorkOrderTaskServiceError(Exception):
