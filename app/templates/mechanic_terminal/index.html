@@ -3,31 +3,34 @@
 {% block content %}
 <div class="container py-4">
     <div class="text-center mb-4">
-        <h3 class="mb-1">Terminal de Taller</h3>
+        <h3 class="mb-1 fw-bold">Terminal de Taller</h3>
         <p class="text-muted mb-0">Escanee el código del mecánico para continuar.</p>
     </div>
 
     <input id="scanner" autofocus style="opacity:0; position:absolute; left:-9999px;">
 
-    <div class="alert alert-info text-center" id="scanStatus">
+    <div class="alert alert-info text-center rounded-4 shadow-sm border-0" id="scanStatus">
         Esperando escaneo...
     </div>
 
     <div id="terminalContent" class="d-none">
 
         <div class="card border-0 shadow-sm rounded-4 mb-4">
-            <div class="card-body d-flex justify-content-between">
+            <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
                 <div>
-                    <h5 id="mechanicName"></h5>
-                    <small id="mechanicCode"></small>
+                    <div class="text-secondary small text-uppercase fw-semibold">Mecánico activo</div>
+                    <h5 id="mechanicName" class="fw-bold mb-1"></h5>
+                    <small id="mechanicCode" class="text-muted"></small>
                 </div>
-                <button class="btn btn-outline-secondary" id="resetTerminalBtn">Nuevo escaneo</button>
+                <button type="button" class="btn btn-outline-secondary rounded-3" id="resetTerminalBtn">
+                    Nuevo escaneo
+                </button>
             </div>
         </div>
 
         <div class="card border-0 shadow-sm rounded-4 mb-4">
-            <div class="card-body">
-                <h5>Órdenes activas</h5>
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-3">Órdenes activas</h5>
                 <div id="workOrdersList" class="row g-3"></div>
                 <div id="noWorkOrders" class="text-muted d-none">
                     Este mecánico no tiene OT en proceso.
@@ -36,10 +39,10 @@
         </div>
 
         <div id="receptionSection" class="card border-0 shadow-sm rounded-4 mb-4 d-none">
-            <div class="card-body">
+            <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                     <div>
-                        <h5 class="mb-1">Recepción de artículos</h5>
+                        <h5 class="fw-bold mb-1">Recepción de artículos</h5>
                         <div id="receptionScanHint" class="small text-primary d-none">
                             Escanee para firmar recepción de la solicitud seleccionada.
                         </div>
@@ -56,21 +59,28 @@
 
         <div id="selectedWorkOrderSection" class="d-none">
             <div class="card border-0 shadow-sm rounded-4 mb-4">
-                <div class="card-body">
-                    <h5 id="selectedWorkOrderLabel"></h5>
+                <div class="card-body p-4">
+                    <div class="text-secondary small text-uppercase fw-semibold">Orden seleccionada</div>
+                    <h5 id="selectedWorkOrderLabel" class="fw-bold mb-3"></h5>
 
                     <div class="d-flex flex-wrap gap-2">
-                        <button class="btn btn-primary" id="loadArticlesBtn">Solicitar artículo</button>
-                        <button class="btn btn-warning" id="loadToolsBtn">Solicitar herramienta</button>
-                        <button class="btn btn-outline-dark" id="loadBorrowedToolsBtn">Devolver herramienta</button>
+                        <button type="button" class="btn btn-primary rounded-3" id="loadArticlesBtn">
+                            Solicitar artículo
+                        </button>
+                        <button type="button" class="btn btn-warning rounded-3" id="loadToolsBtn">
+                            Solicitar herramienta
+                        </button>
+                        <button type="button" class="btn btn-outline-dark rounded-3" id="loadBorrowedToolsBtn">
+                            Devolver herramienta
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
 
         <div id="taskSection" class="card border-0 shadow-sm rounded-4 mb-4 d-none">
-            <div class="card-body">
-                <h5 class="mb-3">Mis trabajos en esta OT</h5>
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-3">Mis trabajos en esta OT</h5>
 
                 <div id="taskList"></div>
 
@@ -81,10 +91,10 @@
         </div>
 
         <div id="itemsSection" class="card border-0 shadow-sm rounded-4 d-none">
-            <div class="card-body">
-                <h5 id="itemsTitle"></h5>
+            <div class="card-body p-4">
+                <h5 id="itemsTitle" class="fw-bold mb-3"></h5>
 
-                <input id="itemsSearch" class="form-control mb-2" placeholder="Buscar...">
+                <input id="itemsSearch" class="form-control mb-3 rounded-3" placeholder="Buscar...">
 
                 <div id="itemsList"></div>
 
@@ -95,18 +105,18 @@
         </div>
 
         <div id="cartSection" class="card border-0 shadow-sm rounded-4 mt-3 d-none">
-            <div class="card-body">
-                <h5>Solicitud</h5>
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-3">Solicitud</h5>
                 <div id="cartList"></div>
-                <button class="btn btn-success mt-2" id="submitRequestBtn">
+                <button type="button" class="btn btn-success rounded-3 mt-3" id="submitRequestBtn">
                     Enviar solicitud
                 </button>
             </div>
         </div>
 
         <div id="quantitySection" class="card border-0 shadow-sm rounded-4 mt-3 d-none">
-            <div class="card-body">
-                <h5>Ingresar cantidad</h5>
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-3">Ingresar cantidad</h5>
                 <div class="mb-2 fw-semibold" id="quantityItemLabel"></div>
 
                 <input type="hidden" id="quantityArticleId">
@@ -115,7 +125,7 @@
                 <input
                     type="number"
                     id="quantityInput"
-                    class="form-control"
+                    class="form-control rounded-3"
                     min="1"
                     step="1"
                     inputmode="numeric"
@@ -124,8 +134,12 @@
                 >
 
                 <div class="d-flex gap-2 mt-3">
-                    <button class="btn btn-success" id="confirmQuantityBtn">Agregar</button>
-                    <button class="btn btn-outline-secondary" id="cancelQuantityBtn">Cancelar</button>
+                    <button type="button" class="btn btn-success rounded-3" id="confirmQuantityBtn">
+                        Agregar
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary rounded-3" id="cancelQuantityBtn">
+                        Cancelar
+                    </button>
                 </div>
             </div>
         </div>
@@ -143,6 +157,7 @@ let currentTasks = [];
 let cart = [];
 let pendingReceptionRequestId = null;
 let receptionMode = false;
+let scannerFocusPausedUntil = 0;
 
 const scannerEl = document.getElementById("scanner");
 const quantitySection = document.getElementById("quantitySection");
@@ -154,7 +169,15 @@ const receptionScanHint = document.getElementById("receptionScanHint");
 const scanStatus = document.getElementById("scanStatus");
 const itemsSearch = document.getElementById("itemsSearch");
 
+function pauseScannerFocus(ms) {
+    scannerFocusPausedUntil = Date.now() + ms;
+}
+
 function canForceScannerFocus() {
+    if (Date.now() < scannerFocusPausedUntil) {
+        return false;
+    }
+
     const activeEl = document.activeElement;
 
     if (!quantitySection.classList.contains("d-none")) {
@@ -170,7 +193,8 @@ function canForceScannerFocus() {
         (
             activeEl.tagName === "INPUT" ||
             activeEl.tagName === "TEXTAREA" ||
-            activeEl.tagName === "SELECT"
+            activeEl.tagName === "SELECT" ||
+            activeEl.tagName === "BUTTON"
         )
     ) {
         return false;
@@ -180,17 +204,36 @@ function canForceScannerFocus() {
 }
 
 function keepScannerFocus() {
-    if (canForceScannerFocus() && document.activeElement !== scannerEl) {
-        scannerEl.focus();
+    if (!canForceScannerFocus()) {
+        return;
+    }
+
+    if (document.activeElement !== scannerEl) {
+        scannerEl.focus({ preventScroll: true });
     }
 }
 
-setInterval(keepScannerFocus, 500);
+setInterval(keepScannerFocus, 1200);
+
+function focusScannerWithoutScroll() {
+    setTimeout(function () {
+        if (scannerEl && canForceScannerFocus()) {
+            scannerEl.focus({ preventScroll: true });
+        }
+    }, 100);
+}
 
 function focusItemsSearch() {
-    if (!itemsSearch) return;
-    itemsSearch.focus();
-    itemsSearch.select();
+    if (!itemsSearch) {
+        return;
+    }
+
+    pauseScannerFocus(1500);
+
+    setTimeout(function () {
+        itemsSearch.focus({ preventScroll: true });
+        itemsSearch.select();
+    }, 80);
 }
 
 function resetTerminal() {
@@ -229,7 +272,7 @@ function resetTerminal() {
         itemsSearch.value = "";
     }
 
-    scannerEl.focus();
+    scannerEl.focus({ preventScroll: true });
 }
 
 async function handleScannerEnter() {
@@ -256,6 +299,7 @@ async function handleScannerEnter() {
         pendingReceptionRequestId = null;
         receptionScanHint.classList.add("d-none");
         scannerInput = "";
+        focusScannerWithoutScroll();
         return;
     }
 
@@ -283,6 +327,7 @@ async function handleScannerEnter() {
     }
 
     scannerInput = "";
+    focusScannerWithoutScroll();
 }
 
 document.addEventListener("keydown", async function (e) {
@@ -305,6 +350,7 @@ document.addEventListener("keydown", async function (e) {
     }
 
     if (e.key === "Enter") {
+        e.preventDefault();
         await handleScannerEnter();
         return;
     }
@@ -331,27 +377,36 @@ function renderWorkOrders() {
         const col = document.createElement("div");
         col.className = "col-12 col-md-6 col-xl-4";
 
-        col.innerHTML = `
-            <button class="btn btn-outline-primary w-100 p-3 text-start">
-                <div class="fw-bold">OT ${ot.number}</div>
-                <div class="small text-muted">Equipo: ${equipo}</div>
-            </button>
-        `;
+        col.innerHTML =
+            '<button type="button" class="btn btn-outline-primary w-100 p-3 text-start rounded-4">' +
+                '<div class="fw-bold">OT ' + ot.number + '</div>' +
+                '<div class="small text-muted">Equipo: ' + equipo + '</div>' +
+            '</button>';
 
-        col.querySelector("button").onclick = async function () {
+        col.querySelector("button").onclick = async function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            pauseScannerFocus(1200);
+
             selectedWorkOrder = ot;
             cart = [];
             currentTasks = [];
             renderCart();
 
             document.getElementById("selectedWorkOrderSection").classList.remove("d-none");
-            document.getElementById("selectedWorkOrderLabel").innerText = `OT ${ot.number} | Equipo: ${equipo}`;
+            document.getElementById("selectedWorkOrderLabel").innerText = "OT " + ot.number + " | Equipo: " + equipo;
 
             document.getElementById("itemsSection").classList.add("d-none");
             document.getElementById("cartSection").classList.add("d-none");
             document.getElementById("quantitySection").classList.add("d-none");
 
             await loadMyTasks();
+
+            document.getElementById("selectedWorkOrderSection").scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+            });
         };
 
         container.appendChild(col);
@@ -363,7 +418,7 @@ async function loadPendingReceptions() {
         return;
     }
 
-    const res = await fetch(`/terminal/pending-receptions/${currentMechanic.mechanic_id}`);
+    const res = await fetch("/terminal/pending-receptions/" + currentMechanic.mechanic_id);
     const data = await res.json();
 
     const container = document.getElementById("receptionList");
@@ -385,31 +440,33 @@ async function loadPendingReceptions() {
 
     data.items.forEach(function (item) {
         const articlesHtml = item.articles.map(function (article) {
-            return `
-                <div class="small text-muted">
-                    ${article.article} | Cantidad: ${article.quantity}
-                </div>
-            `;
+            return (
+                '<div class="small text-muted">' +
+                    article.article + ' | Cantidad: ' + article.quantity +
+                '</div>'
+            );
         }).join("");
 
         const row = document.createElement("div");
-        row.className = "border p-3 mb-2 d-flex justify-content-between align-items-start gap-3";
+        row.className = "border rounded-3 p-3 mb-2 d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 bg-white";
 
-        row.innerHTML = `
-            <div>
-                <div class="fw-semibold">Solicitud #${item.request_id}</div>
-                <div class="small mb-1">OT ${item.work_order} | Equipo: ${item.equipment}</div>
-                ${articlesHtml}
-            </div>
-            <button class="btn btn-sm btn-success">Recibir solicitud</button>
-        `;
+        row.innerHTML =
+            '<div>' +
+                '<div class="fw-semibold">Solicitud #' + item.request_id + '</div>' +
+                '<div class="small mb-1">OT ' + item.work_order + ' | Equipo: ' + item.equipment + '</div>' +
+                articlesHtml +
+            '</div>' +
+            '<button type="button" class="btn btn-sm btn-success rounded-3">Recibir solicitud</button>';
 
-        row.querySelector("button").onclick = function () {
+        row.querySelector("button").onclick = function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
             pendingReceptionRequestId = item.request_id;
             receptionMode = true;
             receptionScanHint.classList.remove("d-none");
-            scanStatus.innerText = `Escanee para firmar recepción de la solicitud #${item.request_id}.`;
-            scannerEl.focus();
+            scanStatus.innerText = "Escanee para firmar recepción de la solicitud #" + item.request_id + ".";
+            scannerEl.focus({ preventScroll: true });
         };
 
         container.appendChild(row);
@@ -421,7 +478,7 @@ async function loadMyTasks() {
         return;
     }
 
-    const res = await fetch(`/terminal/work-order/${selectedWorkOrder.id}/tasks/${currentMechanic.mechanic_id}`);
+    const res = await fetch("/terminal/work-order/" + selectedWorkOrder.id + "/tasks/" + currentMechanic.mechanic_id);
     const data = await res.json();
 
     const container = document.getElementById("taskList");
@@ -445,46 +502,47 @@ async function loadMyTasks() {
 
     currentTasks.forEach(function (task) {
         const row = document.createElement("div");
-        row.className = "border rounded-3 p-3 mb-2 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3";
+        row.className = "border rounded-3 p-3 mb-2 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 bg-white";
 
         const seconds = Number(task.effective_seconds || 0);
         const minutes = Math.floor(seconds / 60);
-        const timeLabel = minutes > 0 ? `${minutes} min` : `${seconds} seg`;
+        const timeLabel = minutes > 0 ? minutes + " min" : seconds + " seg";
 
-        let statusBadge = `<span class="badge text-bg-secondary">${task.status}</span>`;
+        let statusBadge = '<span class="badge text-bg-secondary rounded-pill">' + task.status + '</span>';
         let actionHtml = "";
 
         if (task.status === "EN_PROCESO") {
-            statusBadge = `<span class="badge text-bg-warning text-dark">EN PROCESO</span>`;
-            actionHtml = `<button class="btn btn-sm btn-success">Solicitar finalizar</button>`;
+            statusBadge = '<span class="badge text-bg-warning text-dark rounded-pill">EN PROCESO</span>';
+            actionHtml = '<button type="button" class="btn btn-sm btn-success rounded-3">Solicitar finalizar</button>';
         } else if (task.status === "FINALIZACION_SOLICITADA") {
-            statusBadge = `<span class="badge text-bg-primary">PENDIENTE JEFATURA</span>`;
+            statusBadge = '<span class="badge text-bg-primary rounded-pill">PENDIENTE JEFATURA</span>';
         } else if (task.status === "FINALIZADA") {
-            statusBadge = `<span class="badge text-bg-success">FINALIZADA</span>`;
+            statusBadge = '<span class="badge text-bg-success rounded-pill">FINALIZADA</span>';
         } else if (task.status === "PAUSADA") {
-            statusBadge = `<span class="badge text-bg-dark">PAUSADA</span>`;
+            statusBadge = '<span class="badge text-bg-dark rounded-pill">PAUSADA</span>';
         }
 
         const startedAt = task.started_at ? task.started_at.replace("T", " ").slice(0, 16) : "-";
         const repairType = task.repair_type ? task.repair_type : "-";
 
-        row.innerHTML = `
-            <div>
-                <div class="fw-semibold">${task.title}</div>
-                <div class="small text-muted">Tipo: ${repairType}</div>
-                <div class="small text-muted">Inicio: ${startedAt}</div>
-                <div class="small text-muted">Tiempo acumulado: ${timeLabel}</div>
-            </div>
-            <div class="d-flex flex-column flex-md-row align-items-md-center gap-2">
-                ${statusBadge}
-                ${actionHtml}
-            </div>
-        `;
+        row.innerHTML =
+            '<div>' +
+                '<div class="fw-semibold">' + task.title + '</div>' +
+                '<div class="small text-muted">Tipo: ' + repairType + '</div>' +
+                '<div class="small text-muted">Inicio: ' + startedAt + '</div>' +
+                '<div class="small text-muted">Tiempo acumulado: ' + timeLabel + '</div>' +
+            '</div>' +
+            '<div class="d-flex flex-column flex-md-row align-items-md-center gap-2">' +
+                statusBadge +
+                actionHtml +
+            '</div>';
 
         const finishBtn = row.querySelector("button");
 
         if (finishBtn) {
-            finishBtn.onclick = async function () {
+            finishBtn.onclick = async function (e) {
+                e.preventDefault();
+                e.stopPropagation();
                 await requestFinishTask(task.task_id);
             };
         }
@@ -499,7 +557,7 @@ async function requestFinishTask(taskId) {
         return;
     }
 
-    const res = await fetch(`/terminal/tasks/${taskId}/request-finish`, {
+    const res = await fetch("/terminal/tasks/" + taskId + "/request-finish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -518,6 +576,13 @@ async function requestFinishTask(taskId) {
 }
 
 async function loadItems(url, title) {
+    if (!selectedWorkOrder) {
+        alert("Debe seleccionar una OT.");
+        return;
+    }
+
+    pauseScannerFocus(1500);
+
     document.getElementById("itemsTitle").innerText = title;
 
     const res = await fetch(url);
@@ -537,18 +602,31 @@ async function loadItems(url, title) {
     renderItems();
     document.getElementById("itemsSection").classList.remove("d-none");
 
-    setTimeout(function () {
-        focusItemsSearch();
-    }, 50);
+    document.getElementById("itemsSection").scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+    });
+
+    focusItemsSearch();
 }
 
 function openQuantityForItem(item) {
+    pauseScannerFocus(2000);
+
     quantityArticleId.value = item.article_id;
     quantityArticleName.value = item.name;
     quantityItemLabel.innerText = item.code + " - " + item.name;
     quantityInput.value = "";
     quantitySection.classList.remove("d-none");
-    quantityInput.focus();
+
+    quantitySection.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+    });
+
+    setTimeout(function () {
+        quantityInput.focus({ preventScroll: true });
+    }, 150);
 }
 
 function renderItemRows(items) {
@@ -564,14 +642,15 @@ function renderItemRows(items) {
 
     items.forEach(function (item) {
         const row = document.createElement("div");
-        row.className = "border p-2 mb-1 d-flex justify-content-between align-items-center";
+        row.className = "border rounded-3 p-2 mb-2 d-flex justify-content-between align-items-center bg-white";
 
-        row.innerHTML = `
-            <div>${item.code} - ${item.name}</div>
-            <button class="btn btn-sm btn-success">Agregar</button>
-        `;
+        row.innerHTML =
+            '<div>' + item.code + ' - ' + item.name + '</div>' +
+            '<button type="button" class="btn btn-sm btn-success rounded-3">Agregar</button>';
 
-        row.querySelector("button").onclick = function () {
+        row.querySelector("button").onclick = function (e) {
+            e.preventDefault();
+            e.stopPropagation();
             openQuantityForItem(item);
         };
 
@@ -596,12 +675,13 @@ function renderCart() {
         const row = document.createElement("div");
         row.className = "d-flex justify-content-between align-items-center border-bottom py-2";
 
-        row.innerHTML = `
-            <div>${c.name} - ${c.quantity}</div>
-            <button class="btn btn-sm btn-danger ms-2">X</button>
-        `;
+        row.innerHTML =
+            '<div>' + c.name + ' - ' + c.quantity + '</div>' +
+            '<button type="button" class="btn btn-sm btn-danger rounded-3 ms-2">X</button>';
 
-        row.querySelector("button").onclick = function () {
+        row.querySelector("button").onclick = function (e) {
+            e.preventDefault();
+            e.stopPropagation();
             cart.splice(i, 1);
             renderCart();
         };
@@ -612,7 +692,10 @@ function renderCart() {
     document.getElementById("cartSection").classList.remove("d-none");
 }
 
-document.getElementById("confirmQuantityBtn").onclick = function () {
+document.getElementById("confirmQuantityBtn").onclick = function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+
     const quantityValue = quantityInput.value.trim();
 
     if (!quantityValue) {
@@ -636,21 +719,35 @@ document.getElementById("confirmQuantityBtn").onclick = function () {
     quantitySection.classList.add("d-none");
     renderCart();
 
-    setTimeout(function () {
-        focusItemsSearch();
-    }, 50);
+    document.getElementById("cartSection").scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+    });
+
+    focusItemsSearch();
 };
 
-document.getElementById("cancelQuantityBtn").onclick = function () {
+document.getElementById("cancelQuantityBtn").onclick = function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+
     quantitySection.classList.add("d-none");
-
-    setTimeout(function () {
-        focusItemsSearch();
-    }, 50);
+    focusItemsSearch();
 };
 
-document.getElementById("submitRequestBtn").onclick = async function () {
+document.getElementById("submitRequestBtn").onclick = async function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    pauseScannerFocus(2000);
+
     if (!selectedWorkOrder) {
+        alert("Debe seleccionar una OT.");
+        return;
+    }
+
+    if (!currentMechanic || !currentMechanic.mechanic_id) {
+        alert("No hay mecánico escaneado.");
         return;
     }
 
@@ -659,7 +756,11 @@ document.getElementById("submitRequestBtn").onclick = async function () {
         return;
     }
 
-    const res = await fetch(`/terminal/work-orders/${selectedWorkOrder.id}/requests/submit`, {
+    const button = this;
+    button.disabled = true;
+    button.innerText = "Enviando...";
+
+    const res = await fetch("/terminal/work-orders/" + selectedWorkOrder.id + "/requests/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -671,25 +772,42 @@ document.getElementById("submitRequestBtn").onclick = async function () {
     const data = await res.json();
 
     if (data.ok) {
-        resetTerminal();
+        scanStatus.innerText = data.message || "Solicitud enviada correctamente.";
+        cart = [];
+        renderCart();
+        await loadPendingReceptions();
+        button.disabled = false;
+        button.innerText = "Enviar solicitud";
     } else {
+        button.disabled = false;
+        button.innerText = "Enviar solicitud";
         alert(data.error || "Error al enviar solicitud.");
     }
 };
 
-document.getElementById("loadArticlesBtn").onclick = function () {
-    loadItems(`/terminal/articles/${selectedWorkOrder.warehouse_id}`, "Solicitar artículo");
+document.getElementById("loadArticlesBtn").onclick = function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    loadItems("/terminal/articles/" + selectedWorkOrder.warehouse_id, "Solicitar artículo");
 };
 
-document.getElementById("loadToolsBtn").onclick = function () {
-    loadItems(`/terminal/tools/${selectedWorkOrder.warehouse_id}`, "Solicitar herramienta");
+document.getElementById("loadToolsBtn").onclick = function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    loadItems("/terminal/tools/" + selectedWorkOrder.warehouse_id, "Solicitar herramienta");
 };
 
-document.getElementById("loadBorrowedToolsBtn").onclick = function () {
-    loadItems(`/terminal/borrowed-tools/${selectedWorkOrder.id}`, "Devolver herramienta");
+document.getElementById("loadBorrowedToolsBtn").onclick = function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    loadItems("/terminal/borrowed-tools/" + selectedWorkOrder.id, "Devolver herramienta");
 };
 
-document.getElementById("resetTerminalBtn").onclick = resetTerminal;
+document.getElementById("resetTerminalBtn").onclick = function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    resetTerminal();
+};
 
 itemsSearch.addEventListener("input", function () {
     const term = this.value.toLowerCase().trim();
@@ -707,5 +825,7 @@ itemsSearch.addEventListener("input", function () {
 
     renderItemRows(filtered);
 });
+
+scannerEl.focus({ preventScroll: true });
 </script>
 {% endblock %}
