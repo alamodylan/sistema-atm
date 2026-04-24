@@ -20,6 +20,13 @@ class Article(db.Model):
         index=True,
     )
 
+    subcategory_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("atm.item_subcategories.id"),
+        nullable=True,
+        index=True,
+    )
+
     unit_id = db.Column(
         db.BigInteger,
         db.ForeignKey("atm.units.id"),
@@ -55,6 +62,8 @@ class Article(db.Model):
     )
 
     category = db.relationship("ItemCategory", back_populates="articles")
+    subcategory = db.relationship("ItemSubcategory", back_populates="articles")
+
     unit = db.relationship("Unit", back_populates="articles")
     created_by_user = db.relationship("User")
 

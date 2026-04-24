@@ -21,5 +21,11 @@ class ItemCategory(db.Model):
         lazy="dynamic",
     )
 
+    subcategories = db.relationship(
+        "ItemSubcategory",
+        back_populates="category",
+        lazy="dynamic",
+    )
+
     def __repr__(self) -> str:
         return f"<ItemCategory {self.code} - {self.name}>"

@@ -49,6 +49,8 @@ from .work_order_service import WorkOrderService
 from .work_order_task_line import WorkOrderTaskLine
 from .work_order_task_line_assignment import WorkOrderTaskLineAssignment
 from .work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
+from .item_category import ItemCategory
+from .item_subcategory import ItemSubcategory
 
 __all__ = [
     "Role",
@@ -105,4 +107,6 @@ __all__ = [
     "WorkOrderTaskLine",
     "WorkOrderTaskLineAssignment",
     "WorkOrderTaskLineFinishRequest",
+    "ItemCategory",
+    "ItemSubcategory",
 ]

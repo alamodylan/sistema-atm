@@ -12,6 +12,7 @@ from app.models.site import Site
 from app.models.unit import Unit
 from app.models.warehouse import Warehouse
 from app.models.warehouse_location import WarehouseLocation
+from app.models.item_subcategory import ItemSubcategory
 
 # Si ya tienes supplier.py, esto funcionará de una vez.
 # Si aún no existe el modelo, la carga de proveedores fallará con un mensaje claro.
@@ -373,21 +374,42 @@ def import_locations(rows: list[dict], *, site_id: int) -> dict:
 # =========================================================
 # ARTÍCULOS (GLOBAL)
 # =========================================================
+
+
 def import_articles(rows: list[dict]) -> dict:
     created = 0
     updated = 0
     skipped = 0
+
+    # CACHE para evitar consultas por cada fila
+    units_map = {u.code: u for u in Unit.query.all()}
+    categories_map = {c.code: c for c in ItemCategory.query.all()}
+
+    subcategories_map = {}
+    for sc in ItemSubcategory.query.all():
+        key = (sc.category_id, sc.name.lower())
+        subcategories_map[key] = sc
+
+    articles_map = {a.code: a for a in Article.query.all()}
+    barcodes_map = {a.barcode: a for a in Article.query.all() if a.barcode}
+
+    BATCH_SIZE = 200
+    counter = 0
 
     for row in rows:
         try:
             code = _clean(row.get("codigo"))
             name = _clean(row.get("nombre"))
             unit_code = _clean(row.get("codigo_unidad"))
+
             category_code = _clean(row.get("codigo_categoria"))
+            category_name = _clean(row.get("nombre_categoria"))
+            subcategory_name = _clean(row.get("nombre_subcategoria"))
+
             description = _clean(row.get("descripcion")) or None
-            family_code = _clean(row.get("codigo_familia")) or None
             barcode = _clean(row.get("codigo_barras")) or None
             sap_code = _clean(row.get("codigo_sap")) or None
+
             is_tool = _parse_bool(row.get("es_herramienta"))
             is_active = _parse_bool(row.get("activo"))
 
@@ -395,60 +417,114 @@ def import_articles(rows: list[dict]) -> dict:
                 skipped += 1
                 continue
 
-            unit = Unit.query.filter_by(code=unit_code).first()
+            # =========================================================
+            # UNIDAD
+            # =========================================================
+            unit = units_map.get(unit_code)
             if not unit:
                 skipped += 1
                 continue
 
+            # =========================================================
+            # CATEGORÍA / FAMILIA
+            # Si no existe, se crea automáticamente.
+            # =========================================================
             category = None
-            if category_code:
-                category = ItemCategory.query.filter_by(code=category_code).first()
+
+            if category_code or category_name:
+                if not category_code:
+                    category_code = category_name.strip().upper().replace(" ", "_")[:50]
+
+                category = categories_map.get(category_code)
+
                 if not category:
-                    skipped += 1
-                    continue
+                    category = ItemCategory(
+                        code=category_code,
+                        name=category_name or category_code,
+                        description=None,
+                    )
+                    db.session.add(category)
+                    db.session.flush()
 
-            article = Article.query.filter_by(code=code).first()
+                    categories_map[category_code] = category
 
-            # Validación simple para barcode único
+            # =========================================================
+            # SUBCATEGORÍA / SUBFAMILIA
+            # Si no existe dentro de la categoría, se crea automáticamente.
+            # =========================================================
+            subcategory = None
+
+            if subcategory_name and category:
+                key = (category.id, subcategory_name.lower())
+                subcategory = subcategories_map.get(key)
+
+                if not subcategory:
+                    subcategory = ItemSubcategory(
+                        category_id=category.id,
+                        name=subcategory_name,
+                    )
+                    db.session.add(subcategory)
+                    db.session.flush()
+
+                    subcategories_map[key] = subcategory
+
+            # =========================================================
+            # VALIDACIÓN BARCODE ÚNICO
+            # =========================================================
             if barcode:
-                barcode_owner = Article.query.filter_by(barcode=barcode).first()
-                if barcode_owner and (not article or barcode_owner.id != article.id):
+                barcode_owner = barcodes_map.get(barcode)
+                if barcode_owner and barcode_owner.code != code:
                     skipped += 1
                     continue
+
+            # =========================================================
+            # CREAR / ACTUALIZAR ARTÍCULO
+            # =========================================================
+            article = articles_map.get(code)
 
             if article:
                 article.name = name
                 article.description = description
                 article.unit_id = unit.id
                 article.category_id = category.id if category else None
-                article.family_code = family_code
+                article.subcategory_id = subcategory.id if subcategory else None
                 article.barcode = barcode
                 article.sap_code = sap_code
                 article.is_tool = is_tool
                 article.is_active = is_active
                 updated += 1
             else:
-                db.session.add(
-                    Article(
-                        code=code,
-                        name=name,
-                        description=description,
-                        unit_id=unit.id,
-                        category_id=category.id if category else None,
-                        family_code=family_code,
-                        barcode=barcode,
-                        sap_code=sap_code,
-                        is_tool=is_tool,
-                        is_active=is_active,
-                    )
+                article = Article(
+                    code=code,
+                    name=name,
+                    description=description,
+                    unit_id=unit.id,
+                    category_id=category.id if category else None,
+                    subcategory_id=subcategory.id if subcategory else None,
+                    barcode=barcode,
+                    sap_code=sap_code,
+                    is_tool=is_tool,
+                    is_active=is_active,
                 )
+                db.session.add(article)
+                articles_map[code] = article
                 created += 1
 
+            if barcode:
+                barcodes_map[barcode] = article
+
+            counter += 1
+
+            if counter % BATCH_SIZE == 0:
+                db.session.commit()
+
         except Exception:
+            db.session.rollback()
             skipped += 1
             continue
 
     db.session.commit()
+
     return {"created": created, "updated": updated, "skipped": skipped}
 
 
