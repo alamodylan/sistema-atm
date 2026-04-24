@@ -4,7 +4,7 @@
 
 {% block content %}
 {% set title = "Nueva Orden de Trabajo" %}
-{% set subtitle = "Cree una orden de trabajo con responsable, bodega, equipo y mecánicos asignados." %}
+{% set subtitle = "Cree una orden de trabajo con responsable, bodega, equipo y tipo de reparación." %}
 {% include 'components/page_header.html' with context %}
 
 <div class="card border-0 shadow-sm rounded-4">
@@ -14,6 +14,7 @@
 
             <div class="row g-4">
 
+                <!-- BODEGA -->
                 <div class="col-12 col-md-6">
                     <label class="form-label fw-semibold">Bodega</label>
                     <select class="form-select" name="warehouse_id" required>
@@ -28,6 +29,7 @@
                     </select>
                 </div>
 
+                <!-- RESPONSABLE -->
                 <div class="col-12 col-md-6">
                     <label class="form-label fw-semibold">Responsable</label>
                     <input
@@ -38,25 +40,30 @@
                     >
                 </div>
 
+                <!-- 🔥 TIPO REPARACIÓN -->
                 <div class="col-12 col-md-6">
                     <label class="form-label fw-semibold">Tipo de reparación</label>
-                    <select class="form-select" name="service_id" required>
+                    <select class="form-select" name="repair_type_id" id="repair_type_select" required>
                         <option value="">Seleccione...</option>
-                        {% if services %}
-                            {% for service in services %}
-                                <option value="{{ service.id }}">
-                                    {{ service.code }} - {{ service.name }}{% if service.category %} - {{ service.category }}{% endif %}
+                        {% if repair_types %}
+                            {% for rt in repair_types %}
+                                <option value="{{ rt.id }}">
+                                    {{ rt.name }}
                                 </option>
                             {% endfor %}
                         {% endif %}
                     </select>
-                    {% if not services %}
-                        <div class="form-text text-danger">
-                            No hay tipos de reparación activos para mostrar.
-                        </div>
-                    {% endif %}
                 </div>
 
+                <!-- 🔥 MECÁNICO DINÁMICO -->
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold">Mecánico</label>
+                    <select class="form-select" name="mechanic_id" id="mechanic_select" required disabled>
+                        <option value="">Seleccione tipo de reparación primero</option>
+                    </select>
+                </div>
+
+                <!-- EQUIPO -->
                 <div class="col-12 col-md-6">
                     <label class="form-label fw-semibold">Equipo (opcional)</label>
                     <input type="hidden" name="equipment_id" id="equipment_id" value="">
@@ -79,60 +86,38 @@
                             {% endfor %}
                         {% endif %}
                     </datalist>
-                    <div class="form-text">
-                        Empiece a escribir el código o la descripción del equipo y seleccione una coincidencia.
-                    </div>
                 </div>
 
+                <!-- 🔥 TÍTULO TRABAJO -->
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Notas del tipo de reparación (opcional)</label>
+                    <label class="form-label fw-semibold">Trabajo a realizar</label>
+                    <input
+                        type="text"
+                        class="form-control"
+                        name="task_title"
+                        placeholder="Ej: Soldadura de chasis"
+                        required
+                    >
+                </div>
+
+                <!-- 🔥 DETALLE TRABAJO -->
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Detalle del trabajo</label>
                     <textarea
                         class="form-control"
-                        name="service_notes"
+                        name="task_description"
                         rows="2"
-                        placeholder="Notas adicionales para el tipo de reparación seleccionado..."
                     ></textarea>
                 </div>
 
+                <!-- OBSERVACIONES -->
                 <div class="col-12">
                     <label class="form-label fw-semibold">Observaciones generales (opcional)</label>
                     <textarea
                         class="form-control"
                         name="description"
                         rows="3"
-                        placeholder="Observaciones generales de la orden..."
                     ></textarea>
-                </div>
-
-                <div class="col-12">
-                    <label class="form-label fw-semibold">Mecánicos asignados</label>
-                    <div class="row g-2">
-                        {% if mechanics %}
-                            {% for mechanic in mechanics %}
-                                <div class="col-12 col-md-4">
-                                    <div class="form-check border rounded-3 px-3 py-2 bg-white">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            name="mechanics"
-                                            value="{{ mechanic.id }}"
-                                            id="mec{{ mechanic.id }}"
-                                        >
-                                        <label class="form-check-label fw-medium" for="mec{{ mechanic.id }}">
-                                            {{ mechanic.name }}
-                                        </label>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="col-12">
-                                <div class="alert alert-warning mb-0">
-                                    No hay mecánicos disponibles para asignar.
-                                </div>
-                            </div>
-                        {% endif %}
-                    </div>
-                    <div class="form-text">Debe seleccionar al menos un mecánico.</div>
                 </div>
 
             </div>
@@ -146,26 +131,66 @@
 </div>
 
 <script>
-    document.addEventListener("DOMContentLoaded", function () {
-        const equipmentInput = document.getElementById("equipment_search");
-        const equipmentIdInput = document.getElementById("equipment_id");
-        const equipmentOptions = document.querySelectorAll("#equipment_list option");
+document.addEventListener("DOMContentLoaded", function () {
 
-        function syncEquipmentSelection() {
-            const selectedValue = equipmentInput.value.trim();
-            let selectedId = "";
+    const equipmentInput = document.getElementById("equipment_search");
+    const equipmentIdInput = document.getElementById("equipment_id");
+    const equipmentOptions = document.querySelectorAll("#equipment_list option");
 
-            equipmentOptions.forEach(function (option) {
-                if (option.value === selectedValue) {
-                    selectedId = option.dataset.id || "";
-                }
-            });
+    const repairTypeSelect = document.getElementById("repair_type_select");
+    const mechanicSelect = document.getElementById("mechanic_select");
 
-            equipmentIdInput.value = selectedId;
+    const repairTypeMechanicsMap = JSON.parse(
+        '{{ repair_type_mechanics_map | default({}) | tojson | safe }}'
+    );
+
+    function syncEquipmentSelection() {
+        const selectedValue = equipmentInput.value.trim();
+        let selectedId = "";
+
+        equipmentOptions.forEach(function (option) {
+            if (option.value === selectedValue) {
+                selectedId = option.dataset.id || "";
+            }
+        });
+
+        equipmentIdInput.value = selectedId;
+    }
+
+    equipmentInput.addEventListener("input", syncEquipmentSelection);
+    equipmentInput.addEventListener("change", syncEquipmentSelection);
+
+    repairTypeSelect.addEventListener("change", function () {
+        const repairTypeId = this.value;
+
+        mechanicSelect.innerHTML = "";
+
+        if (!repairTypeId || !repairTypeMechanicsMap[repairTypeId]) {
+            mechanicSelect.innerHTML = '<option value="">Sin mecánicos disponibles</option>';
+            mechanicSelect.disabled = true;
+            return;
         }
 
-        equipmentInput.addEventListener("input", syncEquipmentSelection);
-        equipmentInput.addEventListener("change", syncEquipmentSelection);
+        const mechanics = repairTypeMechanicsMap[repairTypeId];
+
+        if (!mechanics.length) {
+            mechanicSelect.innerHTML = '<option value="">No hay mecánicos para este tipo</option>';
+            mechanicSelect.disabled = true;
+            return;
+        }
+
+        mechanicSelect.disabled = false;
+        mechanicSelect.innerHTML = '<option value="">Seleccione...</option>';
+
+        mechanics.forEach(function (m) {
+            const option = document.createElement("option");
+            option.value = m.id;
+            option.textContent = m.name + " (" + m.code + ")";
+            mechanicSelect.appendChild(option);
+        });
     });
+
+});
 </script>
+
 {% endblock %}

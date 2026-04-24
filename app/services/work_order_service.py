@@ -4,16 +4,13 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.extensions import db
-from app.models.article import Article
-from app.models.mechanic import Mechanic
-from app.models.service_catalog import ServiceCatalog
 from app.models.tool_loan import ToolLoan
 from app.models.work_order import WorkOrder
 from app.models.work_order_line import WorkOrderLine
 from app.models.work_order_request_line import WorkOrderRequestLine
-from app.models.work_order_service import WorkOrderService
 from app.services.audit_service import log_action
 from app.services.inventory_service import InventoryServiceError, subtract_stock
+from app.services.work_order_task_service import create_task_line
 
 
 class WorkOrderServiceError(Exception):
@@ -53,9 +50,10 @@ def create_work_order(
     warehouse_id: int,
     responsible_user_id: int,
     created_by_user_id: int,
-    mechanic_ids: list[int],
-    service_id: int,
-    service_notes: str | None = None,
+    repair_type_id: int,
+    mechanic_id: int,
+    task_title: str,
+    task_description: str | None = None,
     description: str | None = None,
     equipment_id: int | None = None,
     equipment_code_snapshot: str | None = None,
@@ -72,30 +70,18 @@ def create_work_order(
     if not responsible_user_id:
         raise WorkOrderServiceError("El responsable es obligatorio.")
 
-    if not mechanic_ids:
-        raise WorkOrderServiceError("Debe seleccionar al menos un mecánico.")
-
-    if not service_id:
+    if not repair_type_id:
         raise WorkOrderServiceError("Debe seleccionar un tipo de reparación.")
+
+    if not mechanic_id:
+        raise WorkOrderServiceError("Debe seleccionar un mecánico.")
+
+    if not task_title or not task_title.strip():
+        raise WorkOrderServiceError("Debe indicar el trabajo a realizar.")
 
     existing = WorkOrder.query.filter_by(number=generated_number).first()
     if existing:
         raise WorkOrderServiceError("Ya existe una orden de trabajo con ese número.")
-
-    mechanics = Mechanic.query.filter(Mechanic.id.in_(mechanic_ids)).all()
-    if len(mechanics) != len(set(mechanic_ids)):
-        raise WorkOrderServiceError("Uno o más mecánicos seleccionados no existen.")
-
-    service = (
-        ServiceCatalog.query
-        .filter(
-            ServiceCatalog.id == service_id,
-            ServiceCatalog.is_active.is_(True),
-        )
-        .first()
-    )
-    if not service:
-        raise WorkOrderServiceError("El tipo de reparación seleccionado no existe o está inactivo.")
 
     work_order = WorkOrder(
         number=generated_number,
@@ -106,21 +92,21 @@ def create_work_order(
         created_by_user_id=created_by_user_id,
         description=(description or "").strip() or None,
         equipment_id=equipment_id,
-        equipment_code_snapshot=equipment_code_snapshot,
+        equipment_code_snapshot=(equipment_code_snapshot or "").strip() or None,
     )
-
-    work_order.mechanics = mechanics
 
     db.session.add(work_order)
     db.session.flush()
 
-    work_order_service = WorkOrderService(
+    create_task_line(
         work_order_id=work_order.id,
-        service_id=service_id,
-        notes=(service_notes or "").strip() or None,
+        repair_type_id=repair_type_id,
+        title=task_title.strip(),
+        description=(task_description or "").strip() or None,
+        assigned_mechanic_id=mechanic_id,
         created_by_user_id=created_by_user_id,
+        commit=False,
     )
-    db.session.add(work_order_service)
 
     if commit:
         db.session.commit()
@@ -135,9 +121,10 @@ def create_work_order(
             "site_id": site_id,
             "warehouse_id": warehouse_id,
             "responsible_user_id": responsible_user_id,
-            "mechanic_ids": mechanic_ids,
             "equipment_id": equipment_id,
-            "service_id": service_id,
+            "repair_type_id": repair_type_id,
+            "mechanic_id": mechanic_id,
+            "task_title": task_title,
         },
         commit=commit,
     )
@@ -250,6 +237,17 @@ def finalize_work_order(
     if has_open_loans:
         raise WorkOrderServiceError(
             "No se puede finalizar la OT porque tiene herramientas prestadas."
+        )
+
+    pending_tasks = [
+        task_line
+        for task_line in work_order.task_lines
+        if task_line.status not in ("FINALIZADA", "CANCELADA")
+    ]
+
+    if pending_tasks:
+        raise WorkOrderServiceError(
+            "No se puede finalizar la OT porque tiene trabajos pendientes."
         )
 
     work_order.status = "FINALIZADA"
