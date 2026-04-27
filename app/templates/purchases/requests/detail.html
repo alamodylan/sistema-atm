@@ -17,6 +17,56 @@
         </div>
     </div>
 
+    {% if purchase_request.status == 'BORRADOR' %}
+    <form method="POST" action="{{ url_for('purchases.send_request', request_id=purchase_request.id) }}">
+        <button class="btn btn-success rounded-3">
+            <i class="bi bi-send me-2"></i>Enviar solicitud
+        </button>
+    </form>
+    {% endif %}
+
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4">
+            <h6 class="fw-bold mb-3">Seguimiento de proceso</h6>
+
+            <div class="d-flex flex-wrap gap-2">
+                <span class="badge {{ 'text-bg-success' if purchase_request.status in ['BORRADOR', 'ENVIADA', 'EN_REVISION_PROVEEDURIA', 'PARCIALMENTE_COTIZADA', 'COTIZADA', 'CONVERTIDA_A_OC', 'CERRADA'] else 'text-bg-secondary' }}">
+                    Solicitud creada
+                </span>
+
+                <span class="badge {{ 'text-bg-success' if purchase_request.status in ['ENVIADA', 'EN_REVISION_PROVEEDURIA', 'PARCIALMENTE_COTIZADA', 'COTIZADA', 'CONVERTIDA_A_OC', 'CERRADA'] else 'text-bg-secondary' }}">
+                    Enviada
+                </span>
+
+                <span class="badge {{ 'text-bg-success' if purchase_request.status in ['EN_REVISION_PROVEEDURIA', 'PARCIALMENTE_COTIZADA', 'COTIZADA', 'CONVERTIDA_A_OC', 'CERRADA'] else 'text-bg-secondary' }}">
+                    Revisión proveeduría
+                </span>
+
+                <span class="badge {{ 'text-bg-success' if purchase_request.status in ['PARCIALMENTE_COTIZADA', 'COTIZADA', 'CONVERTIDA_A_OC', 'CERRADA'] else 'text-bg-secondary' }}">
+                    Cotización iniciada
+                </span>
+
+                <span class="badge {{ 'text-bg-success' if purchase_request.status in ['COTIZADA', 'CONVERTIDA_A_OC', 'CERRADA'] else 'text-bg-secondary' }}">
+                    Cotizada
+                </span>
+
+                <span class="badge {{ 'text-bg-success' if purchase_request.status in ['CONVERTIDA_A_OC', 'CERRADA'] else 'text-bg-secondary' }}">
+                    Orden de compra
+                </span>
+
+                <span class="badge {{ 'text-bg-success' if purchase_request.status == 'CERRADA' else 'text-bg-secondary' }}">
+                    Recibido / cerrado
+                </span>
+
+                {% if purchase_request.status == 'CANCELADA' %}
+                <span class="badge text-bg-danger">
+                    Cancelada
+                </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
     <div class="row g-4">
         <div class="col-12 col-xl-4">
             <div class="card border-0 shadow-sm rounded-4">
@@ -29,7 +79,21 @@
 
                         <dt class="col-5 text-muted">Estado</dt>
                         <dd class="col-7">
-                            <span class="badge text-bg-secondary">{{ purchase_request.status }}</span>
+                            {% set status = purchase_request.status %}
+                            <span class="badge
+                                {% if status == 'BORRADOR' %} text-bg-secondary
+                                {% elif status == 'ENVIADA' %} text-bg-primary
+                                {% elif status == 'EN_REVISION_PROVEEDURIA' %} text-bg-info
+                                {% elif status == 'PARCIALMENTE_COTIZADA' %} text-bg-warning
+                                {% elif status == 'COTIZADA' %} text-bg-success
+                                {% elif status == 'CONVERTIDA_A_OC' %} text-bg-dark
+                                {% elif status == 'CERRADA' %} text-bg-success
+                                {% elif status == 'CANCELADA' %} text-bg-danger
+                                {% else %} text-bg-secondary
+                                {% endif %}
+                            ">
+                                {{ status }}
+                            </span>
                         </dd>
 
                         <dt class="col-5 text-muted">Prioridad</dt>
@@ -123,6 +187,29 @@
                                         <div class="fw-semibold text-dark">{{ item.number }}</div>
                                         <small class="text-muted">
                                             {{ item.quote_date.strftime('%d/%m/%Y') if item.quote_date else '-' }}
+                                        </small>
+                                    </div>
+                                    <i class="bi bi-arrow-right text-dark"></i>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if purchase_request.purchase_orders %}
+                <div class="card border-0 shadow-sm rounded-4 mt-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3">Órdenes de compra relacionadas</h5>
+
+                        <div class="d-flex flex-column gap-2">
+                            {% for order in purchase_request.purchase_orders %}
+                                <a href="{{ url_for('purchases.order_detail', order_id=order.id) }}"
+                                   class="text-decoration-none border rounded-3 p-3 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="fw-semibold text-dark">{{ order.number }}</div>
+                                        <small class="text-muted">
+                                            {{ order.created_at.strftime('%d/%m/%Y') if order.created_at else '-' }}
                                         </small>
                                     </div>
                                     <i class="bi bi-arrow-right text-dark"></i>

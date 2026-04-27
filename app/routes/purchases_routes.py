@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
+from app.extensions import db
 
 from flask import (
     Blueprint,
@@ -135,8 +136,26 @@ def list_requests():
 @purchases_bp.route("/requests/create", methods=["GET", "POST"])
 @login_required
 def create_request():
-    articles = Article.query.filter_by(is_active=True).order_by(Article.code.asc()).all()
-    pending_articles = PendingArticle.query.order_by(PendingArticle.created_at.desc()).all()
+    search = (request.args.get("search") or "").strip()
+
+    articles_query = Article.query.filter(Article.is_active.is_(True))
+
+    if search:
+        search_like = f"%{search}%"
+        articles_query = articles_query.filter(
+            db.or_(
+                Article.code.ilike(search_like),
+                Article.name.ilike(search_like),
+            )
+        )
+
+    articles = (
+        articles_query
+        .order_by(Article.code.asc())
+        .limit(200)
+        .all()
+    )
+
     units = Unit.query.order_by(Unit.id.asc()).all()
     sites = Site.query.filter_by(is_active=True).order_by(Site.name.asc()).all()
     warehouses = Warehouse.query.filter_by(is_active=True).order_by(Warehouse.name.asc()).all()
@@ -188,10 +207,10 @@ def create_request():
                 return render_template(
                     "purchases/requests/create.html",
                     articles=articles,
-                    pending_articles=pending_articles,
                     units=units,
                     sites=sites,
                     warehouses=warehouses,
+                    search=search,
                 )
 
             article_id: int | None = None
@@ -212,10 +231,10 @@ def create_request():
                     return render_template(
                         "purchases/requests/create.html",
                         articles=articles,
-                        pending_articles=pending_articles,
                         units=units,
                         sites=sites,
                         warehouses=warehouses,
+                        search=search,
                     )
 
             elif article_id_raw:
@@ -249,10 +268,10 @@ def create_request():
             return render_template(
                 "purchases/requests/create.html",
                 articles=articles,
-                pending_articles=pending_articles,
                 units=units,
                 sites=sites,
                 warehouses=warehouses,
+                search=search,
             )
 
         flash("Solicitud de compra creada correctamente.", "success")
@@ -261,10 +280,10 @@ def create_request():
     return render_template(
         "purchases/requests/create.html",
         articles=articles,
-        pending_articles=pending_articles,
         units=units,
         sites=sites,
         warehouses=warehouses,
+        search=search,
     )
 
 
@@ -277,6 +296,25 @@ def request_detail(request_id: int):
         purchase_request=purchase_request,
     )
 
+@purchases_bp.route("/requests/<int:request_id>/send", methods=["POST"])
+@login_required
+def send_request(request_id: int):
+    purchase_request = get_purchase_request_or_404(request_id)
+
+    if purchase_request.status != "BORRADOR":
+        flash("Solo se pueden enviar solicitudes en estado BORRADOR.", "warning")
+        return redirect(url_for("purchases.request_detail", request_id=request_id))
+
+    if not purchase_request.lines:
+        flash("La solicitud no tiene líneas.", "danger")
+        return redirect(url_for("purchases.request_detail", request_id=request_id))
+
+    purchase_request.status = "ENVIADA"
+
+    db.session.commit()
+
+    flash("Solicitud enviada correctamente.", "success")
+    return redirect(url_for("purchases.request_detail", request_id=request_id))
 
 # =========================
 # PENDING ARTICLES
