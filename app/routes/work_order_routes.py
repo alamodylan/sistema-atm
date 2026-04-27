@@ -43,44 +43,65 @@ def _build_repair_type_mechanics_map(site_id: int):
         .all()
     )
 
-    repair_type_mechanics_map = {}
+    repair_type_ids = [repair_type.id for repair_type in repair_types]
 
-    for repair_type in repair_types:
-        specialty_ids = [
-            assignment.specialty_id
-            for assignment in RepairTypeSpecialty.query.filter_by(
-                repair_type_id=repair_type.id
-            ).all()
-        ]
+    if not repair_type_ids:
+        return repair_types, {}
 
-        if not specialty_ids:
-            repair_type_mechanics_map[str(repair_type.id)] = []
-            continue
+    repair_type_specialties = (
+        RepairTypeSpecialty.query
+        .filter(RepairTypeSpecialty.repair_type_id.in_(repair_type_ids))
+        .all()
+    )
 
-        mechanics = (
-            Mechanic.query
-            .join(
-                MechanicSpecialtyAssignment,
-                MechanicSpecialtyAssignment.mechanic_id == Mechanic.id,
-            )
+    specialties_by_repair_type = {}
+
+    for row in repair_type_specialties:
+        specialties_by_repair_type.setdefault(row.repair_type_id, set()).add(row.specialty_id)
+
+    all_specialty_ids = {
+        row.specialty_id
+        for row in repair_type_specialties
+        if row.specialty_id
+    }
+
+    mechanics_by_specialty = {}
+
+    if all_specialty_ids:
+        mechanic_assignments = (
+            db.session.query(MechanicSpecialtyAssignment, Mechanic)
+            .join(Mechanic, Mechanic.id == MechanicSpecialtyAssignment.mechanic_id)
             .filter(
                 Mechanic.site_id == site_id,
                 Mechanic.is_active.is_(True),
-                MechanicSpecialtyAssignment.specialty_id.in_(specialty_ids),
+                MechanicSpecialtyAssignment.specialty_id.in_(all_specialty_ids),
             )
-            .distinct()
             .order_by(Mechanic.name.asc())
             .all()
         )
 
-        repair_type_mechanics_map[str(repair_type.id)] = [
-            {
-                "id": mechanic.id,
-                "name": mechanic.name,
-                "code": mechanic.code,
-            }
-            for mechanic in mechanics
-        ]
+        for assignment, mechanic in mechanic_assignments:
+            mechanics_by_specialty.setdefault(assignment.specialty_id, []).append(mechanic)
+
+    repair_type_mechanics_map = {}
+
+    for repair_type in repair_types:
+        specialty_ids = specialties_by_repair_type.get(repair_type.id, set())
+
+        mechanics_map = {}
+
+        for specialty_id in specialty_ids:
+            for mechanic in mechanics_by_specialty.get(specialty_id, []):
+                mechanics_map[mechanic.id] = {
+                    "id": mechanic.id,
+                    "name": mechanic.name,
+                    "code": mechanic.code,
+                }
+
+        repair_type_mechanics_map[str(repair_type.id)] = sorted(
+            mechanics_map.values(),
+            key=lambda item: item["name"],
+        )
 
     return repair_types, repair_type_mechanics_map
 
@@ -386,6 +407,7 @@ def get_work_order(work_order_id: int):
             .options(
                 selectinload(WorkOrderTaskLine.assigned_mechanic),
                 selectinload(WorkOrderTaskLine.repair_type),
+                selectinload(WorkOrderTaskLine.assignments),
             )
             .filter(WorkOrderTaskLine.work_order_id == work_order.id)
             .order_by(WorkOrderTaskLine.created_at.asc())
