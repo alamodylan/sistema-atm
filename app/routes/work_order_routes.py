@@ -265,6 +265,15 @@ def get_work_order(work_order_id: int):
             request_lines_for_view = []
 
             for line in req.lines:
+                if line.line_status in ["CANCELADA"]:
+                    continue
+
+                if not req.sent_to_warehouse_at:
+                    continue
+
+                if hasattr(line, "manager_review_status") and line.manager_review_status != "APROBADA":
+                    continue
+
                 existing_ot_line = (
                     WorkOrderLine.query
                     .filter_by(request_line_id=line.id)
@@ -275,12 +284,6 @@ def get_work_order(work_order_id: int):
                     continue
 
                 if source == "dashboard":
-                    if not req.sent_to_warehouse_at:
-                        continue
-
-                    if line.manager_review_status != "APROBADA":
-                        continue
-
                     stock = (
                         WarehouseStock.query
                         .filter_by(
@@ -295,6 +298,7 @@ def get_work_order(work_order_id: int):
                         if stock and stock.available_quantity
                         else Decimal("0")
                     )
+
                     remaining = Decimal(str(line.quantity_requested)) - Decimal(str(line.quantity_attended))
 
                     line.stock_available = available_qty
@@ -303,6 +307,7 @@ def get_work_order(work_order_id: int):
                         if remaining > 0
                         else Decimal("0")
                     )
+
                     line.warehouse_action_enabled = available_qty > 0 and remaining > 0
                     line.location_label = stock.location_name if stock and hasattr(stock, "location_name") else "-"
 
@@ -359,16 +364,15 @@ def get_work_order(work_order_id: int):
 @login_required
 def create_task_line_action(work_order_id: int):
     try:
-        title = (request.form.get("title") or "").strip()
         repair_type_id = request.form.get("repair_type_id")
         mechanic_id = request.form.get("mechanic_id")
         description = request.form.get("description")
 
-        if not title:
-            raise ValueError("El título del trabajo es obligatorio.")
-
         if not repair_type_id:
             raise ValueError("Debe seleccionar un tipo de reparación para el trabajo.")
+
+        repair_type = RepairType.query.get(int(repair_type_id))
+        title = repair_type.name if repair_type else "Trabajo"
 
         create_task_line(
             work_order_id=work_order_id,

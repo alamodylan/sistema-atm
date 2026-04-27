@@ -164,7 +164,7 @@
                             </thead>
                             <tbody>
                                 {% set lines = req.filtered_lines if req.filtered_lines is defined else req.lines %}
-                                {% for line in lines %}
+                                {% for line in lines if line.line_status not in ["CANCELADA"] and req.sent_to_warehouse_at %}
                                 <tr>
                                     <td>
                                         <div>{{ line.article.code }} - {{ line.article.name }}</div>
@@ -314,10 +314,6 @@
                 {% if work_order.status == "EN_PROCESO" %}
                 <div class="border rounded-4 p-3 bg-light-subtle mb-4">
                     <form method="POST" action="{{ url_for('work_orders.create_task_line_action', work_order_id=work_order.id) }}" class="row g-3">
-                        <div class="col-12 col-md-4">
-                            <label class="form-label fw-semibold">Trabajo</label>
-                            <input name="title" class="form-control" required>
-                        </div>
 
                         <div class="col-12 col-md-4">
                             <label class="form-label fw-semibold">Tipo de reparación</label>
@@ -337,7 +333,7 @@
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label fw-semibold">Descripción</label>
+                            <label class="form-label fw-semibold">Observaciones generales (opcional)</label>
                             <textarea name="description" class="form-control" rows="2"></textarea>
                         </div>
 
