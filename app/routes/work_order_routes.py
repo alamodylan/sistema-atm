@@ -21,6 +21,7 @@ from app.models.work_order_line import WorkOrderLine
 from app.models.work_order_task_line import WorkOrderTaskLine
 from app.models.work_order_task_line_assignment import WorkOrderTaskLineAssignment
 from app.models.work_order_request import WorkOrderRequest
+from app.models.work_order_request_line import WorkOrderRequestLine
 from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 from app.services.work_order_service import (
     WorkOrderServiceError,
@@ -288,12 +289,30 @@ def get_work_order(work_order_id: int):
                 joinedload(WorkOrder.warehouse),
                 joinedload(WorkOrder.responsible_user),
 
-                selectinload(WorkOrder.requests),
                 selectinload(WorkOrder.requests).selectinload(WorkOrderRequest.lines),
+                selectinload(WorkOrder.requests).selectinload(WorkOrderRequest.requested_by_user),
+                selectinload(WorkOrder.requests).selectinload(WorkOrderRequest.approved_by_user),
+                selectinload(WorkOrder.requests).selectinload(WorkOrderRequest.sent_to_warehouse_by_user),
+
+                selectinload(WorkOrder.requests)
+                    .selectinload(WorkOrderRequest.lines)
+                    .selectinload(WorkOrderRequestLine.article),
 
                 selectinload(WorkOrder.lines),
                 selectinload(WorkOrder.lines).selectinload(WorkOrderLine.article),
                 selectinload(WorkOrder.lines).selectinload(WorkOrderLine.delete_requests),
+                selectinload(WorkOrder.lines).selectinload(WorkOrderLine.delivered_by_user),
+                selectinload(WorkOrder.lines).selectinload(WorkOrderLine.received_by_user),
+
+                selectinload(WorkOrder.lines)
+                    .selectinload(WorkOrderLine.request_line)
+                    .selectinload(WorkOrderRequestLine.work_order_request)
+                    .selectinload(WorkOrderRequest.mechanic),
+
+                selectinload(WorkOrder.lines)
+                    .selectinload(WorkOrderLine.request_line)
+                    .selectinload(WorkOrderRequestLine.work_order_request)
+                    .selectinload(WorkOrderRequest.approved_by_user),
             )
             .filter(WorkOrder.id == work_order_id)
             .first()
