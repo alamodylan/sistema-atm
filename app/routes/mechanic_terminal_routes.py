@@ -569,3 +569,36 @@ def confirm_reception():
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": str(exc)}), 400
+
+@terminal_bp.route("/articles-tree/<int:warehouse_id>")
+@login_required
+def get_articles_tree(warehouse_id):
+    try:
+        items = get_inventory_by_warehouse(warehouse_id)
+
+        data = {}
+
+        for i in items:
+            if float(i["quantity_on_hand"]) <= 0:
+                continue
+
+            if i["code"] == "19000":
+                continue
+
+            category = i.get("category_name") or "Sin categoría"
+            subcategory = i.get("subcategory_name") or "Sin subcategoría"
+
+            data.setdefault(category, {})
+            data[category].setdefault(subcategory, [])
+
+            data[category][subcategory].append({
+                "article_id": i["article_id"],
+                "code": i["code"],
+                "name": i["name"],
+                "stock": i["quantity_on_hand"],
+            })
+
+        return jsonify({"data": data})
+
+    except InventoryServiceError as exc:
+        return jsonify({"error": str(exc)}), 400

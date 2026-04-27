@@ -92,7 +92,10 @@
 
         <div id="itemsSection" class="card border-0 shadow-sm rounded-4 d-none">
             <div class="card-body p-4">
-                <h5 id="itemsTitle" class="fw-bold mb-3"></h5>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 id="itemsTitle" class="fw-bold mb-0"></h5>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="goBack()">Volver</button>
+                </div>
 
                 <input id="itemsSearch" class="form-control mb-3 rounded-3" placeholder="Buscar...">
 
@@ -153,6 +156,10 @@ let currentMechanic = null;
 let currentWorkOrders = [];
 let selectedWorkOrder = null;
 let currentItems = [];
+let itemsTree = {};
+let currentCategory = null;
+let currentSubcategory = null;
+let navigationLevel = "categories";
 let currentTasks = [];
 let cart = [];
 let pendingReceptionRequestId = null;
@@ -242,6 +249,10 @@ function resetTerminal() {
     currentWorkOrders = [];
     selectedWorkOrder = null;
     currentItems = [];
+    itemsTree = {};
+    currentCategory = null;
+    currentSubcategory = null;
+    navigationLevel = "categories";
     currentTasks = [];
     cart = [];
     pendingReceptionRequestId = null;
@@ -610,6 +621,153 @@ async function loadItems(url, title) {
     focusItemsSearch();
 }
 
+async function loadItemsTree(warehouse_id) {
+    if (!selectedWorkOrder) {
+        alert("Debe seleccionar una OT.");
+        return;
+    }
+
+    pauseScannerFocus(1500);
+
+    const res = await fetch("/terminal/articles-tree/" + warehouse_id);
+    const data = await res.json();
+
+    if (!res.ok) {
+        alert(data.error || "Error al cargar artículos.");
+        return;
+    }
+
+    itemsTree = data.data || {};
+    currentItems = [];
+    currentCategory = null;
+    currentSubcategory = null;
+    navigationLevel = "categories";
+
+    if (itemsSearch) {
+        itemsSearch.value = "";
+    }
+
+    document.getElementById("itemsTitle").innerText = "Seleccionar categoría";
+    document.getElementById("itemsSection").classList.remove("d-none");
+    document.getElementById("noItemsMessage").classList.add("d-none");
+
+    renderCategories();
+
+    document.getElementById("itemsSection").scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+    });
+
+    focusItemsSearch();
+}
+
+function goBack() {
+    if (navigationLevel === "articles") {
+        navigationLevel = "subcategories";
+        currentSubcategory = null;
+        currentItems = [];
+        document.getElementById("itemsTitle").innerText = currentCategory;
+        if (itemsSearch) {
+            itemsSearch.value = "";
+        }
+        renderSubcategories();
+    } else if (navigationLevel === "subcategories") {
+        navigationLevel = "categories";
+        currentCategory = null;
+        currentSubcategory = null;
+        currentItems = [];
+        document.getElementById("itemsTitle").innerText = "Seleccionar categoría";
+        if (itemsSearch) {
+            itemsSearch.value = "";
+        }
+        renderCategories();
+    }
+}
+
+function renderCategories() {
+    const container = document.getElementById("itemsList");
+    container.innerHTML = "";
+
+    const categories = Object.keys(itemsTree);
+
+    if (!categories.length) {
+        document.getElementById("noItemsMessage").classList.remove("d-none");
+        return;
+    }
+
+    document.getElementById("noItemsMessage").classList.add("d-none");
+
+    categories.forEach(function (category) {
+        const row = document.createElement("div");
+        row.className = "border rounded-3 p-3 mb-2 d-flex justify-content-between align-items-center bg-white";
+        row.innerHTML =
+            '<div class="fw-semibold">' + category + '</div>' +
+            '<div class="small text-muted">Ver subcategorías</div>';
+
+        row.onclick = function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            currentCategory = category;
+            navigationLevel = "subcategories";
+            document.getElementById("itemsTitle").innerText = category;
+
+            if (itemsSearch) {
+                itemsSearch.value = "";
+            }
+
+            renderSubcategories();
+        };
+
+        container.appendChild(row);
+    });
+}
+
+function renderSubcategories() {
+    const container = document.getElementById("itemsList");
+    container.innerHTML = "";
+
+    const subs = itemsTree[currentCategory] || {};
+    const subcategoryNames = Object.keys(subs);
+
+    if (!subcategoryNames.length) {
+        document.getElementById("noItemsMessage").classList.remove("d-none");
+        return;
+    }
+
+    document.getElementById("noItemsMessage").classList.add("d-none");
+
+    subcategoryNames.forEach(function (sub) {
+        const row = document.createElement("div");
+        row.className = "border rounded-3 p-3 mb-2 d-flex justify-content-between align-items-center bg-white";
+        row.innerHTML =
+            '<div class="fw-semibold">' + sub + '</div>' +
+            '<div class="small text-muted">Ver artículos</div>';
+
+        row.onclick = function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            currentSubcategory = sub;
+            navigationLevel = "articles";
+            document.getElementById("itemsTitle").innerText = currentCategory + " / " + sub;
+
+            if (itemsSearch) {
+                itemsSearch.value = "";
+            }
+
+            renderArticlesFromTree();
+        };
+
+        container.appendChild(row);
+    });
+}
+
+function renderArticlesFromTree() {
+    currentItems = itemsTree[currentCategory][currentSubcategory] || [];
+    renderItems();
+}
+
 function openQuantityForItem(item) {
     pauseScannerFocus(2000);
 
@@ -788,7 +946,7 @@ document.getElementById("submitRequestBtn").onclick = async function (e) {
 document.getElementById("loadArticlesBtn").onclick = function (e) {
     e.preventDefault();
     e.stopPropagation();
-    loadItems("/terminal/articles/" + selectedWorkOrder.warehouse_id, "Solicitar artículo");
+    loadItemsTree(selectedWorkOrder.warehouse_id);
 };
 
 document.getElementById("loadToolsBtn").onclick = function (e) {
@@ -813,7 +971,76 @@ itemsSearch.addEventListener("input", function () {
     const term = this.value.toLowerCase().trim();
 
     if (!term) {
+        if (navigationLevel === "categories") {
+            renderCategories();
+            return;
+        }
+
+        if (navigationLevel === "subcategories") {
+            renderSubcategories();
+            return;
+        }
+
         renderItems();
+        return;
+    }
+
+    if (navigationLevel === "categories") {
+        const filteredTree = {};
+        Object.keys(itemsTree).forEach(function (category) {
+            if (category.toLowerCase().includes(term)) {
+                filteredTree[category] = itemsTree[category];
+            }
+        });
+
+        const originalTree = itemsTree;
+        itemsTree = filteredTree;
+        renderCategories();
+        itemsTree = originalTree;
+        return;
+    }
+
+    if (navigationLevel === "subcategories") {
+        const container = document.getElementById("itemsList");
+        container.innerHTML = "";
+
+        const subs = itemsTree[currentCategory] || {};
+        const filteredSubs = Object.keys(subs).filter(function (sub) {
+            return sub.toLowerCase().includes(term);
+        });
+
+        if (!filteredSubs.length) {
+            document.getElementById("noItemsMessage").classList.remove("d-none");
+            return;
+        }
+
+        document.getElementById("noItemsMessage").classList.add("d-none");
+
+        filteredSubs.forEach(function (sub) {
+            const row = document.createElement("div");
+            row.className = "border rounded-3 p-3 mb-2 d-flex justify-content-between align-items-center bg-white";
+            row.innerHTML =
+                '<div class="fw-semibold">' + sub + '</div>' +
+                '<div class="small text-muted">Ver artículos</div>';
+
+            row.onclick = function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                currentSubcategory = sub;
+                navigationLevel = "articles";
+                document.getElementById("itemsTitle").innerText = currentCategory + " / " + sub;
+
+                if (itemsSearch) {
+                    itemsSearch.value = "";
+                }
+
+                renderArticlesFromTree();
+            };
+
+            container.appendChild(row);
+        });
+
         return;
     }
 

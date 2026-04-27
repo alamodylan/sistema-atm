@@ -508,14 +508,23 @@ def get_inventory_by_warehouse(warehouse_id: int) -> list[dict]:
 
     result = []
     for stock, article in rows:
+        category_name = article.category.name if article.category else None
+        subcategory_name = article.subcategory.name if article.subcategory else None
+
         result.append(
             {
                 "article_id": article.id,
                 "code": article.code,
                 "name": article.name,
                 "quantity_on_hand": str(stock.quantity_on_hand),
+                "reserved_quantity": str(stock.reserved_quantity or 0),
+                "available_quantity": str(stock.available_quantity),
                 "last_unit_cost": str(stock.last_unit_cost or 0),
                 "avg_unit_cost": str(stock.avg_unit_cost or 0),
+                "category_id": article.category_id,
+                "category_name": category_name,
+                "subcategory_id": article.subcategory_id,
+                "subcategory_name": subcategory_name,
             }
         )
 
