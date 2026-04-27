@@ -267,6 +267,8 @@ def get_work_order(work_order_id: int):
                 joinedload(WorkOrder.responsible_user),
 
                 selectinload(WorkOrder.requests),
+                selectinload(WorkOrder.requests).selectinload("lines"),
+
                 selectinload(WorkOrder.lines),
                 selectinload(WorkOrder.lines).selectinload(WorkOrderLine.article),
                 selectinload(WorkOrder.lines).selectinload(WorkOrderLine.delete_requests),
@@ -278,16 +280,50 @@ def get_work_order(work_order_id: int):
         if not work_order:
             raise ValueError("Orden de trabajo no encontrada.")
 
-        # 🔥 CAMBIO CLAVE: precargar request_line_id ya usados en una sola consulta
         existing_request_line_ids = {
-            r.request_line_id
-            for r in WorkOrderLine.query
-                .filter(WorkOrderLine.work_order_id == work_order.id)
-                .all()
-            if r.request_line_id
+            line.request_line_id
+            for line in work_order.lines
+            if line.request_line_id
         }
 
         visible_requests = []
+
+        stock_by_article_id = {}
+
+        if source == "dashboard":
+            article_ids = set()
+
+            for req in work_order.requests:
+                for line in req.lines:
+                    if line.line_status in ["CANCELADA"]:
+                        continue
+
+                    if not req.sent_to_warehouse_at:
+                        continue
+
+                    if hasattr(line, "manager_review_status") and line.manager_review_status != "APROBADA":
+                        continue
+
+                    if line.id in existing_request_line_ids:
+                        continue
+
+                    if line.article_id:
+                        article_ids.add(line.article_id)
+
+            if article_ids:
+                stocks = (
+                    WarehouseStock.query
+                    .filter(
+                        WarehouseStock.warehouse_id == work_order.warehouse_id,
+                        WarehouseStock.article_id.in_(article_ids),
+                    )
+                    .all()
+                )
+
+                stock_by_article_id = {
+                    stock.article_id: stock
+                    for stock in stocks
+                }
 
         for req in work_order.requests:
             request_lines_for_view = []
@@ -302,19 +338,11 @@ def get_work_order(work_order_id: int):
                 if hasattr(line, "manager_review_status") and line.manager_review_status != "APROBADA":
                     continue
 
-                # 🔥 AQUÍ ESTABA EL PROBLEMA (ANTES había query por cada línea)
                 if line.id in existing_request_line_ids:
                     continue
 
                 if source == "dashboard":
-                    stock = (
-                        WarehouseStock.query
-                        .filter_by(
-                            article_id=line.article_id,
-                            warehouse_id=work_order.warehouse_id,
-                        )
-                        .first()
-                    )
+                    stock = stock_by_article_id.get(line.article_id)
 
                     available_qty = (
                         Decimal(str(stock.available_quantity))
@@ -322,7 +350,10 @@ def get_work_order(work_order_id: int):
                         else Decimal("0")
                     )
 
-                    remaining = Decimal(str(line.quantity_requested)) - Decimal(str(line.quantity_attended))
+                    remaining = (
+                        Decimal(str(line.quantity_requested))
+                        - Decimal(str(line.quantity_attended))
+                    )
 
                     line.stock_available = available_qty
                     line.suggested_attend_quantity = (
@@ -332,7 +363,11 @@ def get_work_order(work_order_id: int):
                     )
 
                     line.warehouse_action_enabled = available_qty > 0 and remaining > 0
-                    line.location_label = stock.location_name if stock and hasattr(stock, "location_name") else "-"
+                    line.location_label = (
+                        stock.location_name
+                        if stock and hasattr(stock, "location_name")
+                        else "-"
+                    )
 
                 request_lines_for_view.append(line)
 
