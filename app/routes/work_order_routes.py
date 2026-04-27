@@ -20,6 +20,7 @@ from app.models.work_order import WorkOrder
 from app.models.work_order_line import WorkOrderLine
 from app.models.work_order_task_line import WorkOrderTaskLine
 from app.models.work_order_task_line_assignment import WorkOrderTaskLineAssignment
+from app.models.work_order_request import WorkOrderRequest
 from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 from app.services.work_order_service import (
     WorkOrderServiceError,
@@ -288,7 +289,7 @@ def get_work_order(work_order_id: int):
                 joinedload(WorkOrder.responsible_user),
 
                 selectinload(WorkOrder.requests),
-                selectinload(WorkOrder.requests).selectinload("lines"),
+                selectinload(WorkOrder.requests).selectinload(WorkOrderRequest.lines),
 
                 selectinload(WorkOrder.lines),
                 selectinload(WorkOrder.lines).selectinload(WorkOrderLine.article),
