@@ -41,26 +41,35 @@
                 </div>
 
                 <!-- 🔥 TIPO REPARACIÓN -->
-                <div class="col-12 col-md-6">
-                    <label class="form-label fw-semibold">Tipo de reparación</label>
-                    <select class="form-select" name="repair_type_id" id="repair_type_select" required>
-                        <option value="">Seleccione...</option>
-                        {% if repair_types %}
-                            {% for rt in repair_types %}
-                                <option value="{{ rt.id }}">
-                                    {{ rt.name }}
-                                </option>
-                            {% endfor %}
-                        {% endif %}
-                    </select>
-                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Trabajos</label>
 
-                <!-- 🔥 MECÁNICO DINÁMICO -->
-                <div class="col-12 col-md-6">
-                    <label class="form-label fw-semibold">Mecánico</label>
-                    <select class="form-select" name="mechanic_id" id="mechanic_select" required disabled>
-                        <option value="">Seleccione tipo de reparación primero</option>
-                    </select>
+                    <div id="tasks-container">
+
+                        <div class="row g-3 task-row mb-2">
+
+                            <div class="col-12 col-md-6">
+                                <select class="form-select repair-type-select" name="repair_type_id[]" required>
+                                    <option value="">Seleccione tipo de reparación...</option>
+                                    {% for rt in repair_types %}
+                                        <option value="{{ rt.id }}">{{ rt.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <select class="form-select mechanic-select" name="mechanic_id[]" required disabled>
+                                    <option value="">Seleccione tipo primero</option>
+                                </select>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addTaskRow()">
+                        + Agregar otro trabajo
+                    </button>
                 </div>
 
                 <!-- EQUIPO -->
@@ -138,24 +147,22 @@ document.addEventListener("DOMContentLoaded", function () {
     equipmentInput.addEventListener("input", syncEquipmentSelection);
     equipmentInput.addEventListener("change", syncEquipmentSelection);
 
-    repairTypeSelect.addEventListener("change", function () {
+function bindRepairTypeChange(row) {
+    const repairSelect = row.querySelector(".repair-type-select");
+    const mechanicSelect = row.querySelector(".mechanic-select");
+
+    repairSelect.addEventListener("change", function () {
         const repairTypeId = this.value;
 
         mechanicSelect.innerHTML = "";
 
         if (!repairTypeId || !repairTypeMechanicsMap[repairTypeId]) {
-            mechanicSelect.innerHTML = '<option value="">Sin mecánicos disponibles</option>';
+            mechanicSelect.innerHTML = '<option value="">Sin mecánicos</option>';
             mechanicSelect.disabled = true;
             return;
         }
 
         const mechanics = repairTypeMechanicsMap[repairTypeId];
-
-        if (!mechanics.length) {
-            mechanicSelect.innerHTML = '<option value="">No hay mecánicos para este tipo</option>';
-            mechanicSelect.disabled = true;
-            return;
-        }
 
         mechanicSelect.disabled = false;
         mechanicSelect.innerHTML = '<option value="">Seleccione...</option>';
@@ -167,7 +174,30 @@ document.addEventListener("DOMContentLoaded", function () {
             mechanicSelect.appendChild(option);
         });
     });
+}
 
+function addTaskRow() {
+    const container = document.getElementById("tasks-container");
+    const firstRow = document.querySelector(".task-row");
+    const newRow = firstRow.cloneNode(true);
+
+    newRow.querySelectorAll("select").forEach(s => {
+        s.value = "";
+        if (s.classList.contains("mechanic-select")) {
+            s.innerHTML = '<option value="">Seleccione tipo primero</option>';
+            s.disabled = true;
+        }
+    });
+
+    container.appendChild(newRow);
+
+    bindRepairTypeChange(newRow);
+}
+
+// Inicializar primera fila
+document.querySelectorAll(".task-row").forEach(row => {
+    bindRepairTypeChange(row);
+});
 });
 </script>
 

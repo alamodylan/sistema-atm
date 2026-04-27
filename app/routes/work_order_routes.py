@@ -175,13 +175,13 @@ def create_work_order_action():
     try:
         site_id = session.get("active_site_id")
         warehouse_id = request.form.get("warehouse_id")
-        repair_type_id = request.form.get("repair_type_id")
-        mechanic_id = request.form.get("mechanic_id")
+        repair_type_ids = request.form.getlist("repair_type_id[]")
+        mechanic_ids = request.form.getlist("mechanic_id[]")
         description = request.form.get("description")
         equipment_id = request.form.get("equipment_id")
         equipment_code_snapshot = request.form.get("equipment_code_snapshot")
-        repair_type = RepairType.query.get(int(repair_type_id))
-        task_title = repair_type.name if repair_type else "Trabajo"
+        first_repair_type = RepairType.query.get(int(repair_type_ids[0]))
+        task_title = first_repair_type.name if first_repair_type else "Trabajo"
         task_description = None
 
         if not site_id:
@@ -190,11 +190,11 @@ def create_work_order_action():
         if not warehouse_id:
             raise ValueError("La bodega es obligatoria.")
 
-        if not repair_type_id:
-            raise ValueError("Debe seleccionar un tipo de reparación.")
+        if not repair_type_ids:
+            raise ValueError("Debe agregar al menos un trabajo.")
 
-        if not mechanic_id:
-            raise ValueError("Debe seleccionar un mecánico.")
+        if not mechanic_ids:
+            raise ValueError("Debe asignar mecánicos a los trabajos.")
 
         if not task_title:
             raise ValueError("Debe indicar el trabajo a realizar.")
@@ -205,8 +205,8 @@ def create_work_order_action():
             warehouse_id=int(warehouse_id),
             responsible_user_id=current_user.id,
             created_by_user_id=current_user.id,
-            repair_type_id=int(repair_type_id),
-            mechanic_id=int(mechanic_id),
+            repair_type_id=int(repair_type_ids[0]),
+            mechanic_id=int(mechanic_ids[0]),
             task_title=task_title,
             task_description=None,
             description=description,
@@ -214,6 +214,27 @@ def create_work_order_action():
             equipment_code_snapshot=equipment_code_snapshot,
             commit=True,
         )
+
+        # Crear trabajos adicionales desde la segunda línea en adelante
+        for i in range(1, len(repair_type_ids)):
+            rt_id = repair_type_ids[i]
+            mech_id = mechanic_ids[i] if i < len(mechanic_ids) else None
+
+            if not rt_id or not mech_id:
+                continue
+
+            repair_type = RepairType.query.get(int(rt_id))
+            title = repair_type.name if repair_type else "Trabajo"
+
+            create_task_line(
+                work_order_id=work_order.id,
+                repair_type_id=int(rt_id),
+                title=title,
+                description=None,
+                assigned_mechanic_id=int(mech_id),
+                created_by_user_id=current_user.id,
+                commit=True,
+            )
 
         flash(f"Orden de trabajo {work_order.number} creada correctamente.", "success")
         return redirect(url_for("work_orders.get_work_order", work_order_id=work_order.id))
