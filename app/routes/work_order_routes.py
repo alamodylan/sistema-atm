@@ -244,6 +244,11 @@ def get_work_order(work_order_id: int):
                 joinedload(WorkOrder.equipment),
                 joinedload(WorkOrder.warehouse),
                 joinedload(WorkOrder.responsible_user),
+
+                selectinload(WorkOrder.requests),
+                selectinload(WorkOrder.lines),
+                selectinload(WorkOrder.lines).selectinload(WorkOrderLine.article),
+                selectinload(WorkOrder.lines).selectinload(WorkOrderLine.delete_requests),
             )
             .filter(WorkOrder.id == work_order_id)
             .first()
@@ -251,13 +256,6 @@ def get_work_order(work_order_id: int):
 
         if not work_order:
             raise ValueError("Orden de trabajo no encontrada.")
-
-        available_articles = (
-            Article.query
-            .filter(Article.is_active.is_(True))
-            .order_by(Article.code.asc(), Article.name.asc())
-            .all()
-        )
 
         # 🔥 CAMBIO CLAVE: precargar request_line_id ya usados en una sola consulta
         existing_request_line_ids = {
@@ -343,7 +341,7 @@ def get_work_order(work_order_id: int):
             title="Detalle de Orden de Trabajo",
             subtitle="Consulte la información general, líneas y acciones de la OT.",
             work_order=work_order,
-            available_articles=available_articles,
+            available_articles=[],
             visible_requests=visible_requests,
             repair_types=repair_types,
             repair_type_mechanics_map=repair_type_mechanics_map,
