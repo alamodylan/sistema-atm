@@ -259,6 +259,15 @@ def get_work_order(work_order_id: int):
             .all()
         )
 
+        # 🔥 CAMBIO CLAVE: precargar request_line_id ya usados en una sola consulta
+        existing_request_line_ids = {
+            r.request_line_id
+            for r in WorkOrderLine.query
+                .filter(WorkOrderLine.work_order_id == work_order.id)
+                .all()
+            if r.request_line_id
+        }
+
         visible_requests = []
 
         for req in work_order.requests:
@@ -274,13 +283,8 @@ def get_work_order(work_order_id: int):
                 if hasattr(line, "manager_review_status") and line.manager_review_status != "APROBADA":
                     continue
 
-                existing_ot_line = (
-                    WorkOrderLine.query
-                    .filter_by(request_line_id=line.id)
-                    .first()
-                )
-
-                if existing_ot_line:
+                # 🔥 AQUÍ ESTABA EL PROBLEMA (ANTES había query por cada línea)
+                if line.id in existing_request_line_ids:
                     continue
 
                 if source == "dashboard":
@@ -475,6 +479,128 @@ def print_work_order(work_order_id: int):
         flash("Error al generar impresión.", "danger")
         return redirect(url_for("work_orders.get_work_order", work_order_id=work_order_id))
 
+@work_order_bp.route("/tasks/<int:task_id>/pause", methods=["POST"])
+@login_required
+def pause_task_line_action(task_id):
+    try:
+        task = WorkOrderTaskLine.query.get_or_404(task_id)
+
+        if task.status != "EN_PROCESO":
+            flash("Solo se pueden pausar trabajos en proceso.", "warning")
+            return redirect(request.referrer or "/")
+
+        now = datetime.now(UTC)
+
+        # cerrar assignment activo
+        active_assignment = next(
+            (a for a in task.assignments if a.ended_at is None),
+            None
+        )
+
+        if active_assignment:
+            seconds = int((now - active_assignment.started_at).total_seconds())
+            active_assignment.ended_at = now
+            active_assignment.seconds_worked += seconds
+            active_assignment.ended_reason = "PAUSA_JEFATURA"
+
+            task.effective_seconds += seconds
+
+        task.status = "PAUSADA"
+        task.paused_at = now
+
+        db.session.commit()
+        flash("Trabajo pausado correctamente.", "success")
+
+    except Exception as exc:
+        db.session.rollback()
+        print(f"[PAUSE TASK ERROR] {exc}")
+        flash("Error al pausar el trabajo.", "danger")
+
+    return redirect(request.referrer or "/")
+
+@work_order_bp.route("/tasks/<int:task_id>/resume", methods=["POST"])
+@login_required
+def resume_task_line_action(task_id):
+    try:
+        task = WorkOrderTaskLine.query.get_or_404(task_id)
+
+        if task.status != "PAUSADA":
+            flash("Solo se pueden reanudar trabajos pausados.", "warning")
+            return redirect(request.referrer or "/")
+
+        now = datetime.now(UTC)
+
+        new_assignment = WorkOrderTaskLineAssignment(
+            task_line_id=task.id,
+            mechanic_id=task.assigned_mechanic_id,
+            started_at=now,
+        )
+
+        db.session.add(new_assignment)
+
+        task.status = "EN_PROCESO"
+        task.paused_at = None
+
+        db.session.commit()
+        flash("Trabajo reanudado correctamente.", "success")
+
+    except Exception as exc:
+        db.session.rollback()
+        print(f"[RESUME TASK ERROR] {exc}")
+        flash("Error al reanudar el trabajo.", "danger")
+
+    return redirect(request.referrer or "/")
+
+@work_order_bp.route("/tasks/<int:task_id>/replace-mechanic", methods=["POST"])
+@login_required
+def replace_task_line_mechanic_action(task_id):
+    try:
+        new_mechanic_id = request.form.get("mechanic_id")
+
+        if not new_mechanic_id:
+            raise ValueError("Debe seleccionar un mecánico.")
+
+        task = WorkOrderTaskLine.query.get_or_404(task_id)
+
+        now = datetime.now(UTC)
+
+        # cerrar assignment actual
+        active_assignment = next(
+            (a for a in task.assignments if a.ended_at is None),
+            None
+        )
+
+        if active_assignment:
+            seconds = int((now - active_assignment.started_at).total_seconds())
+            active_assignment.ended_at = now
+            active_assignment.seconds_worked += seconds
+            active_assignment.ended_reason = "REASIGNADO"
+
+            task.effective_seconds += seconds
+
+        # asignar nuevo mecánico
+        task.assigned_mechanic_id = int(new_mechanic_id)
+
+        new_assignment = WorkOrderTaskLineAssignment(
+            task_line_id=task.id,
+            mechanic_id=int(new_mechanic_id),
+            started_at=now,
+        )
+
+        db.session.add(new_assignment)
+
+        task.status = "EN_PROCESO"
+        task.paused_at = None
+
+        db.session.commit()
+        flash("Mecánico reemplazado correctamente.", "success")
+
+    except Exception as exc:
+        db.session.rollback()
+        print(f"[REPLACE MECHANIC ERROR] {exc}")
+        flash("Error al reemplazar mecánico.", "danger")
+
+    return redirect(request.referrer or "/")
 
 # =========================================================
 # LISTADO SOLICITUDES DE ELIMINACIÓN
