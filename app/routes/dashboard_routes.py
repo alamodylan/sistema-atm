@@ -297,12 +297,30 @@ def manager_dashboard():
             )
 
             lines = req.lines
-
             req.visible_lines = []
             has_approved_lines = False
             all_lines_decided = True
 
             for line in lines:
+                # ===============================
+                # STOCK DE BODEGA (AQUÍ ESTÁ LO NUEVO)
+                # ===============================
+                stock = (
+                    WarehouseStock.query
+                    .filter_by(
+                        article_id=line.article_id,
+                        warehouse_id=req.work_order.warehouse_id
+                    )
+                    .first()
+                )
+
+                line.stock_available = (
+                    stock.available_quantity if stock and stock.available_quantity else 0
+                )
+
+                # ===============================
+                # ESTADO DE JEFATURA
+                # ===============================
                 if line.manager_review_status == "RECHAZADA":
                     line.manager_decision = "RECHAZADA"
 
@@ -393,6 +411,13 @@ def manager_dashboard():
         )
 
         task_finish_requests_count = len(task_finish_requests)
+        for task_req in task_finish_requests:
+            seconds = task_req.task_line.effective_seconds or 0
+
+            hours = int(seconds) // 3600
+            minutes = (int(seconds) % 3600) // 60
+
+            task_req.formatted_time = f"{hours}h {minutes}m"
 
         return render_template(
             "dashboard/manager.html",

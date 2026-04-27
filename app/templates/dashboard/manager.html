@@ -123,6 +123,7 @@
                         <tr>
                             <th>Artículo</th>
                             <th class="text-end">Cantidad solicitada</th>
+                            <th class="text-end">Stock bodega</th>
                             <th>Estado</th>
                             <th style="min-width: 320px;">Acción jefatura</th>
                         </tr>
@@ -140,7 +141,15 @@
                                 {% endif %}
                             </td>
 
-                            <td class="text-end">{{ line.quantity_requested }}</td>
+                            <td class="text-end">
+                                {% if line.stock_available >= line.quantity_requested %}
+                                    <span class="fw-semibold text-success">{{ line.stock_available }}</span>
+                                {% elif line.stock_available > 0 %}
+                                    <span class="fw-semibold text-warning">{{ line.stock_available }}</span>
+                                {% else %}
+                                    <span class="fw-semibold text-danger">{{ line.stock_available }}</span>
+                                {% endif %}
+                            </td>
 
                             <td>
                                 {% if line.manager_decision == "PENDIENTE" %}
@@ -271,7 +280,11 @@
                         <div class="col-12 col-md-6">
                             <div class="text-muted">Tiempo trabajado</div>
                             <div class="fw-semibold text-dark">
-                                {{ req.task_line.effective_seconds if req.task_line else 0 }} seg
+                                {% set seconds = req.task_line.effective_seconds if req.task_line else 0 %}
+                                {% set hours = (seconds // 3600) %}
+                                {% set minutes = ((seconds % 3600) // 60) %}
+
+                                {{ hours }}h {{ minutes }}m
                             </div>
                         </div>
 
