@@ -3,6 +3,8 @@ from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, flash, redirect, request, url_for
 from flask_login import current_user, login_required
+from app.models.work_order_request_line import WorkOrderRequestLine
+from app.models.inventory import WarehouseStock
 
 from app.services.work_order_request_service import (
     WorkOrderRequestServiceError,
@@ -142,8 +144,49 @@ def cancel_request_line_action(line_id: int):
 @login_required
 def approve_request_line_action(line_id: int):
     try:
-        qty = Decimal(request.form.get("quantity"))
+        # =========================
+        # OBTENER LÍNEA
+        # =========================
+        line = WorkOrderRequestLine.query.get_or_404(line_id)
 
+        qty = Decimal(request.form.get("quantity") or "0")
+
+        # =========================
+        # OBTENER STOCK REAL
+        # =========================
+        stock = (
+            WarehouseStock.query
+            .filter_by(
+                article_id=line.article_id,
+                warehouse_id=line.work_order_request.work_order.warehouse_id,
+            )
+            .first()
+        )
+
+        available_qty = Decimal(str(stock.available_quantity if stock else 0))
+
+        # =========================
+        # VALIDACIONES
+        # =========================
+
+        # 1. Mayor que cero
+        if qty <= 0:
+            raise ValueError("La cantidad debe ser mayor a cero.")
+
+        # 2. No mayor al stock
+        if qty > available_qty:
+            raise ValueError("No se puede aprobar más que el stock disponible.")
+
+        # 3. No decimales en UND
+        unit_code = line.article.unit.code if line.article and line.article.unit else ""
+
+        if unit_code == "UND":
+            if qty != qty.to_integral_value():
+                raise ValueError("Este artículo usa unidad UND, solo permite cantidades enteras.")
+
+        # =========================
+        # APLICAR APROBACIÓN
+        # =========================
         update_request_line_requested_quantity(
             request_line_id=line_id,
             quantity_requested=qty,
