@@ -1096,7 +1096,7 @@ def quotation_line_view(line_id: int):
 
     suppliers = (
         suppliers_query
-        .order_by(Supplier.commercial_name.asc(), Supplier.name.asc())
+        .order_by(Supplier.commercial_name.asc(), Supplier.legal_name.asc())
         .all()
     )
 

@@ -128,7 +128,7 @@
                                     <optgroup label="Otros proveedores activos">
                                         {% for supplier in suppliers %}
                                             <option value="{{ supplier.id }}">
-                                                {{ supplier.commercial_name or supplier.name }}
+                                                {{ supplier.commercial_name or supplier.legal_name }}
                                             </option>
                                         {% endfor %}
                                     </optgroup>

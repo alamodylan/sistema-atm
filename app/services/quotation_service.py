@@ -516,7 +516,7 @@ def get_article_supplier_comparison(
         db.session.query(
             QuotationLine.supplier_id,
             Supplier.commercial_name,
-            Supplier.name,
+            Supplier.legal_name,
             func.max(QuotationLine.quote_date).label("last_quote_date"),
             func.max(QuotationLine.created_at).label("last_created_at"),
         )
@@ -534,7 +534,7 @@ def get_article_supplier_comparison(
         .group_by(
             QuotationLine.supplier_id,
             Supplier.commercial_name,
-            Supplier.name,
+            Supplier.legal_name,
         )
         .all()
     )
@@ -554,7 +554,7 @@ def get_article_supplier_comparison(
         comparison.append(
             {
                 "supplier_id": row.supplier_id,
-                "supplier_name": row.commercial_name or row.name or "Proveedor",
+                "supplier_name": row.commercial_name or row.legal_name or "Proveedor",
                 "last_price": last_line.unit_price,
                 "last_price_with_tax": last_line.unit_price_with_tax,
                 "last_quote_date": last_line.quote_date,
@@ -620,7 +620,7 @@ def get_registered_suppliers_for_article(article_id: int) -> list[Supplier]:
             Supplier.id.in_(supplier_ids),
             Supplier.is_active.is_(True),
         )
-        .order_by(Supplier.commercial_name.asc(), Supplier.name.asc())
+        .order_by(Supplier.commercial_name.asc(), Supplier.legal_name.asc())
         .all()
     )
 
@@ -658,7 +658,7 @@ def get_available_suppliers_for_article(
 
     return (
         query
-        .order_by(Supplier.commercial_name.asc(), Supplier.name.asc())
+        .order_by(Supplier.commercial_name.asc())
         .all()
     )
 
@@ -678,7 +678,7 @@ def get_all_active_suppliers(
 
     return (
         query
-        .order_by(Supplier.commercial_name.asc(), Supplier.name.asc())
+        .order_by(Supplier.commercial_name.asc())
         .all()
     )
 
