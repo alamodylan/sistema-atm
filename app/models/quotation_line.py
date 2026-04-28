@@ -1,4 +1,5 @@
 from app.extensions import db
+from decimal import Decimal
 
 
 class QuotationLine(db.Model):
@@ -140,9 +141,16 @@ class QuotationLine(db.Model):
 
     @property
     def unit_price_with_tax(self):
-        if self.tax_included:
-            return self.unit_price
-        return self.unit_price * (1 + (self.tax_pct or 0) / 100)
+        unit_price = self.unit_price or Decimal("0")
+        tax_pct = self.tax_pct or Decimal("0")
+
+        if not isinstance(unit_price, Decimal):
+            unit_price = Decimal(str(unit_price))
+
+        if not isinstance(tax_pct, Decimal):
+            tax_pct = Decimal(str(tax_pct))
+
+        return unit_price * (Decimal("1") + (tax_pct / Decimal("100")))
 
     @property
     def unit_price_net(self):
