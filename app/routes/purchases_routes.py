@@ -4,6 +4,8 @@ from datetime import UTC
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 from app.extensions import db
+from app.models.article_supplier import ArticleSupplier
+from app.models.purchase_request_line import PurchaseRequestLine
 
 from flask import (
     Blueprint,
@@ -1081,24 +1083,38 @@ def quotation_line_view(line_id: int):
         flash(str(exc), "danger")
         return redirect(url_for("purchases.create_quotation"))
 
-    comparison_supplier_ids = {
-        item["supplier_id"]
-        for item in comparison
-        if item.get("supplier_id")
-    }
-
-    suppliers_query = Supplier.query.filter_by(is_active=True)
-
-    if comparison_supplier_ids:
-        suppliers_query = suppliers_query.filter(
-            Supplier.id.notin_(comparison_supplier_ids)
-        )
-
-    suppliers = (
-        suppliers_query
-        .order_by(Supplier.commercial_name.asc(), Supplier.legal_name.asc())
-        .all()
+    request_line = (
+        PurchaseRequestLine.query
+        .get_or_404(line_id)
     )
+
+    article_id = request_line.article_id
+
+    suppliers = []
+
+    if article_id:
+        supplier_ids = [
+            row.supplier_id
+            for row in (
+                ArticleSupplier.query
+                .filter(
+                    ArticleSupplier.article_id == article_id,
+                    ArticleSupplier.is_active.is_(True),
+                )
+                .all()
+            )
+        ]
+
+        if supplier_ids:
+            suppliers = (
+                Supplier.query
+                .filter(
+                    Supplier.id.in_(supplier_ids),
+                    Supplier.is_active.is_(True),
+                )
+                .order_by(Supplier.commercial_name.asc(), Supplier.legal_name.asc())
+                .all()
+            )
 
     return render_template(
         "purchases/quotations/line.html",
@@ -1111,6 +1127,13 @@ def quotation_line_view(line_id: int):
 @login_required
 def create_quote_for_line(line_id: int):
     supplier_id = _to_int(request.form.get("supplier_id"))
+    new_supplier_name = request.form.get("new_supplier_name")
+
+    if supplier_id == -1:
+        supplier_id = None
+    else:
+        new_supplier_name = None
+
     unit_price = request.form.get("unit_price")
     use_last_price = request.form.get("use_last_price") == "1"
 
@@ -1127,6 +1150,7 @@ def create_quote_for_line(line_id: int):
         create_single_line_quotation(
             purchase_request_line_id=line_id,
             supplier_id=supplier_id,
+            new_supplier_name=new_supplier_name,
             created_by_user_id=current_user.id,
             unit_price=unit_price,
             use_last_price=use_last_price,
@@ -1142,11 +1166,7 @@ def create_quote_for_line(line_id: int):
         flash(str(exc), "danger")
         return redirect(url_for("purchases.quotation_line_view", line_id=line_id))
 
-    if status == "BORRADOR":
-        flash("Borrador de cotización guardado correctamente.", "success")
-    else:
-        flash("Cotización guardada correctamente.", "success")
-
+    flash("Cotización guardada correctamente.", "success")
     return redirect(url_for("purchases.quotation_line_view", line_id=line_id))
 
 @purchases_bp.route("/quotations/last-price")

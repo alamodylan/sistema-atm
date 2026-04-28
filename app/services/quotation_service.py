@@ -275,7 +275,8 @@ def get_last_price_for_supplier(
 def create_single_line_quotation(
     *,
     purchase_request_line_id: int,
-    supplier_id: int,
+    supplier_id: int | None = None,
+    new_supplier_name: str | None = None,
     created_by_user_id: int,
     quote_date: Any | None = None,
     unit_price: Any | None = None,
@@ -305,11 +306,22 @@ def create_single_line_quotation(
 
     supplier = Supplier.query.get(supplier_id)
 
-    if not supplier:
-        raise QuotationServiceError("El proveedor indicado no existe.")
+    if new_supplier_name:
+        supplier = create_minimal_supplier_for_quotation(
+            commercial_name=new_supplier_name,
+        )
+        supplier_id = supplier.id
+    else:
+        if not supplier_id:
+            raise QuotationServiceError("Debe seleccionar un proveedor.")
 
-    if hasattr(supplier, "is_active") and not supplier.is_active:
-        raise QuotationServiceError("El proveedor indicado está inactivo.")
+        supplier = Supplier.query.get(supplier_id)
+
+        if not supplier:
+            raise QuotationServiceError("El proveedor indicado no existe.")
+
+        if hasattr(supplier, "is_active") and not supplier.is_active:
+            raise QuotationServiceError("El proveedor indicado está inactivo.")
 
     quote_date = quote_date or datetime.now(UTC)
 
@@ -658,7 +670,7 @@ def get_available_suppliers_for_article(
 
     return (
         query
-        .order_by(Supplier.commercial_name.asc())
+        .order_by(Supplier.commercial_name.asc(), Supplier.legal_name.asc())
         .all()
     )
 
@@ -678,7 +690,7 @@ def get_all_active_suppliers(
 
     return (
         query
-        .order_by(Supplier.commercial_name.asc())
+        .order_by(Supplier.commercial_name.asc(), Supplier.legal_name.asc())
         .all()
     )
 
@@ -702,3 +714,33 @@ def list_quotation_batches(search: str | None = None) -> list[QuotationBatch]:
 
 def get_quotation_batch_or_404(batch_id: int) -> QuotationBatch:
     return QuotationBatch.query.get_or_404(batch_id)
+
+def create_minimal_supplier_for_quotation(
+    *,
+    commercial_name: str,
+) -> Supplier:
+    commercial_name = (commercial_name or "").strip()
+
+    if not commercial_name:
+        raise QuotationServiceError("Debe indicar el nombre del nuevo proveedor.")
+
+    existing = (
+        Supplier.query
+        .filter(func.lower(Supplier.commercial_name) == commercial_name.lower())
+        .first()
+    )
+
+    if existing:
+        if not existing.is_active:
+            existing.is_active = True
+        return existing
+
+    supplier = Supplier(
+        commercial_name=commercial_name,
+        is_active=True,
+    )
+
+    db.session.add(supplier)
+    db.session.flush()
+
+    return supplier

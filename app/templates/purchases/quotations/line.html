@@ -18,7 +18,6 @@
 
     <div class="row g-4">
 
-        <!-- COMPARATIVO -->
         <div class="col-12 col-xl-7">
             <div class="card border-0 shadow-sm rounded-4">
                 <div class="card-body p-4">
@@ -59,15 +58,13 @@
                                                 {{ item.rank }}
                                             {% endif %}
                                         </td>
-                                        <td class="fw-semibold">
-                                            {{ item.supplier_name }}
-                                        </td>
+                                        <td class="fw-semibold">{{ item.supplier_name }}</td>
                                         <td>
                                             {{ item.currency_code or "CRC" }}
                                             {{ item.last_price_with_tax or item.last_price }}
                                         </td>
                                         <td>
-                                            {{ item.last_quote_date or "-" }}
+                                            {{ item.last_quote_date.strftime("%d/%m/%Y") if item.last_quote_date else "-" }}
                                         </td>
                                         <td>
                                             {% if item.payment_type %}
@@ -96,7 +93,6 @@
             </div>
         </div>
 
-        <!-- FORMULARIO -->
         <div class="col-12 col-xl-5">
             <div class="card border-0 shadow-sm rounded-4">
                 <div class="card-body p-4">
@@ -109,33 +105,35 @@
 
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Proveedor</label>
+
                             <select name="supplier_id" id="supplier_id" class="form-select rounded-3" required>
                                 <option value="">Seleccione proveedor</option>
 
-                                {% if comparison %}
-                                    <optgroup label="Proveedores con historial">
-                                        {% for item in comparison %}
-                                            <option value="{{ item.supplier_id }}"
-                                                    data-last-price="{{ item.last_price }}"
-                                                    data-last-date="{{ item.last_quote_date or '' }}">
-                                                {{ item.supplier_name }}
-                                            </option>
-                                        {% endfor %}
-                                    </optgroup>
+                                {% if suppliers %}
+                                    {% for supplier in suppliers %}
+                                        <option value="{{ supplier.id }}">
+                                            {{ supplier.commercial_name or supplier.legal_name }}
+                                        </option>
+                                    {% endfor %}
                                 {% endif %}
 
-                                {% if suppliers is defined and suppliers %}
-                                    <optgroup label="Otros proveedores activos">
-                                        {% for supplier in suppliers %}
-                                            <option value="{{ supplier.id }}">
-                                                {{ supplier.commercial_name or supplier.legal_name }}
-                                            </option>
-                                        {% endfor %}
-                                    </optgroup>
-                                {% endif %}
+                                <option value="-1">+ Nuevo proveedor</option>
                             </select>
+
                             <div class="form-text">
-                                Si eliges un proveedor sin historial para este artículo, quedará registrado para futuras cotizaciones.
+                                Solo aparecen proveedores ligados a este artículo. Si no existe, usa “Nuevo proveedor”.
+                            </div>
+                        </div>
+
+                        <div class="mb-3 d-none" id="new_supplier_group">
+                            <label class="form-label fw-semibold">Nombre del nuevo proveedor</label>
+                            <input type="text"
+                                   name="new_supplier_name"
+                                   id="new_supplier_name"
+                                   class="form-control rounded-3"
+                                   placeholder="Ejemplo: Repuestos La Central">
+                            <div class="form-text">
+                                Se creará un proveedor básico y luego podrá completarse desde el módulo de proveedores.
                             </div>
                         </div>
 
@@ -260,6 +258,24 @@
     </div>
 </div>
 
+<!-- JSON seguro para evitar errores de VS Code -->
+<script id="comparison-data" type="application/json">
+{
+{% for item in comparison %}
+    "{{ item.supplier_id }}": {
+        "last_price": {{ (item.last_price|string)|tojson }},
+        "last_date": {{ (item.last_quote_date.strftime("%d/%m/%Y") if item.last_quote_date else "")|tojson }},
+        "payment_type": {{ (item.payment_type or "")|tojson }},
+        "payment_term_months": {{ (item.payment_term_months|string if item.payment_term_months is not none else "")|tojson }},
+        "origin_type": {{ (item.origin_type or "")|tojson }},
+        "lead_time_days": {{ (item.lead_time_days|string if item.lead_time_days is not none else "")|tojson }},
+        "brand_model": {{ (item.brand_model or "")|tojson }},
+        "notes": {{ (item.notes or "")|tojson }}
+    }{% if not loop.last %},{% endif %}
+{% endfor %}
+}
+</script>
+
 <script>
 (function () {
     const supplierSelect = document.getElementById("supplier_id");
@@ -269,27 +285,78 @@
     const useLastPriceInput = document.getElementById("use_last_price");
     const unitPriceGroup = document.getElementById("unit_price_group");
     const unitPriceInput = document.getElementById("unit_price");
+    const newSupplierGroup = document.getElementById("new_supplier_group");
+    const newSupplierInput = document.getElementById("new_supplier_name");
+
+    const paymentTypeSelect = document.querySelector('[name="payment_type"]');
+    const paymentTermInput = document.querySelector('[name="payment_term_months"]');
+    const originTypeSelect = document.querySelector('[name="origin_type"]');
+    const leadTimeInput = document.querySelector('[name="lead_time_days"]');
+    const brandModelInput = document.querySelector('[name="brand_model"]');
+    const notesInput = document.querySelector('[name="notes"]');
+
+    const comparisonDataElement = document.getElementById("comparison-data");
+    const comparisonBySupplier = comparisonDataElement
+        ? JSON.parse(comparisonDataElement.textContent || "{}")
+        : {};
+
+    function setNewPriceMode() {
+        useLastPriceInput.value = "0";
+        keepRadio.checked = false;
+        newRadio.checked = true;
+        updatePriceMode();
+    }
+
+    function clearCommercialFields() {
+        paymentTypeSelect.value = "";
+        paymentTermInput.value = "";
+        originTypeSelect.value = "";
+        leadTimeInput.value = "";
+        brandModelInput.value = "";
+        notesInput.value = "";
+    }
+
+    function fillCommercialFields(data) {
+        paymentTypeSelect.value = data.payment_type || "";
+        paymentTermInput.value = data.payment_term_months || "";
+        originTypeSelect.value = data.origin_type || "";
+        leadTimeInput.value = data.lead_time_days || "";
+        brandModelInput.value = data.brand_model || "";
+        notesInput.value = data.notes || "";
+    }
 
     function updateLastPrice() {
-        const option = supplierSelect.options[supplierSelect.selectedIndex];
+        const supplierId = supplierSelect.value;
 
-        if (!option) return;
+        if (supplierId === "-1") {
+            newSupplierGroup.classList.remove("d-none");
+            newSupplierInput.setAttribute("required", "required");
 
-        const lastPrice = option.dataset.lastPrice || "";
-        const lastDate = option.dataset.lastDate || "";
+            lastPriceDisplay.value = "Proveedor nuevo";
+            keepRadio.disabled = true;
+            clearCommercialFields();
+            setNewPriceMode();
+            return;
+        }
 
-        if (lastPrice) {
-            lastPriceDisplay.value = lastDate
-                ? `${lastPrice} | Fecha: ${lastDate}`
-                : lastPrice;
+        newSupplierGroup.classList.add("d-none");
+        newSupplierInput.removeAttribute("required");
+        newSupplierInput.value = "";
+
+        const data = comparisonBySupplier[supplierId];
+
+        if (data && data.last_price) {
+            lastPriceDisplay.value = data.last_date
+                ? `${data.last_price} | Fecha: ${data.last_date}`
+                : data.last_price;
 
             keepRadio.disabled = false;
+            fillCommercialFields(data);
         } else {
             lastPriceDisplay.value = "Sin precio previo";
-            keepRadio.checked = false;
             keepRadio.disabled = true;
-            newRadio.checked = true;
-            updatePriceMode();
+            clearCommercialFields();
+            setNewPriceMode();
         }
     }
 
