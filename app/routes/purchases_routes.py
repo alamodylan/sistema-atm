@@ -69,6 +69,7 @@ from app.services.quotation_service import (
     create_single_line_quotation,
     get_quotation_batch_or_404,
     list_quotation_batches,
+    list_quotation_line_groups,
     get_comparison_for_purchase_request_line,
     get_last_price_for_supplier,
 )
@@ -424,11 +425,12 @@ def resolve_pending_article_route(pending_article_id: int):
 @login_required
 def list_quotations():
     search = request.args.get("search", type=str)
-    quotation_batches = list_quotation_batches(search=search)
+
+    quotation_groups = list_quotation_line_groups(search=search)
 
     return render_template(
         "purchases/quotations/index.html",
-        quotation_batches=quotation_batches,
+        quotation_groups=quotation_groups,
         search=search,
     )
 

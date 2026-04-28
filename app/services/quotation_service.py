@@ -711,6 +711,101 @@ def list_quotation_batches(search: str | None = None) -> list[QuotationBatch]:
         .all()
     )
 
+def list_quotation_line_groups(search: str | None = None) -> list[dict]:
+    search = (search or "").strip()
+
+    query = (
+        db.session.query(
+            PurchaseRequestLine.id.label("purchase_request_line_id"),
+            PurchaseRequestLine.line_status.label("line_status"),
+            PurchaseRequestLine.quantity_requested.label("quantity_requested"),
+            PurchaseRequest.number.label("purchase_request_number"),
+            PurchaseRequest.id.label("purchase_request_id"),
+            func.count(QuotationLine.id).label("total_quotes"),
+            func.sum(
+                db.case(
+                    (QuotationLine.status == "BORRADOR", 1),
+                    else_=0,
+                )
+            ).label("draft_quotes"),
+            func.sum(
+                db.case(
+                    (QuotationLine.status == "COTIZADA", 1),
+                    else_=0,
+                )
+            ).label("confirmed_quotes"),
+            func.max(QuotationLine.quote_date).label("last_quote_date"),
+        )
+        .join(
+            QuotationLine,
+            QuotationLine.purchase_request_line_id == PurchaseRequestLine.id,
+        )
+        .join(
+            PurchaseRequest,
+            PurchaseRequest.id == PurchaseRequestLine.purchase_request_id,
+        )
+        .group_by(
+            PurchaseRequestLine.id,
+            PurchaseRequestLine.line_status,
+            PurchaseRequestLine.quantity_requested,
+            PurchaseRequest.number,
+            PurchaseRequest.id,
+        )
+    )
+
+    if search:
+        like_value = f"%{search}%"
+        query = query.filter(
+            db.or_(
+                PurchaseRequest.number.ilike(like_value),
+                QuotationLine.currency_code.ilike(like_value),
+            )
+        )
+
+    rows = (
+        query
+        .order_by(
+            func.max(QuotationLine.quote_date).desc(),
+            PurchaseRequest.id.desc(),
+            PurchaseRequestLine.id.desc(),
+        )
+        .all()
+    )
+
+    groups: list[dict] = []
+
+    for row in rows:
+        request_line = PurchaseRequestLine.query.get(row.purchase_request_line_id)
+
+        if not request_line:
+            continue
+
+        comparison = get_article_supplier_comparison(
+            article_id=getattr(request_line, "article_id", None),
+            pending_article_id=getattr(request_line, "pending_article_id", None),
+        )
+
+        best = comparison[0] if comparison else None
+
+        groups.append(
+            {
+                "purchase_request_id": row.purchase_request_id,
+                "purchase_request_number": row.purchase_request_number,
+                "purchase_request_line_id": row.purchase_request_line_id,
+                "item_code": request_line.item_code or "-",
+                "item_name": request_line.item_name or "Sin artículo",
+                "quantity_requested": row.quantity_requested,
+                "line_status": row.line_status,
+                "total_quotes": int(row.total_quotes or 0),
+                "draft_quotes": int(row.draft_quotes or 0),
+                "confirmed_quotes": int(row.confirmed_quotes or 0),
+                "best_price": best.get("last_price_with_tax") or best.get("last_price") if best else None,
+                "best_supplier": best.get("supplier_name") if best else None,
+                "last_quote_date": row.last_quote_date,
+            }
+        )
+
+    return groups
 
 def get_quotation_batch_or_404(batch_id: int) -> QuotationBatch:
     return QuotationBatch.query.get_or_404(batch_id)
