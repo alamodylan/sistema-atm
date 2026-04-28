@@ -110,7 +110,7 @@
     <div><strong>Artículo:</strong> {{ request_line.item_name or "Sin artículo" }}</div>
     <div><strong>Código:</strong> {{ request_line.item_code or "-" }}</div>
     <div><strong>Cantidad:</strong> {{ request_line.quantity_requested }}</div>
-    <div><strong>Fecha:</strong> {{ now().strftime("%d/%m/%Y") }}</div>
+    <div><strong>Fecha:</strong> {{ generated_at.strftime("%d/%m/%Y") }}</div>
 </div>
 
 <table>

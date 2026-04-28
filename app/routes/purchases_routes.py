@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 from app.extensions import db
@@ -1310,4 +1310,5 @@ def print_quotation_comparison(line_id: int):
         "purchases/quotations/print_comparison.html",
         request_line=request_line,
         comparison=comparison,
+        generated_at=datetime.now(CR_TZ),
     )
