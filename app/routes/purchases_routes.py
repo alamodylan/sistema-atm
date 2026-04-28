@@ -59,8 +59,11 @@ from app.services.quotation_service import (
     QuotationLinePayload,
     QuotationServiceError,
     create_quotation_batch,
+    create_single_line_quotation,
     get_quotation_batch_or_404,
     list_quotation_batches,
+    get_comparison_for_purchase_request_line,
+    get_last_price_for_supplier,
 )
 
 purchases_bp = Blueprint("purchases", __name__, template_folder="../templates")
@@ -1066,3 +1069,106 @@ def entry_detail(entry_id: int):
         "purchases/inventory_entries/detail.html",
         inventory_entry=inventory_entry,
     )
+
+@purchases_bp.route("/quotations/line/<int:line_id>")
+@login_required
+def quotation_line_view(line_id: int):
+    try:
+        comparison = get_comparison_for_purchase_request_line(
+            purchase_request_line_id=line_id
+        )
+    except QuotationServiceError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("purchases.create_quotation"))
+
+    comparison_supplier_ids = {
+        item["supplier_id"]
+        for item in comparison
+        if item.get("supplier_id")
+    }
+
+    suppliers_query = Supplier.query.filter_by(is_active=True)
+
+    if comparison_supplier_ids:
+        suppliers_query = suppliers_query.filter(
+            Supplier.id.notin_(comparison_supplier_ids)
+        )
+
+    suppliers = (
+        suppliers_query
+        .order_by(Supplier.commercial_name.asc(), Supplier.name.asc())
+        .all()
+    )
+
+    return render_template(
+        "purchases/quotations/line.html",
+        line_id=line_id,
+        comparison=comparison,
+        suppliers=suppliers,
+    )
+
+@purchases_bp.route("/quotations/line/<int:line_id>/quote", methods=["POST"])
+@login_required
+def create_quote_for_line(line_id: int):
+    supplier_id = _to_int(request.form.get("supplier_id"))
+    unit_price = request.form.get("unit_price")
+    use_last_price = request.form.get("use_last_price") == "1"
+
+    payment_type = request.form.get("payment_type") or None
+    payment_term = _to_int(request.form.get("payment_term_months"))
+    origin_type = request.form.get("origin_type") or None
+
+    lead_time_days = _to_int(request.form.get("lead_time_days"))
+    brand_model = request.form.get("brand_model")
+    notes = request.form.get("notes")
+    status = request.form.get("status") or "COTIZADA"
+
+    try:
+        create_single_line_quotation(
+            purchase_request_line_id=line_id,
+            supplier_id=supplier_id,
+            created_by_user_id=current_user.id,
+            unit_price=unit_price,
+            use_last_price=use_last_price,
+            payment_type=payment_type,
+            payment_term_months=payment_term,
+            origin_type=origin_type,
+            lead_time_days=lead_time_days,
+            brand_model=brand_model,
+            notes=notes,
+            status=status,
+        )
+    except QuotationServiceError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("purchases.quotation_line_view", line_id=line_id))
+
+    if status == "BORRADOR":
+        flash("Borrador de cotización guardado correctamente.", "success")
+    else:
+        flash("Cotización guardada correctamente.", "success")
+
+    return redirect(url_for("purchases.quotation_line_view", line_id=line_id))
+
+@purchases_bp.route("/quotations/last-price")
+@login_required
+def get_last_price():
+    supplier_id = _to_int(request.args.get("supplier_id"))
+    article_id = _to_int(request.args.get("article_id"))
+    pending_article_id = _to_int(request.args.get("pending_article_id"))
+
+    try:
+        last = get_last_price_for_supplier(
+            supplier_id=supplier_id,
+            article_id=article_id,
+            pending_article_id=pending_article_id,
+        )
+    except QuotationServiceError as exc:
+        return {"error": str(exc)}, 400
+
+    if not last:
+        return {"price": None}
+
+    return {
+        "price": str(last.unit_price),
+        "date": str(last.quote_date),
+    }
