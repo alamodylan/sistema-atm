@@ -426,19 +426,31 @@ def list_quotations():
 @purchases_bp.route("/quotations/create", methods=["GET", "POST"])
 @login_required
 def create_quotation():
+    # 🔥 SOLO solicitudes válidas
     purchase_requests = (
-        PurchaseRequest.query.order_by(PurchaseRequest.created_at.desc()).all()
+        PurchaseRequest.query.filter(
+            PurchaseRequest.status.in_([
+                "ENVIADA",
+                "EN_REVISION_PROVEEDURIA",
+                "PARCIALMENTE_COTIZADA",
+            ])
+        )
+        .order_by(PurchaseRequest.created_at.desc())
+        .all()
     )
+
     suppliers = (
         Supplier.query.filter_by(is_active=True)
         .order_by(Supplier.commercial_name.asc())
         .all()
     )
+
     articles = (
         Article.query.filter_by(is_active=True)
         .order_by(Article.code.asc())
         .all()
     )
+
     pending_articles = (
         PendingArticle.query.filter(
             PendingArticle.status.in_(["PENDIENTE_CODIFICACION", "CODIFICADO"])
@@ -447,9 +459,13 @@ def create_quotation():
         .all()
     )
 
+    # 🔥 MAPA DE LÍNEAS (solo activas)
     purchase_request_lines_map: dict[int, list] = {}
     for pr in purchase_requests:
-        purchase_request_lines_map[pr.id] = list(pr.lines) if pr.lines else []
+        purchase_request_lines_map[pr.id] = [
+            line for line in pr.lines
+            if line.line_status not in ["CANCELADA", "CONVERTIDA_A_OC", "RECIBIDA"]
+        ]
 
     if request.method == "POST":
         purchase_request_id = _to_int(request.form.get("purchase_request_id"))
@@ -469,15 +485,16 @@ def create_quotation():
         brands = request.form.getlist("line_brand_model[]")
         notes_list = request.form.getlist("line_notes[]")
 
+        # 🔥 NUEVOS CAMPOS
+        payment_types = request.form.getlist("line_payment_type[]")
+        payment_terms = request.form.getlist("line_payment_term_months[]")
+        origin_types = request.form.getlist("line_origin_type[]")
+
         max_len = max(
-            [
-                len(article_ids),
-                len(pending_article_ids),
-                len(supplier_ids),
-                len(prices),
-            ],
+            [len(supplier_ids), len(prices)],
             default=0,
         )
+
         lines: list[QuotationLinePayload] = []
 
         for index in range(max_len):
@@ -494,17 +511,10 @@ def create_quotation():
 
             try:
                 unit_price = _to_decimal(price_raw)
-                discount_pct = _to_decimal(
-                    discounts[index] if index < len(discounts) else None
-                )
-                tax_pct = _to_decimal(
-                    taxes[index] if index < len(taxes) else None
-                )
+                discount_pct = _to_decimal(discounts[index] if index < len(discounts) else None)
+                tax_pct = _to_decimal(taxes[index] if index < len(taxes) else None)
             except ValueError:
-                flash(
-                    f"Hay valores inválidos en la línea {index + 1} de cotización.",
-                    "danger",
-                )
+                flash(f"Error en línea {index + 1}", "danger")
                 return render_template(
                     "purchases/quotations/create.html",
                     purchase_requests=purchase_requests,
@@ -526,11 +536,16 @@ def create_quotation():
                     discount_pct=discount_pct,
                     tax_pct=tax_pct,
                     tax_included=str(index) in tax_included_flags,
-                    lead_time_days=_to_int(
-                        lead_times[index] if index < len(lead_times) else None
-                    ),
+                    lead_time_days=_to_int(lead_times[index] if index < len(lead_times) else None),
                     brand_model=brands[index] if index < len(brands) else None,
                     notes=notes_list[index] if index < len(notes_list) else None,
+
+                    # 🔥 NUEVO
+                    payment_type=payment_types[index] if index < len(payment_types) else None,
+                    payment_term_months=_to_int(payment_terms[index] if index < len(payment_terms) else None),
+                    origin_type=origin_types[index] if index < len(origin_types) else None,
+
+                    status="COTIZADA",
                 )
             )
 
@@ -554,9 +569,7 @@ def create_quotation():
             )
 
         flash("Cotización creada correctamente.", "success")
-        return redirect(
-            url_for("purchases.quotation_detail", batch_id=quotation_batch.id)
-        )
+        return redirect(url_for("purchases.quotation_detail", batch_id=quotation_batch.id))
 
     return render_template(
         "purchases/quotations/create.html",

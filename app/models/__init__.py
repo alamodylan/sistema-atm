@@ -1,4 +1,5 @@
 from .article import Article
+from .article_supplier import ArticleSupplier
 from .audit_log import AuditLog
 from .deletion_request import WorkOrderLineDeleteRequest
 from .equipment import Equipment
@@ -6,6 +7,7 @@ from .inventory import InventoryLedger, WarehouseStock, WarehouseLocationStock
 from .inventory_entry import InventoryEntry
 from .inventory_entry_line import InventoryEntryLine
 from .item_category import ItemCategory
+from .item_subcategory import ItemSubcategory
 from .mechanic import Mechanic
 from .mechanic_specialty import MechanicSpecialty
 from .mechanic_specialty_assignment import MechanicSpecialtyAssignment
@@ -49,14 +51,13 @@ from .work_order_service import WorkOrderService
 from .work_order_task_line import WorkOrderTaskLine
 from .work_order_task_line_assignment import WorkOrderTaskLineAssignment
 from .work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
-from .item_category import ItemCategory
-from .item_subcategory import ItemSubcategory
 
 __all__ = [
     "Role",
     "User",
     "AuditLog",
     "Article",
+    "ArticleSupplier",
     "Warehouse",
     "WarehouseLocation",
     "InventoryLedger",
@@ -69,6 +70,7 @@ __all__ = [
     "WasteAct",
     "WasteActLine",
     "ItemCategory",
+    "ItemSubcategory",
     "Unit",
     "WorkOrderRequest",
     "WorkOrderRequestLine",
@@ -107,6 +109,4 @@ __all__ = [
     "WorkOrderTaskLine",
     "WorkOrderTaskLineAssignment",
     "WorkOrderTaskLineFinishRequest",
-    "ItemCategory",
-    "ItemSubcategory",
 ]

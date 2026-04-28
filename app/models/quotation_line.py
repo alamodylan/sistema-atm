@@ -67,6 +67,28 @@ class QuotationLine(db.Model):
 
     lead_time_days = db.Column(db.Integer, nullable=True)
     brand_model = db.Column(db.String(200), nullable=True)
+
+    status = db.Column(
+        db.String(30),
+        nullable=False,
+        default="BORRADOR",
+    )
+
+    payment_type = db.Column(
+        db.String(20),
+        nullable=True,
+    )
+
+    payment_term_months = db.Column(
+        db.Integer,
+        nullable=True,
+    )
+
+    origin_type = db.Column(
+        db.String(20),
+        nullable=True,
+    )
+
     notes = db.Column(db.Text)
 
     created_at = db.Column(
@@ -128,3 +150,19 @@ class QuotationLine(db.Model):
         if self.discount_pct:
             price = price * (1 - self.discount_pct / 100)
         return price
+
+    @property
+    def payment_type_label(self) -> str:
+        if self.payment_type == "CONTADO":
+            return "Contado"
+        if self.payment_type == "CREDITO":
+            return "Crédito"
+        return "-"
+
+    @property
+    def origin_type_label(self) -> str:
+        if self.origin_type == "LOCAL":
+            return "Local"
+        if self.origin_type == "IMPORTACION":
+            return "Importación"
+        return "-"

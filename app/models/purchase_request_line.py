@@ -48,6 +48,26 @@ class PurchaseRequestLine(db.Model):
         default="ACTIVA",
     )
 
+    sent_to_quote_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    quoted_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    converted_to_po_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    received_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -99,3 +119,22 @@ class PurchaseRequestLine(db.Model):
     @property
     def is_pending(self) -> bool:
         return self.pending_article_id is not None
+
+    @property
+    def is_quoted(self) -> bool:
+        return self.line_status in {
+            "COTIZADA",
+            "CONVERTIDA_A_OC",
+            "RECIBIDA",
+        }
+
+    @property
+    def is_converted_to_po(self) -> bool:
+        return self.line_status in {
+            "CONVERTIDA_A_OC",
+            "RECIBIDA",
+        }
+
+    @property
+    def is_received(self) -> bool:
+        return self.line_status == "RECIBIDA"
