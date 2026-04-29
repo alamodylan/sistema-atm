@@ -105,7 +105,66 @@ def _validate_quotation_line(line: QuotationLinePayload) -> None:
     if line.payment_term_months is not None and line.payment_term_months < 0:
         raise QuotationServiceError("El plazo de pago no puede ser negativo.")
 
+def list_quotation_request_groups(search: str | None = None) -> list[dict]:
+    search = (search or "").strip()
 
+    query = (
+        db.session.query(
+            PurchaseRequest.id.label("purchase_request_id"),
+            PurchaseRequest.number.label("purchase_request_number"),
+            func.count(PurchaseRequestLine.id).label("total_lines"),
+            func.sum(
+                db.case(
+                    (PurchaseRequestLine.line_status == "COTIZADA", 1),
+                    else_=0,
+                )
+            ).label("quoted_lines"),
+            func.sum(
+                db.case(
+                    (PurchaseRequestLine.line_status != "COTIZADA", 1),
+                    else_=0,
+                )
+            ).label("pending_lines"),
+            func.max(QuotationLine.quote_date).label("last_quote_date"),
+        )
+        .join(
+            PurchaseRequestLine,
+            PurchaseRequestLine.purchase_request_id == PurchaseRequest.id,
+        )
+        .outerjoin(
+            QuotationLine,
+            QuotationLine.purchase_request_line_id == PurchaseRequestLine.id,
+        )
+        .group_by(
+            PurchaseRequest.id,
+            PurchaseRequest.number,
+        )
+    )
+
+    if search:
+        like_value = f"%{search}%"
+        query = query.filter(
+            PurchaseRequest.number.ilike(like_value)
+        )
+
+    rows = query.order_by(
+        func.max(QuotationLine.quote_date).desc().nullslast(),
+        PurchaseRequest.id.desc(),
+    ).all()
+
+    result = []
+
+    for row in rows:
+        result.append({
+            "purchase_request_id": row.purchase_request_id,
+            "purchase_request_number": row.purchase_request_number,
+            "total_lines": int(row.total_lines or 0),
+            "quoted_lines": int(row.quoted_lines or 0),
+            "pending_lines": int(row.pending_lines or 0),
+            "last_quote_date": row.last_quote_date,
+        })
+
+    return result
 def _ensure_article_supplier(
     *,
     article_id: int | None,

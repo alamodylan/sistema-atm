@@ -3,17 +3,48 @@
 {% block content %}
 <div class="container-fluid py-4">
 
+    <nav class="mb-3">
+        <ol class="breadcrumb mb-0 small">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('purchases.list_quotations') }}">Cotizaciones</a>
+            </li>
+
+            {% if request_line and request_line.purchase_request %}
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('purchases.quotation_request_lines', request_id=request_line.purchase_request.id) }}">
+                        {{ request_line.purchase_request.number }}
+                    </a>
+                </li>
+            {% endif %}
+
+            <li class="breadcrumb-item active">
+                Línea {{ request_line.item_code or "-" }}
+            </li>
+        </ol>
+    </nav>
+
     <div class="d-flex justify-content-between align-items-start mb-4">
         <div>
             <h2 class="fw-bold mb-1">Cotizar línea solicitada</h2>
             <p class="text-muted mb-0">
-                Revisa el comparativo histórico, selecciona proveedor y registra una nueva cotización.
+                {{ request_line.item_name or "Sin artículo" }}
+                {% if request_line.item_code %}
+                    | Código: {{ request_line.item_code }}
+                {% endif %}
+                | Cantidad: {{ request_line.quantity_requested }}
             </p>
         </div>
 
-        <a href="{{ url_for('purchases.create_quotation') }}" class="btn btn-light rounded-3">
-            <i class="bi bi-arrow-left me-2"></i>Volver
-        </a>
+        {% if request_line and request_line.purchase_request %}
+            <a href="{{ url_for('purchases.quotation_request_lines', request_id=request_line.purchase_request.id) }}"
+               class="btn btn-light rounded-3">
+                <i class="bi bi-arrow-left me-2"></i>Volver a líneas
+            </a>
+        {% else %}
+            <a href="{{ url_for('purchases.list_quotations') }}" class="btn btn-light rounded-3">
+                <i class="bi bi-arrow-left me-2"></i>Volver
+            </a>
+        {% endif %}
     </div>
 
     <div class="row g-4">
@@ -111,6 +142,7 @@
                     </p>
 
                     <form method="post" action="{{ url_for('purchases.create_quote_for_line', line_id=line_id) }}">
+                        <input type="hidden" name="status" value="COTIZADA">
 
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Proveedor</label>
@@ -250,11 +282,7 @@
                         </div>
 
                         <div class="d-flex justify-content-end gap-2 mt-4">
-                            <button type="submit" name="status" value="BORRADOR" class="btn btn-outline-dark rounded-3">
-                                Guardar borrador
-                            </button>
-
-                            <button type="submit" name="status" value="COTIZADA" class="btn btn-dark rounded-3">
+                            <button type="submit" class="btn btn-dark rounded-3">
                                 <i class="bi bi-save me-2"></i>Guardar cotización
                             </button>
                         </div>

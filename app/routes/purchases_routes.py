@@ -68,6 +68,7 @@ from app.services.quotation_service import (
     create_quotation_batch,
     create_single_line_quotation,
     get_quotation_batch_or_404,
+    list_quotation_request_groups,
     list_quotation_batches,
     list_quotation_line_groups,
     get_comparison_for_purchase_request_line,
@@ -426,12 +427,36 @@ def resolve_pending_article_route(pending_article_id: int):
 def list_quotations():
     search = request.args.get("search", type=str)
 
-    quotation_groups = list_quotation_line_groups(search=search)
+    quotation_requests = list_quotation_request_groups(search=search)
 
     return render_template(
         "purchases/quotations/index.html",
-        quotation_groups=quotation_groups,
+        quotation_requests=quotation_requests,
         search=search,
+    )
+
+@purchases_bp.route("/quotations/request/<int:request_id>")
+@login_required
+def quotation_request_lines(request_id: int):
+    purchase_request = PurchaseRequest.query.get_or_404(request_id)
+
+    lines = [
+        line for line in purchase_request.lines
+        if line.line_status not in ["CANCELADA"]
+    ]
+
+    line_groups = list_quotation_line_groups()
+
+    # 🔥 Filtrar solo las líneas de esta solicitud
+    line_groups = [
+        lg for lg in line_groups
+        if lg["purchase_request_id"] == request_id
+    ]
+
+    return render_template(
+        "purchases/quotations/request_lines.html",
+        purchase_request=purchase_request,
+        line_groups=line_groups,
     )
 
 
@@ -1174,7 +1199,14 @@ def create_quote_for_line(line_id: int):
         return redirect(url_for("purchases.quotation_line_view", line_id=line_id))
 
     flash("Cotización guardada correctamente.", "success")
-    return redirect(url_for("purchases.quotation_line_view", line_id=line_id))
+    request_line = PurchaseRequestLine.query.get(line_id)
+
+    return redirect(
+        url_for(
+            "purchases.quotation_request_lines",
+            request_id=request_line.purchase_request_id,
+        )
+    )
 
 @purchases_bp.route("/quotations/last-price")
 @login_required
