@@ -1107,18 +1107,24 @@ def entry_detail(entry_id: int):
 @purchases_bp.route("/quotations/line/<int:line_id>")
 @login_required
 def quotation_line_view(line_id: int):
+    request_line = PurchaseRequestLine.query.get_or_404(line_id)
+
     try:
         comparison = get_comparison_for_purchase_request_line(
             purchase_request_line_id=line_id
         )
     except QuotationServiceError as exc:
         flash(str(exc), "danger")
-        return redirect(url_for("purchases.create_quotation"))
 
-    request_line = (
-        PurchaseRequestLine.query
-        .get_or_404(line_id)
-    )
+        if request_line.purchase_request_id:
+            return redirect(
+                url_for(
+                    "purchases.quotation_request_lines",
+                    request_id=request_line.purchase_request_id,
+                )
+            )
+
+        return redirect(url_for("purchases.list_quotations"))
 
     article_id = request_line.article_id
 
@@ -1144,13 +1150,17 @@ def quotation_line_view(line_id: int):
                     Supplier.id.in_(supplier_ids),
                     Supplier.is_active.is_(True),
                 )
-                .order_by(Supplier.commercial_name.asc(), Supplier.legal_name.asc())
+                .order_by(
+                    Supplier.commercial_name.asc(),
+                    Supplier.legal_name.asc(),
+                )
                 .all()
             )
 
     return render_template(
         "purchases/quotations/line.html",
         line_id=line_id,
+        request_line=request_line,
         comparison=comparison,
         suppliers=suppliers,
     )
