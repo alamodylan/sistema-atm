@@ -1,6 +1,15 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% set approved_doc = none %}
+{% if purchase_order.approvals %}
+    {% for approval in purchase_order.approvals %}
+        {% if approval.status == "APROBADA" and approval.approved_pdf_path %}
+            {% set approved_doc = approval %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+
 <div class="container-fluid py-4">
     <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
         <div>
@@ -18,22 +27,6 @@
                class="btn btn-outline-dark rounded-3">
                 <i class="bi bi-printer me-2"></i>Imprimir / PDF
             </a>
-
-            {% if purchase_order.approval_status == 'BORRADOR' %}
-                <form method="post" action="{{ url_for('purchases.approve_order', order_id=purchase_order.id) }}">
-                    <input type="hidden" name="reason" value="Aprobación directa desde detalle">
-                    <button type="submit" class="btn btn-success rounded-3">
-                        <i class="bi bi-check2-circle me-2"></i>Aprobar
-                    </button>
-                </form>
-
-                <form method="post" action="{{ url_for('purchases.reject_order', order_id=purchase_order.id) }}">
-                    <input type="hidden" name="reason" value="Rechazo directo desde detalle">
-                    <button type="submit" class="btn btn-danger rounded-3">
-                        <i class="bi bi-x-circle me-2"></i>Rechazar
-                    </button>
-                </form>
-            {% endif %}
 
             {% if purchase_order.approval_status in ['APROBADA', 'RECIBIDA_PARCIAL'] %}
                 <a href="{{ url_for('purchases.create_entry') }}" class="btn btn-dark rounded-3">
@@ -68,7 +61,9 @@
                         <dt class="col-5 text-muted">Estado</dt>
                         <dd class="col-7">
                             {% if purchase_order.approval_status == 'APROBADA' %}
-                                <span class="badge text-bg-success">{{ purchase_order.approval_status }}</span>
+                                <span class="badge text-bg-success">APROBADA</span>
+                            {% elif purchase_order.approval_status == 'PENDIENTE_APROBACION' %}
+                                <span class="badge text-bg-warning">PENDIENTE APROBACIÓN</span>
                             {% elif purchase_order.approval_status in ['RECHAZADA', 'ANULADA'] %}
                                 <span class="badge text-bg-danger">{{ purchase_order.approval_status }}</span>
                             {% elif purchase_order.approval_status in ['RECIBIDA_PARCIAL', 'RECIBIDA_TOTAL'] %}
@@ -95,10 +90,14 @@
                             {{ purchase_order.generated_by_user.name if purchase_order.generated_by_user and purchase_order.generated_by_user.name else purchase_order.generated_by_user.username if purchase_order.generated_by_user else '-' }}
                         </dd>
 
-                        <dt class="col-5 text-muted">Fecha</dt>
-                        <dd class="col-7">
-                            {{ cr_datetime(purchase_order.created_at) }}
-                        </dd>
+                        <dt class="col-5 text-muted">Fecha creación</dt>
+                        <dd class="col-7">{{ cr_datetime(purchase_order.created_at) }}</dd>
+
+                        <dt class="col-5 text-muted">Enviada aprobación</dt>
+                        <dd class="col-7">{{ cr_datetime(purchase_order.submitted_for_approval_at) }}</dd>
+
+                        <dt class="col-5 text-muted">Aprobada</dt>
+                        <dd class="col-7">{{ cr_datetime(purchase_order.approved_at) }}</dd>
                     </dl>
 
                     {% if purchase_order.notes %}
@@ -108,6 +107,54 @@
                     {% endif %}
                 </div>
             </div>
+
+            {% if purchase_order.approval_status == 'PENDIENTE_APROBACION' %}
+                <div class="card border-0 shadow-sm rounded-4 mt-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-2">Subir OC firmada</h5>
+                        <p class="text-muted small mb-3">
+                            La orden solo pasará a <strong>APROBADA</strong> cuando se adjunte el PDF firmado.
+                        </p>
+
+                        <form method="post"
+                              action="{{ url_for('purchases.upload_approved_pdf', order_id=purchase_order.id) }}"
+                              enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label class="form-label small text-muted">PDF aprobado</label>
+                                <input type="file" name="file" accept=".pdf" class="form-control" required>
+                            </div>
+
+                            <button type="submit" class="btn btn-success w-100 rounded-3">
+                                <i class="bi bi-file-earmark-check me-2"></i>Subir y aprobar OC
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if approved_doc %}
+                <div class="card border-0 shadow-sm rounded-4 mt-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-2">Documento aprobado</h5>
+                        <p class="text-muted small mb-3">
+                            {{ approved_doc.approved_pdf_original_name or 'PDF aprobado' }}
+                        </p>
+
+                        <a href="/{{ approved_doc.approved_pdf_path }}"
+                           target="_blank"
+                           class="btn btn-outline-success w-100 rounded-3">
+                            <i class="bi bi-file-earmark-pdf me-2"></i>Ver PDF aprobado
+                        </a>
+
+                        <div class="small text-muted mt-3">
+                            Subido por:
+                            {{ approved_doc.approved_by_user.name if approved_doc.approved_by_user and approved_doc.approved_by_user.name else approved_doc.approved_by_user.username if approved_doc.approved_by_user else 'Sin usuario' }}
+                            <br>
+                            Fecha: {{ cr_datetime(approved_doc.approved_pdf_uploaded_at) }}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
 
             {% if purchase_order.approvals %}
                 <div class="card border-0 shadow-sm rounded-4 mt-4">
@@ -119,14 +166,20 @@
                                 <div class="border rounded-3 p-3">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
                                         <div class="fw-semibold">{{ item.status }}</div>
-                                        <small class="text-muted">
-                                            {{ cr_datetime(item.created_at) }}
-                                        </small>
+                                        <small class="text-muted">{{ cr_datetime(item.created_at) }}</small>
                                     </div>
                                     <div class="text-muted small mb-1">
                                         {{ item.approved_by_user.name if item.approved_by_user and item.approved_by_user.name else item.approved_by_user.username if item.approved_by_user else 'Sin usuario' }}
                                     </div>
                                     <div class="small text-muted">{{ item.reason or 'Sin observación' }}</div>
+
+                                    {% if item.approved_pdf_path %}
+                                        <div class="mt-2">
+                                            <a href="/{{ item.approved_pdf_path }}" target="_blank" class="small text-success text-decoration-none">
+                                                <i class="bi bi-file-earmark-pdf me-1"></i>Ver PDF firmado
+                                            </a>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             {% endfor %}
                         </div>
@@ -156,6 +209,8 @@
                                         <th>Cant. recibida</th>
                                         <th>Unidad</th>
                                         <th>Costo unitario</th>
+                                        <th>Subtotal</th>
+                                        <th>IVA %</th>
                                         <th>Total</th>
                                         <th class="pe-4">Notas</th>
                                     </tr>
@@ -176,7 +231,9 @@
                                             </td>
                                             <td>{{ line.unit.name if line.unit else '-' }}</td>
                                             <td>{{ line.unit_cost }}</td>
-                                            <td>{{ line.line_total }}</td>
+                                            <td>{{ line.line_subtotal }}</td>
+                                            <td>{{ line.tax_pct }}</td>
+                                            <td class="fw-semibold">{{ line.line_total }}</td>
                                             <td class="pe-4">{{ line.line_notes or '-' }}</td>
                                         </tr>
                                     {% endfor %}

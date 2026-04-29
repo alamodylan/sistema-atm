@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, UTC
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 from app.extensions import db
@@ -11,6 +11,7 @@ from flask import send_file
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from app.models.purchase_order_approval import PurchaseOrderApproval
 
 from flask import (
     Blueprint,
@@ -1356,3 +1357,38 @@ def print_quotation_comparison(line_id: int):
         comparison=comparison,
         generated_at=datetime.now(CR_TZ),
     )
+
+@purchases_bp.route("/orders/<int:order_id>/upload-approved-pdf", methods=["POST"])
+@login_required
+def upload_approved_pdf(order_id):
+    file = request.files.get("file")
+
+    if not file:
+        flash("Debe subir un archivo PDF.", "danger")
+        return redirect(url_for("purchases.order_detail", order_id=order_id))
+
+    filename = file.filename
+    path = f"uploads/oc/{order_id}_{filename}"
+
+    file.save(path)
+
+    approval = PurchaseOrderApproval(
+        purchase_order_id=order_id,
+        approved_by_user_id=current_user.id,
+        status="APROBADA",
+        approved_pdf_path=path,
+        approved_pdf_original_name=filename,
+        approved_pdf_uploaded_at=datetime.now(UTC),
+    )
+
+    order = PurchaseOrder.query.get(order_id)
+
+    order.approval_status = "APROBADA"
+    order.approved_at = datetime.now(UTC)
+
+    db.session.add(approval)
+    db.session.commit()
+
+    flash("Orden aprobada con documento.", "success")
+
+    return redirect(url_for("purchases.order_detail", order_id=order_id))

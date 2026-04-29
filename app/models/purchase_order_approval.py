@@ -22,6 +22,10 @@ class PurchaseOrderApproval(db.Model):
     status = db.Column(db.String(20), nullable=False)
     reason = db.Column(db.Text)
 
+    approved_pdf_path = db.Column(db.Text, nullable=True)
+    approved_pdf_original_name = db.Column(db.String(255), nullable=True)
+    approved_pdf_uploaded_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,

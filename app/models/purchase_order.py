@@ -44,6 +44,16 @@ class PurchaseOrder(db.Model):
     currency_code = db.Column(db.String(10), nullable=False, default="CRC")
     notes = db.Column(db.Text)
 
+    submitted_for_approval_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    approved_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,

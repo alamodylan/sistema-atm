@@ -10,6 +10,8 @@ from app.extensions import db
 from app.models.purchase_order import PurchaseOrder
 from app.models.purchase_order_approval import PurchaseOrderApproval
 from app.models.purchase_order_line import PurchaseOrderLine
+from datetime import datetime, UTC
+from app.models.quotation_line import QuotationLine
 
 
 class PurchaseOrderServiceError(Exception):
@@ -85,64 +87,139 @@ def _validate_unique_request_usage(line: PurchaseOrderLinePayload) -> None:
 
 def create_purchase_order(
     *,
-    supplier_id: int,
+    supplier_id: int | None,
     generated_by_user_id: int,
-    purchase_request_id: int | None,
-    site_id: int | None,
-    warehouse_id: int | None,
-    payment_terms: str | None,
-    currency_code: str,
-    notes: str | None,
-    lines: list[PurchaseOrderLinePayload],
+    purchase_request_id: int | None = None,
+    site_id: int | None = None,
+    warehouse_id: int | None = None,
+    payment_terms: str | None = None,
+    currency_code: str = "CRC",
+    notes: str | None = None,
+    lines: list[PurchaseOrderLinePayload] | None = None,
 ) -> PurchaseOrder:
+    if not supplier_id:
+        raise PurchaseOrderServiceError("Debe seleccionar un proveedor.")
+
+    if not generated_by_user_id:
+        raise PurchaseOrderServiceError("No se pudo identificar el usuario que genera la orden.")
+
+    lines = lines or []
+
     if not lines:
-        raise PurchaseOrderServiceError(
-            "La orden de compra debe incluir al menos una línea."
-        )
+        raise PurchaseOrderServiceError("La orden de compra debe tener al menos una línea.")
 
-    for line in lines:
-        _validate_po_line(line)
-
-        # 🔥 VALIDACIONES NUEVAS
-        _validate_unique_quotation_usage(line)
-        _validate_unique_request_usage(line)
+    now = datetime.now(UTC)
 
     purchase_order = PurchaseOrder(
         number=_generate_purchase_order_number(),
-        supplier_id=supplier_id,
-        generated_by_user_id=generated_by_user_id,
         purchase_request_id=purchase_request_id,
+        supplier_id=supplier_id,
         site_id=site_id,
         warehouse_id=warehouse_id,
-        approval_status="BORRADOR",
-        payment_terms=(payment_terms or "").strip() or None,
-        currency_code=(currency_code or "CRC").strip() or "CRC",
-        notes=(notes or "").strip() or None,
+        generated_by_user_id=generated_by_user_id,
+        approval_status="PENDIENTE_APROBACION",
+        submitted_for_approval_at=now,
+        payment_terms=payment_terms,
+        currency_code=currency_code or "CRC",
+        notes=notes,
     )
 
     db.session.add(purchase_order)
     db.session.flush()
 
-    for line in lines:
-        po_line = PurchaseOrderLine(
+    for index, payload in enumerate(lines, start=1):
+        if not payload.quantity_ordered or payload.quantity_ordered <= 0:
+            raise PurchaseOrderServiceError(
+                f"La cantidad de la línea {index} debe ser mayor a cero."
+            )
+
+        quantity = Decimal(str(payload.quantity_ordered))
+
+        article_id = payload.article_id
+        pending_article_id = payload.pending_article_id
+        purchase_request_line_id = payload.purchase_request_line_id
+        quotation_line_id = payload.quotation_line_id
+        unit_id = payload.unit_id
+
+        unit_cost = Decimal(str(payload.unit_cost or 0))
+        discount_pct = Decimal(str(payload.discount_pct or 0))
+        tax_pct = Decimal(str(payload.tax_pct or 0))
+        line_subtotal = Decimal(str(payload.line_subtotal or 0))
+        line_total = Decimal(str(payload.line_total or 0))
+
+        if quotation_line_id:
+            quotation_line = QuotationLine.query.get(quotation_line_id)
+
+            if not quotation_line:
+                raise PurchaseOrderServiceError(
+                    f"La cotización de la línea {index} no existe."
+                )
+
+            if quotation_line.supplier_id != supplier_id:
+                raise PurchaseOrderServiceError(
+                    f"La línea {index} pertenece a otro proveedor. "
+                    "Una orden de compra solo puede contener líneas del mismo proveedor."
+                )
+
+            article_id = quotation_line.article_id
+            pending_article_id = quotation_line.pending_article_id
+            purchase_request_line_id = quotation_line.purchase_request_line_id
+            unit_id = unit_id
+
+            if not unit_id:
+                if quotation_line.article and quotation_line.article.unit_id:
+                    unit_id = quotation_line.article.unit_id
+                elif quotation_line.purchase_request_line and quotation_line.purchase_request_line.unit_id:
+                    unit_id = quotation_line.purchase_request_line.unit_id
+
+            quoted_price = Decimal(str(quotation_line.unit_price or 0))
+            discount_pct = Decimal(str(quotation_line.discount_pct or 0))
+            tax_pct = Decimal("13")
+
+            if quoted_price <= 0:
+                raise PurchaseOrderServiceError(
+                    f"La cotización de la línea {index} no tiene un precio válido."
+                )
+
+            if quotation_line.tax_included:
+                unit_cost = quoted_price / Decimal("1.13")
+                line_subtotal = quantity * unit_cost
+                line_total = quantity * quoted_price
+            else:
+                unit_cost = quoted_price
+                line_subtotal = quantity * unit_cost
+                line_total = line_subtotal * Decimal("1.13")
+
+        else:
+            if not line_subtotal:
+                line_subtotal = quantity * unit_cost
+
+            if tax_pct:
+                line_total = line_subtotal * (Decimal("1") + (tax_pct / Decimal("100")))
+            else:
+                line_total = line_subtotal
+
+        purchase_order_line = PurchaseOrderLine(
             purchase_order_id=purchase_order.id,
-            purchase_request_line_id=line.purchase_request_line_id,
-            quotation_line_id=line.quotation_line_id,
-            article_id=line.article_id,
-            pending_article_id=line.pending_article_id,
-            quantity_ordered=_normalize_decimal(line.quantity_ordered, "cantidad"),
+            purchase_request_line_id=purchase_request_line_id,
+            quotation_line_id=quotation_line_id,
+            article_id=article_id,
+            pending_article_id=pending_article_id,
+            quantity_ordered=quantity,
             quantity_received=Decimal("0"),
-            unit_id=line.unit_id,
-            unit_cost=_normalize_decimal(line.unit_cost, "costo unitario"),
-            discount_pct=_normalize_decimal(line.discount_pct, "descuento"),
-            tax_pct=_normalize_decimal(line.tax_pct, "impuesto"),
-            line_subtotal=_normalize_decimal(line.line_subtotal, "subtotal"),
-            line_total=_normalize_decimal(line.line_total, "total"),
-            line_notes=(line.line_notes or "").strip() or None,
+            unit_id=unit_id,
+            unit_cost=unit_cost,
+            discount_pct=discount_pct,
+            tax_pct=tax_pct,
+            line_subtotal=line_subtotal,
+            line_total=line_total,
+            line_notes=payload.line_notes,
         )
-        db.session.add(po_line)
+
+        db.session.add(purchase_order_line)
 
     db.session.commit()
+
     return purchase_order
 
 
