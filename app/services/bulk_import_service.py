@@ -13,6 +13,11 @@ from app.models.unit import Unit
 from app.models.warehouse import Warehouse
 from app.models.warehouse_location import WarehouseLocation
 from app.models.item_subcategory import ItemSubcategory
+from app.models.article import Article
+from app.models.supplier import Supplier
+from app.models.article_supplier import ArticleSupplier
+from app.models.unit import Unit
+from app.extensions import db
 
 # Si ya tienes supplier.py, esto funcionará de una vez.
 # Si aún no existe el modelo, la carga de proveedores fallará con un mensaje claro.
@@ -862,3 +867,88 @@ def import_location_stock(
 
     db.session.commit()
     return {"created": created, "updated": updated, "skipped": skipped}
+
+def import_article_suppliers(rows: list[dict]):
+    created = 0
+    existing = 0
+    articles_created = 0
+    suppliers_created = 0
+
+    # ⚠️ unidad por defecto (VALIDAR QUE EXISTA EN BD)
+    default_unit = Unit.query.filter_by(code="UND").first()
+    if not default_unit:
+        raise Exception("No existe unidad 'UND' en la BD.")
+
+    for row in rows:
+        codigo = str(row.get("codigo_articulo", "")).strip()
+        nombre = str(row.get("nombre_articulo", "")).strip()
+
+        if not codigo:
+            continue
+
+        # =========================
+        # ARTÍCULO
+        # =========================
+        article = Article.query.filter_by(code=codigo).first()
+
+        if not article:
+            if not nombre:
+                continue
+
+            article = Article(
+                code=codigo,
+                name=nombre,
+                unit_id=default_unit.id,
+            )
+            db.session.add(article)
+            db.session.flush()
+            articles_created += 1
+
+        # =========================
+        # PROVEEDORES
+        # =========================
+        for i in range(1, 11):
+            proveedor_nombre = str(row.get(f"proveedor_{i}", "")).strip()
+
+            if not proveedor_nombre:
+                continue
+
+            supplier = Supplier.query.filter_by(
+                commercial_name=proveedor_nombre
+            ).first()
+
+            if not supplier:
+                supplier = Supplier(
+                    commercial_name=proveedor_nombre,
+                )
+                db.session.add(supplier)
+                db.session.flush()
+                suppliers_created += 1
+
+            # =========================
+            # RELACIÓN
+            # =========================
+            relation = ArticleSupplier.query.filter_by(
+                article_id=article.id,
+                supplier_id=supplier.id,
+            ).first()
+
+            if relation:
+                existing += 1
+                continue
+
+            relation = ArticleSupplier(
+                article_id=article.id,
+                supplier_id=supplier.id,
+            )
+            db.session.add(relation)
+            created += 1
+
+    db.session.commit()
+
+    return {
+        "created": created,
+        "existing": existing,
+        "articles_created": articles_created,
+        "suppliers_created": suppliers_created,
+    }

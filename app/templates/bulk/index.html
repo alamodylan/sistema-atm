@@ -320,6 +320,59 @@
         </div>
     </div>
 
+    <!-- ARTÍCULOS - PROVEEDORES -->
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-4 d-flex flex-column">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="rounded-circle bg-info bg-opacity-10 text-info d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
+                        <i class="bi bi-diagram-3 fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="mb-1 fw-bold">Artículo - Proveedores</h5>
+                        <p class="text-muted mb-0 small">Relaciona artículos con múltiples proveedores automáticamente.</p>
+                    </div>
+                </div>
+
+                <div class="small text-muted mb-2">Columnas esperadas</div>
+                <div class="small mb-3">
+                    <span class="badge text-bg-light border">codigo_articulo*</span>
+                    <span class="badge text-bg-light border">nombre_articulo</span>
+                    <span class="badge text-bg-light border">codigo_unidad</span>
+                    <span class="badge text-bg-light border">proveedor_1</span>
+                    <span class="badge text-bg-light border">proveedor_2</span>
+                    <span class="badge text-bg-light border">...</span>
+                    <span class="badge text-bg-light border">proveedor_10</span>
+                </div>
+
+                <div class="alert alert-light border small">
+                    Si el artículo no existe se crea automáticamente.<br>
+                    Si el proveedor no existe se crea.<br>
+                    No se duplican relaciones existentes.
+                </div>
+
+                <div class="mt-auto">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a href="{{ url_for('bulk.download_article_suppliers_template') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-download me-1"></i>Descargar plantilla
+                        </a>
+                    </div>
+
+                    <form method="POST" action="{{ url_for('bulk.upload_article_suppliers') }}" enctype="multipart/form-data" class="row g-2">
+                        <div class="col-12 col-md-8">
+                            <input type="file" name="file" class="form-control" accept=".xlsx" required>
+                        </div>
+                        <div class="col-12 col-md-4 d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-upload me-1"></i>Subir archivo
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- EQUIPOS -->
     <div class="col-12 col-lg-6">
         <div class="card border-0 shadow-sm rounded-4 h-100">

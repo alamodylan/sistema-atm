@@ -18,6 +18,7 @@ from app.services.bulk_import_service import (
     import_units,
     import_warehouses,
     import_warehouse_stock,
+    import_article_suppliers,
 )
 
 bulk_bp = Blueprint("bulk", __name__, url_prefix="/bulk")
@@ -469,5 +470,54 @@ def upload_location_stock():
         )
     except Exception as exc:
         flash(f"Error al procesar la carga de stock por ubicación: {exc}", "danger")
+
+    return redirect(url_for("bulk.bulk_home"))
+
+@bulk_bp.route("/article-suppliers/template", methods=["GET"])
+@login_required
+def download_article_suppliers_template():
+    return _send_template(
+        [
+            "codigo_articulo*",
+            "nombre_articulo",
+            "codigo_unidad",
+            "proveedor_1",
+            "proveedor_2",
+            "proveedor_3",
+            "proveedor_4",
+            "proveedor_5",
+            "proveedor_6",
+            "proveedor_7",
+            "proveedor_8",
+            "proveedor_9",
+            "proveedor_10",
+        ],
+        "plantilla_articulo_proveedores.xlsx",
+    )
+
+@bulk_bp.route("/article-suppliers/upload", methods=["POST"])
+@login_required
+def upload_article_suppliers():
+    file = request.files.get("file")
+    if not file or not file.filename:
+        flash("Debe seleccionar un archivo Excel.", "danger")
+        return redirect(url_for("bulk.bulk_home"))
+
+    try:
+        df = _read_excel(file)
+        _validate_required_columns(df, {"codigo_articulo"})
+        result = import_article_suppliers(df.to_dict(orient="records"))
+
+        flash(
+            f"Relaciones cargadas. "
+            f"Creadas: {result['created']}. "
+            f"Existentes: {result['existing']}. "
+            f"Artículos creados: {result['articles_created']}. "
+            f"Proveedores creados: {result['suppliers_created']}.",
+            "success",
+        )
+
+    except Exception as exc:
+        flash(f"Error al procesar la carga: {exc}", "danger")
 
     return redirect(url_for("bulk.bulk_home"))
