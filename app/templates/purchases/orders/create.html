@@ -2,11 +2,17 @@
 
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="mb-4">
-        <h2 class="fw-bold mb-1">Nueva orden de compra</h2>
-        <p class="text-muted mb-0">
-            Registra una orden formal con líneas relacionadas a solicitudes, cotizaciones y artículos.
-        </p>
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">Nueva orden de compra</h2>
+            <p class="text-muted mb-0">
+                Cree una OC desde cotizaciones aprobadas o disponibles del mismo proveedor.
+            </p>
+        </div>
+
+        <a href="{{ url_for('purchases.list_orders') }}" class="btn btn-light rounded-3">
+            <i class="bi bi-arrow-left me-2"></i>Volver
+        </a>
     </div>
 
     <form method="post" id="purchase-order-form">
@@ -18,12 +24,15 @@
 
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Proveedor</label>
-                            <select name="supplier_id" class="form-select rounded-3" required>
-                                <option value="">Seleccione</option>
+                            <select name="supplier_id" id="supplier_id" class="form-select rounded-3" required>
+                                <option value="">Seleccione proveedor</option>
                                 {% for item in suppliers %}
                                     <option value="{{ item.id }}">{{ item.commercial_name }}</option>
                                 {% endfor %}
                             </select>
+                            <div class="form-text">
+                                Al seleccionar proveedor, solo se mostrarán cotizaciones de ese proveedor.
+                            </div>
                         </div>
 
                         <div class="mb-3">
@@ -39,12 +48,14 @@
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Lote de cotización</label>
                             <select id="quotation_batch_id_selector" class="form-select rounded-3">
-                                <option value="">Sin lote</option>
+                                <option value="">Seleccione lote</option>
                                 {% for item in quotation_batches %}
                                     <option value="{{ item.id }}">{{ item.number }}</option>
                                 {% endfor %}
                             </select>
-                            <div class="form-text">Solo para ayudar a cargar líneas relacionadas.</div>
+                            <div class="form-text">
+                                Seleccione el lote para ver sus líneas cotizadas.
+                            </div>
                         </div>
 
                         <div class="mb-3">
@@ -65,20 +76,21 @@
                                     <option value="{{ item.id }}">{{ item.name }}</option>
                                 {% endfor %}
                             </select>
-                            <div class="form-text">Referencia inicial. La recepción real va después.</div>
+                            <div class="form-text">La recepción real se registra después en entradas.</div>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Condiciones de pago</label>
                             <input type="text"
                                    name="payment_terms"
+                                   id="payment_terms"
                                    class="form-control rounded-3"
                                    placeholder="Ejemplo: 30 días">
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Moneda</label>
-                            <select name="currency_code" class="form-select rounded-3">
+                            <select name="currency_code" id="currency_code" class="form-select rounded-3">
                                 <option value="CRC">CRC</option>
                                 <option value="USD">USD</option>
                                 <option value="EUR">EUR</option>
@@ -87,8 +99,22 @@
 
                         <div class="mb-0">
                             <label class="form-label fw-semibold">Notas</label>
-                            <textarea name="notes" rows="4" class="form-control rounded-3"></textarea>
+                            <textarea name="notes" rows="4" class="form-control rounded-3"
+                                      placeholder="Observaciones generales de la orden"></textarea>
                         </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4 mt-4">
+                    <div class="card-body p-4">
+                        <h6 class="fw-bold mb-2">
+                            <i class="bi bi-info-circle me-2"></i>Flujo de aprobación
+                        </h6>
+                        <p class="text-muted small mb-0">
+                            Al guardar, la OC queda en estado <strong>PENDIENTE APROBACIÓN</strong>.
+                            Luego se imprime, se firma físicamente y se sube el PDF firmado para pasarla a
+                            <strong>APROBADA</strong>.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -96,38 +122,100 @@
             <div class="col-12 col-xl-8">
                 <div class="card border-0 shadow-sm rounded-4">
                     <div class="card-body p-4">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-3">
                             <div>
-                                <h5 class="fw-bold mb-1">Líneas de orden</h5>
+                                <h5 class="fw-bold mb-1">Cotizaciones disponibles</h5>
                                 <p class="text-muted mb-0">
-                                    Relaciona líneas de solicitud o cotización y ajusta cantidades/costos.
+                                    Seleccione una o varias líneas cotizadas del mismo proveedor.
                                 </p>
                             </div>
-                            <button type="button" class="btn btn-outline-dark rounded-3" id="add-line-btn">
-                                <i class="bi bi-plus-lg me-2"></i>Agregar línea
-                            </button>
                         </div>
 
-                        <div id="order-lines-container" class="d-flex flex-column gap-3"></div>
-
-                        <div class="d-flex justify-content-end gap-2 mt-4">
-                            <a href="{{ url_for('purchases.list_orders') }}" class="btn btn-light rounded-3">
-                                Cancelar
-                            </a>
-                            <button type="submit" class="btn btn-dark rounded-3">
-                                <i class="bi bi-save me-2"></i>Guardar orden
-                            </button>
+                        <div id="quotation-lines-empty" class="alert alert-light border mb-0">
+                            Seleccione un proveedor y un lote de cotización para mostrar líneas disponibles.
                         </div>
+
+                        <div id="quotation-lines-list" class="d-flex flex-column gap-3"></div>
                     </div>
                 </div>
 
                 <div class="card border-0 shadow-sm rounded-4 mt-4">
-                    <div class="card-body p-4">
-                        <h6 class="fw-bold mb-2">Sugerencia</h6>
-                        <p class="text-muted mb-0">
-                            Puedes seleccionar una solicitud y un lote de cotización para cargar contexto y facilitar la captura.
-                        </p>
+                    <div class="card-body p-0">
+                        <div class="p-4 border-bottom">
+                            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
+                                <div>
+                                    <h5 class="fw-bold mb-1">Líneas seleccionadas para OC</h5>
+                                    <p class="text-muted mb-0">
+                                        El precio, impuesto, subtotal y total se calculan desde la cotización.
+                                    </p>
+                                </div>
+                                <span class="badge text-bg-warning rounded-pill">
+                                    Estado inicial: PENDIENTE APROBACIÓN
+                                </span>
+                            </div>
+                        </div>
+
+                        <div id="selected-lines-empty" class="p-5 text-center">
+                            <i class="bi bi-cart-plus fs-1 text-muted"></i>
+                            <h6 class="fw-bold mt-3">No hay líneas seleccionadas</h6>
+                            <p class="text-muted mb-0">Agregue líneas desde el listado de cotizaciones disponibles.</p>
+                        </div>
+
+                        <div id="selected-lines-table-wrapper" class="table-responsive d-none">
+                            <table class="table align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-4">Artículo</th>
+                                        <th>Código</th>
+                                        <th>Cantidad</th>
+                                        <th>Precio cotizado</th>
+                                        <th>Tipo precio</th>
+                                        <th>Subtotal</th>
+                                        <th>IVA</th>
+                                        <th>Total</th>
+                                        <th class="pe-4"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="selected-lines-body"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="border-top p-4">
+                            <div class="row justify-content-end">
+                                <div class="col-12 col-lg-5">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">Subtotal</span>
+                                        <strong id="summary-subtotal">0.00</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">IVA 13%</span>
+                                        <strong id="summary-tax">0.00</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between fs-5">
+                                        <span class="fw-bold">Total</span>
+                                        <strong id="summary-total">0.00</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="hidden-lines-container"></div>
+
+                            <div class="d-flex justify-content-end gap-2 mt-4">
+                                <a href="{{ url_for('purchases.list_orders') }}" class="btn btn-light rounded-3">
+                                    Cancelar
+                                </a>
+                                <button type="submit" class="btn btn-dark rounded-3" id="submit-btn" disabled>
+                                    <i class="bi bi-file-earmark-check me-2"></i>Crear OC pendiente de aprobación
+                                </button>
+                            </div>
+                        </div>
                     </div>
+                </div>
+
+                <div class="alert alert-info border-0 rounded-4 mt-4 mb-0">
+                    <strong>Importante:</strong>
+                    si la cotización fue registrada con precio con impuesto incluido, el sistema separará automáticamente
+                    el IVA. Si fue registrada sin impuesto, el sistema agregará el 13% al crear la OC.
                 </div>
             </div>
         </div>
@@ -172,7 +260,13 @@
             "discount_pct": {{ (line.discount_pct|string)|tojson }},
             "tax_pct": {{ (line.tax_pct|string)|tojson }},
             "purchase_request_line_id": {{ line.purchase_request_line_id if line.purchase_request_line_id else 'null' }},
-            "is_used": {{ line.is_used|tojson if line.is_used is defined else 'false' }}
+            "is_used": {{ line.is_used|tojson if line.is_used is defined else 'false' }},
+            "tax_included": {{ line.tax_included|tojson if line.tax_included is defined else 'false' }},
+            "brand_model": {{ (line.brand_model or '')|tojson if line.brand_model is defined else '""' }},
+            "payment_type": {{ (line.payment_type or '')|tojson if line.payment_type is defined else '""' }},
+            "payment_term_months": {{ (line.payment_term_months|string)|tojson if line.payment_term_months is defined and line.payment_term_months else '""' }},
+            "origin_type": {{ (line.origin_type or '')|tojson if line.origin_type is defined else '""' }},
+            "notes": {{ (line.notes or '')|tojson if line.notes is defined else '""' }}
         }{% if not loop.last %},{% endif %}
         {% endfor %}
     ]{% if not loop.last %},{% endif %}
@@ -180,389 +274,335 @@
 }
 </script>
 
-<template id="order-line-template">
-    <div class="border rounded-4 p-3 bg-light-subtle order-line-item">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h6 class="fw-bold mb-0">Línea <span class="line-number"></span></h6>
-            <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
-                <i class="bi bi-trash3 me-1"></i>Eliminar
-            </button>
-        </div>
-
-        <div class="row g-3">
-            <div class="col-12 col-lg-6">
-                <label class="form-label fw-semibold">Línea de solicitud</label>
-                <select name="line_purchase_request_line_id[]" class="form-select rounded-3 line-pr-line-select">
-                    <option value="">Sin relación</option>
-                </select>
-                <div class="form-text line-pr-line-help">Selecciona una solicitud para cargar líneas.</div>
-            </div>
-
-            <div class="col-12 col-lg-6">
-                <label class="form-label fw-semibold">Línea de cotización</label>
-                <select name="line_quotation_line_id[]" class="form-select rounded-3 line-quotation-line-select">
-                    <option value="">Sin relación</option>
-                </select>
-                <div class="form-text line-quotation-line-help">Selecciona un lote para cargar líneas cotizadas.</div>
-            </div>
-
-            <div class="col-12 col-lg-6">
-                <label class="form-label fw-semibold">Artículo codificado</label>
-                <select name="line_article_id[]" class="form-select rounded-3 line-article-select">
-                    <option value="">Seleccione</option>
-                    {% for item in articles %}
-                        <option value="{{ item.id }}">{{ item.code }} - {{ item.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-12 col-lg-6">
-                <label class="form-label fw-semibold">Artículo pendiente</label>
-                <select name="line_pending_article_id[]" class="form-select rounded-3 line-pending-select">
-                    <option value="">Seleccione</option>
-                    {% for item in pending_articles %}
-                        <option value="{{ item.id }}">
-                            {{ item.provisional_code or 'SIN-CODIGO' }} - {{ item.provisional_name }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-12 col-md-3">
-                <label class="form-label fw-semibold">Cantidad</label>
-                <input type="number"
-                       step="0.01"
-                       min="0.01"
-                       name="line_quantity_ordered[]"
-                       class="form-control rounded-3 line-quantity-input"
-                       required>
-            </div>
-
-            <div class="col-12 col-md-3">
-                <label class="form-label fw-semibold">Unidad</label>
-                <select name="line_unit_id[]" class="form-select rounded-3 line-unit-select">
-                    <option value="">Seleccione</option>
-                    {% for item in units %}
-                        <option value="{{ item.id }}">{{ item.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-12 col-md-3">
-                <label class="form-label fw-semibold">Costo unitario</label>
-                <input type="number"
-                       step="0.0001"
-                       min="0"
-                       name="line_unit_cost[]"
-                       class="form-control rounded-3 line-unit-cost-input"
-                       value="0"
-                       required>
-            </div>
-
-            <div class="col-12 col-md-3">
-                <label class="form-label fw-semibold">Descuento %</label>
-                <input type="number"
-                       step="0.0001"
-                       min="0"
-                       name="line_discount_pct[]"
-                       class="form-control rounded-3 line-discount-input"
-                       value="0">
-            </div>
-
-            <div class="col-12 col-md-4">
-                <label class="form-label fw-semibold">Impuesto %</label>
-                <input type="number"
-                       step="0.0001"
-                       min="0"
-                       name="line_tax_pct[]"
-                       class="form-control rounded-3 line-tax-input"
-                       value="0">
-            </div>
-
-            <div class="col-12 col-md-4">
-                <label class="form-label fw-semibold">Subtotal</label>
-                <input type="number"
-                       step="0.0001"
-                       min="0"
-                       name="line_subtotal[]"
-                       class="form-control rounded-3 line-subtotal-input"
-                       value="0">
-            </div>
-
-            <div class="col-12 col-md-4">
-                <label class="form-label fw-semibold">Total</label>
-                <input type="number"
-                       step="0.0001"
-                       min="0"
-                       name="line_total[]"
-                       class="form-control rounded-3 line-total-input"
-                       value="0">
-            </div>
-
-            <div class="col-12">
-                <label class="form-label fw-semibold">Notas de línea</label>
-                <textarea name="line_notes[]" rows="2" class="form-control rounded-3"></textarea>
-            </div>
-        </div>
-    </div>
-</template>
-
 <script>
 (function () {
-    const container = document.getElementById("order-lines-container");
-    const template = document.getElementById("order-line-template");
-    const addLineBtn = document.getElementById("add-line-btn");
-    const purchaseRequestSelect = document.getElementById("purchase_request_id");
+    const TAX_RATE = 13;
+    const TAX_FACTOR = 1.13;
+
+    const form = document.getElementById("purchase-order-form");
+    const supplierSelect = document.getElementById("supplier_id");
     const quotationBatchSelect = document.getElementById("quotation_batch_id_selector");
+    const purchaseRequestSelect = document.getElementById("purchase_request_id");
+    const currencySelect = document.getElementById("currency_code");
+    const paymentTermsInput = document.getElementById("payment_terms");
+
+    const quotationLinesList = document.getElementById("quotation-lines-list");
+    const quotationLinesEmpty = document.getElementById("quotation-lines-empty");
+
+    const selectedLinesEmpty = document.getElementById("selected-lines-empty");
+    const selectedLinesTableWrapper = document.getElementById("selected-lines-table-wrapper");
+    const selectedLinesBody = document.getElementById("selected-lines-body");
+    const hiddenLinesContainer = document.getElementById("hidden-lines-container");
+    const submitBtn = document.getElementById("submit-btn");
+
+    const summarySubtotal = document.getElementById("summary-subtotal");
+    const summaryTax = document.getElementById("summary-tax");
+    const summaryTotal = document.getElementById("summary-total");
 
     const purchaseRequestLinesData = JSON.parse(
         document.getElementById("purchase-request-lines-data").textContent || "{}"
     );
+
     const quotationLinesData = JSON.parse(
         document.getElementById("quotation-lines-data").textContent || "{}"
     );
 
-    function updateLineNumbers() {
-        const items = container.querySelectorAll(".order-line-item");
-        items.forEach((item, index) => {
-            const numberSpan = item.querySelector(".line-number");
-            if (numberSpan) numberSpan.textContent = index + 1;
+    const selectedLines = new Map();
+
+    function toNumber(value) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function formatMoney(value) {
+        return toNumber(value).toLocaleString("es-CR", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
         });
     }
 
-    function getSelectedRequestLines() {
-        const requestId = purchaseRequestSelect.value;
-        if (!requestId || !purchaseRequestLinesData[requestId]) return [];
-        return purchaseRequestLinesData[requestId];
+    function getRequestLineById(requestLineId) {
+        if (!requestLineId) return null;
+
+        for (const requestId of Object.keys(purchaseRequestLinesData)) {
+            const found = purchaseRequestLinesData[requestId].find(
+                item => String(item.id) === String(requestLineId)
+            );
+            if (found) return found;
+        }
+
+        return null;
     }
 
-    function getSelectedQuotationLines() {
+    function getQuantityForQuotationLine(line) {
+        const requestLine = getRequestLineById(line.purchase_request_line_id);
+        if (requestLine && requestLine.quantity_requested) {
+            return toNumber(requestLine.quantity_requested) || 1;
+        }
+        return 1;
+    }
+
+    function calculateLine(line, quantity) {
+        const quotedPrice = toNumber(line.unit_price);
+        const taxIncluded = Boolean(line.tax_included);
+
+        let unitCostWithoutTax = 0;
+        let subtotal = 0;
+        let total = 0;
+
+        if (taxIncluded) {
+            unitCostWithoutTax = quotedPrice / TAX_FACTOR;
+            subtotal = unitCostWithoutTax * quantity;
+            total = quotedPrice * quantity;
+        } else {
+            unitCostWithoutTax = quotedPrice;
+            subtotal = unitCostWithoutTax * quantity;
+            total = subtotal * TAX_FACTOR;
+        }
+
+        const taxAmount = total - subtotal;
+
+        return {
+            unitCostWithoutTax,
+            subtotal,
+            taxAmount,
+            total,
+            taxIncluded
+        };
+    }
+
+    function getCurrentQuotationLines() {
+        const supplierId = supplierSelect.value;
         const batchId = quotationBatchSelect.value;
-        if (!batchId || !quotationLinesData[batchId]) return [];
-        return quotationLinesData[batchId];
+
+        if (!supplierId || !batchId || !quotationLinesData[batchId]) {
+            return [];
+        }
+
+        return quotationLinesData[batchId].filter(line => {
+            if (line.is_used) return false;
+            if (String(line.supplier_id) !== String(supplierId)) return false;
+            if (selectedLines.has(String(line.id))) return false;
+            return true;
+        });
     }
 
-    function populateRequestLineSelect(selectElement, helpElement, articleSelect, pendingSelect, quantityInput, unitSelect) {
-        const lines = getSelectedRequestLines();
-        const previousValue = selectElement.value;
+    function renderAvailableQuotationLines() {
+        const lines = getCurrentQuotationLines();
 
-        selectElement.innerHTML = '<option value="">Sin relación</option>';
+        quotationLinesList.innerHTML = "";
+
+        if (!supplierSelect.value || !quotationBatchSelect.value) {
+            quotationLinesEmpty.classList.remove("d-none");
+            quotationLinesEmpty.textContent = "Seleccione un proveedor y un lote de cotización para mostrar líneas disponibles.";
+            return;
+        }
 
         if (!lines.length) {
-            helpElement.textContent = "No hay líneas disponibles para la solicitud seleccionada.";
+            quotationLinesEmpty.classList.remove("d-none");
+            quotationLinesEmpty.textContent = "No hay líneas disponibles para este proveedor en el lote seleccionado, o ya fueron utilizadas.";
             return;
         }
 
-        helpElement.textContent = "Puedes seleccionar una línea para autocompletar artículo y cantidad.";
+        quotationLinesEmpty.classList.add("d-none");
 
         lines.forEach(line => {
-            const option = document.createElement("option");
-            option.value = line.id;
-            option.textContent = `${line.item_code ? line.item_code + " - " : ""}${line.item_name} | Cant: ${line.quantity_requested}${line.unit_name ? " " + line.unit_name : ""}`;
-            option.dataset.articleId = line.article_id ?? "";
-            option.dataset.pendingArticleId = line.pending_article_id ?? "";
-            option.dataset.quantityRequested = line.quantity_requested ?? "";
-            option.dataset.unitId = line.unit_id ?? "";
-            selectElement.appendChild(option);
+            const quantity = getQuantityForQuotationLine(line);
+            const calc = calculateLine(line, quantity);
+
+            const card = document.createElement("div");
+            card.className = "border rounded-4 p-3 bg-light-subtle";
+
+            const taxLabel = calc.taxIncluded
+                ? "Precio incluye IVA"
+                : "Precio sin IVA";
+
+            const meta = [
+                line.brand_model ? `Marca/modelo: ${line.brand_model}` : null,
+                line.payment_type ? `Pago: ${line.payment_type}` : null,
+                line.payment_term_months ? `Plazo: ${line.payment_term_months} meses` : null,
+                line.origin_type ? `Origen: ${line.origin_type}` : null
+            ].filter(Boolean).join(" | ");
+
+            card.innerHTML = `
+                <div class="d-flex flex-column flex-lg-row justify-content-between gap-3">
+                    <div>
+                        <div class="fw-bold">${line.item_code ? line.item_code + " - " : ""}${line.item_name || "Sin artículo"}</div>
+                        <div class="text-muted small">
+                            ${line.currency_code || "CRC"} ${formatMoney(line.unit_price)} · ${taxLabel}
+                        </div>
+                        ${meta ? `<div class="text-muted small mt-1">${meta}</div>` : ""}
+                        ${line.notes ? `<div class="small mt-2">${line.notes}</div>` : ""}
+                    </div>
+
+                    <div class="text-lg-end">
+                        <div class="small text-muted">Cantidad sugerida</div>
+                        <div class="fw-semibold">${quantity}</div>
+                        <div class="small text-muted mt-2">Total estimado</div>
+                        <div class="fw-bold">${formatMoney(calc.total)}</div>
+                    </div>
+
+                    <div class="d-flex align-items-center">
+                        <button type="button" class="btn btn-dark rounded-3 add-quotation-line-btn">
+                            <i class="bi bi-plus-lg me-2"></i>Agregar
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            card.querySelector(".add-quotation-line-btn").addEventListener("click", function () {
+                selectedLines.set(String(line.id), {
+                    ...line,
+                    quantity_ordered: quantity
+                });
+
+                if (!currencySelect.value && line.currency_code) {
+                    currencySelect.value = line.currency_code;
+                } else if (line.currency_code) {
+                    currencySelect.value = line.currency_code;
+                }
+
+                if (!paymentTermsInput.value && line.payment_type) {
+                    paymentTermsInput.value = line.payment_term_months
+                        ? `${line.payment_type} ${line.payment_term_months} meses`
+                        : line.payment_type;
+                }
+
+                renderAvailableQuotationLines();
+                renderSelectedLines();
+            });
+
+            quotationLinesList.appendChild(card);
         });
-
-        if ([...selectElement.options].some(option => option.value === previousValue)) {
-            selectElement.value = previousValue;
-        }
-
-        selectElement.onchange = function () {
-            const selected = this.options[this.selectedIndex];
-            const articleId = selected.dataset.articleId || "";
-            const pendingArticleId = selected.dataset.pendingArticleId || "";
-            const quantityRequested = selected.dataset.quantityRequested || "";
-            const unitId = selected.dataset.unitId || "";
-
-            if (articleId) {
-                articleSelect.value = articleId;
-                pendingSelect.value = "";
-            } else if (pendingArticleId) {
-                pendingSelect.value = pendingArticleId;
-                articleSelect.value = "";
-            }
-
-            if (quantityRequested) quantityInput.value = quantityRequested;
-            if (unitId) unitSelect.value = unitId;
-        };
     }
 
-    function populateQuotationLineSelect(
-        selectElement,
-        helpElement,
-        articleSelect,
-        pendingSelect,
-        prLineSelect,
-        unitCostInput,
-        discountInput,
-        taxInput
-    ) {
-        const lines = getSelectedQuotationLines();
-        const previousValue = selectElement.value;
+    function renderSelectedLines() {
+        selectedLinesBody.innerHTML = "";
+        hiddenLinesContainer.innerHTML = "";
 
-        selectElement.innerHTML = '<option value="">Sin relación</option>';
+        let subtotalSum = 0;
+        let taxSum = 0;
+        let totalSum = 0;
 
-        if (!lines.length) {
-            helpElement.textContent = "No hay líneas disponibles para el lote seleccionado.";
+        if (!selectedLines.size) {
+            selectedLinesEmpty.classList.remove("d-none");
+            selectedLinesTableWrapper.classList.add("d-none");
+            submitBtn.disabled = true;
+
+            summarySubtotal.textContent = "0.00";
+            summaryTax.textContent = "0.00";
+            summaryTotal.textContent = "0.00";
             return;
         }
 
-        const currentSelects = Array.from(
-            document.querySelectorAll(".line-quotation-line-select")
-        );
+        selectedLinesEmpty.classList.add("d-none");
+        selectedLinesTableWrapper.classList.remove("d-none");
+        submitBtn.disabled = false;
 
-        const usedIdsInForm = currentSelects
-            .filter(el => el !== selectElement)
-            .map(el => el.value)
-            .filter(v => v);
+        selectedLines.forEach((line, id) => {
+            const quantity = toNumber(line.quantity_ordered) || 1;
+            const calc = calculateLine(line, quantity);
 
-        let validCount = 0;
+            subtotalSum += calc.subtotal;
+            taxSum += calc.taxAmount;
+            totalSum += calc.total;
 
-        lines.forEach(line => {
-            if (line.is_used) return;
-            if (usedIdsInForm.includes(String(line.id))) return;
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td class="ps-4 fw-semibold">${line.item_name || "Sin artículo"}</td>
+                <td>${line.item_code || "-"}</td>
+                <td style="width: 130px;">
+                    <input type="number"
+                           step="0.01"
+                           min="0.01"
+                           class="form-control form-control-sm rounded-3 selected-quantity-input"
+                           value="${quantity}">
+                </td>
+                <td>${formatMoney(line.unit_price)}</td>
+                <td>
+                    <span class="badge ${calc.taxIncluded ? "text-bg-info" : "text-bg-secondary"}">
+                        ${calc.taxIncluded ? "Con IVA incluido" : "Sin IVA"}
+                    </span>
+                </td>
+                <td>${formatMoney(calc.subtotal)}</td>
+                <td>${formatMoney(calc.taxAmount)}</td>
+                <td class="fw-bold">${formatMoney(calc.total)}</td>
+                <td class="pe-4 text-end">
+                    <button type="button" class="btn btn-sm btn-outline-danger rounded-3 remove-selected-line-btn">
+                        <i class="bi bi-trash3"></i>
+                    </button>
+                </td>
+            `;
 
-            const option = document.createElement("option");
-            option.value = line.id;
-            option.textContent = `${line.item_code ? line.item_code + " - " : ""}${line.item_name} | ${line.currency_code} ${line.unit_price}`;
-            option.dataset.articleId = line.article_id ?? "";
-            option.dataset.pendingArticleId = line.pending_article_id ?? "";
-            option.dataset.purchaseRequestLineId = line.purchase_request_line_id ?? "";
-            option.dataset.unitPrice = line.unit_price ?? "";
-            option.dataset.discountPct = line.discount_pct ?? "0";
-            option.dataset.taxPct = line.tax_pct ?? "0";
-            selectElement.appendChild(option);
-            validCount++;
+            row.querySelector(".selected-quantity-input").addEventListener("input", function () {
+                const newQuantity = toNumber(this.value);
+                if (newQuantity > 0) {
+                    line.quantity_ordered = newQuantity;
+                    selectedLines.set(id, line);
+                    renderSelectedLines();
+                }
+            });
+
+            row.querySelector(".remove-selected-line-btn").addEventListener("click", function () {
+                selectedLines.delete(id);
+                renderAvailableQuotationLines();
+                renderSelectedLines();
+            });
+
+            selectedLinesBody.appendChild(row);
+
+            hiddenLinesContainer.insertAdjacentHTML("beforeend", `
+                <input type="hidden" name="line_purchase_request_line_id[]" value="${line.purchase_request_line_id || ""}">
+                <input type="hidden" name="line_quotation_line_id[]" value="${line.id}">
+                <input type="hidden" name="line_article_id[]" value="${line.article_id || ""}">
+                <input type="hidden" name="line_pending_article_id[]" value="${line.pending_article_id || ""}">
+                <input type="hidden" name="line_quantity_ordered[]" value="${quantity}">
+                <input type="hidden" name="line_unit_id[]" value="">
+                <input type="hidden" name="line_unit_cost[]" value="${calc.unitCostWithoutTax.toFixed(4)}">
+                <input type="hidden" name="line_discount_pct[]" value="${line.discount_pct || 0}">
+                <input type="hidden" name="line_tax_pct[]" value="${TAX_RATE}">
+                <input type="hidden" name="line_subtotal[]" value="${calc.subtotal.toFixed(4)}">
+                <input type="hidden" name="line_total[]" value="${calc.total.toFixed(4)}">
+                <input type="hidden" name="line_notes[]" value="${line.notes || ""}">
+            `);
         });
 
-        if (!validCount) {
-            helpElement.textContent = "Todas las líneas de este lote ya fueron utilizadas.";
+        summarySubtotal.textContent = formatMoney(subtotalSum);
+        summaryTax.textContent = formatMoney(taxSum);
+        summaryTotal.textContent = formatMoney(totalSum);
+    }
+
+    supplierSelect.addEventListener("change", function () {
+        selectedLines.clear();
+        renderAvailableQuotationLines();
+        renderSelectedLines();
+    });
+
+    quotationBatchSelect.addEventListener("change", function () {
+        selectedLines.clear();
+        renderAvailableQuotationLines();
+        renderSelectedLines();
+    });
+
+    purchaseRequestSelect.addEventListener("change", function () {
+        renderSelectedLines();
+    });
+
+    form.addEventListener("submit", function (event) {
+        if (!selectedLines.size) {
+            event.preventDefault();
+            alert("Debe agregar al menos una línea cotizada a la orden de compra.");
             return;
         }
 
-        helpElement.textContent = "Puedes seleccionar una línea para autocompletar artículo y costo.";
-
-        if ([...selectElement.options].some(option => option.value === previousValue)) {
-            selectElement.value = previousValue;
+        if (!supplierSelect.value) {
+            event.preventDefault();
+            alert("Debe seleccionar un proveedor.");
         }
+    });
 
-        selectElement.onchange = function () {
-            const selected = this.options[this.selectedIndex];
-            const articleId = selected.dataset.articleId || "";
-            const pendingArticleId = selected.dataset.pendingArticleId || "";
-            const purchaseRequestLineId = selected.dataset.purchaseRequestLineId || "";
-            const unitPrice = selected.dataset.unitPrice || "";
-            const discountPct = selected.dataset.discountPct || "0";
-            const taxPct = selected.dataset.taxPct || "0";
-
-            if (articleId) {
-                articleSelect.value = articleId;
-                pendingSelect.value = "";
-            } else if (pendingArticleId) {
-                pendingSelect.value = pendingArticleId;
-                articleSelect.value = "";
-            }
-
-            if (purchaseRequestLineId) {
-                prLineSelect.value = purchaseRequestLineId;
-            }
-
-            if (unitPrice) unitCostInput.value = unitPrice;
-            discountInput.value = discountPct;
-            taxInput.value = taxPct;
-
-            refreshAllLineSelectors();
-        };
-    }
-
-    function createLine() {
-        const fragment = template.content.cloneNode(true);
-        const wrapper = fragment.querySelector(".order-line-item");
-
-        const removeBtn = wrapper.querySelector(".remove-line-btn");
-        const articleSelect = wrapper.querySelector(".line-article-select");
-        const pendingSelect = wrapper.querySelector(".line-pending-select");
-        const prLineSelect = wrapper.querySelector(".line-pr-line-select");
-        const prLineHelp = wrapper.querySelector(".line-pr-line-help");
-        const quotationLineSelect = wrapper.querySelector(".line-quotation-line-select");
-        const quotationLineHelp = wrapper.querySelector(".line-quotation-line-help");
-        const quantityInput = wrapper.querySelector(".line-quantity-input");
-        const unitSelect = wrapper.querySelector(".line-unit-select");
-        const unitCostInput = wrapper.querySelector(".line-unit-cost-input");
-        const discountInput = wrapper.querySelector(".line-discount-input");
-        const taxInput = wrapper.querySelector(".line-tax-input");
-
-        removeBtn.addEventListener("click", function () {
-            wrapper.remove();
-            updateLineNumbers();
-            refreshAllLineSelectors();
-        });
-
-        articleSelect.addEventListener("change", function () {
-            if (this.value) pendingSelect.value = "";
-        });
-
-        pendingSelect.addEventListener("change", function () {
-            if (this.value) articleSelect.value = "";
-        });
-
-        populateRequestLineSelect(
-            prLineSelect,
-            prLineHelp,
-            articleSelect,
-            pendingSelect,
-            quantityInput,
-            unitSelect
-        );
-
-        populateQuotationLineSelect(
-            quotationLineSelect,
-            quotationLineHelp,
-            articleSelect,
-            pendingSelect,
-            prLineSelect,
-            unitCostInput,
-            discountInput,
-            taxInput
-        );
-
-        container.appendChild(fragment);
-        updateLineNumbers();
-    }
-
-    function refreshAllLineSelectors() {
-        const lineItems = container.querySelectorAll(".order-line-item");
-        lineItems.forEach(item => {
-            populateRequestLineSelect(
-                item.querySelector(".line-pr-line-select"),
-                item.querySelector(".line-pr-line-help"),
-                item.querySelector(".line-article-select"),
-                item.querySelector(".line-pending-select"),
-                item.querySelector(".line-quantity-input"),
-                item.querySelector(".line-unit-select")
-            );
-
-            populateQuotationLineSelect(
-                item.querySelector(".line-quotation-line-select"),
-                item.querySelector(".line-quotation-line-help"),
-                item.querySelector(".line-article-select"),
-                item.querySelector(".line-pending-select"),
-                item.querySelector(".line-pr-line-select"),
-                item.querySelector(".line-unit-cost-input"),
-                item.querySelector(".line-discount-input"),
-                item.querySelector(".line-tax-input")
-            );
-        });
-    }
-
-    addLineBtn.addEventListener("click", createLine);
-    purchaseRequestSelect.addEventListener("change", refreshAllLineSelectors);
-    quotationBatchSelect.addEventListener("change", refreshAllLineSelectors);
-
-    createLine();
+    renderAvailableQuotationLines();
+    renderSelectedLines();
 })();
 </script>
 {% endblock %}
