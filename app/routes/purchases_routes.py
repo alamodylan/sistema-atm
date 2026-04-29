@@ -12,6 +12,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from app.models.purchase_order_approval import PurchaseOrderApproval
+from app.models.quotation_line import QuotationLine
 
 from flask import (
     Blueprint,
@@ -659,160 +660,138 @@ def list_orders():
 @purchases_bp.route("/orders/create", methods=["GET", "POST"])
 @login_required
 def create_order():
-    purchase_requests = (
-        PurchaseRequest.query.order_by(PurchaseRequest.created_at.desc()).all()
-    )
-    suppliers = (
-        Supplier.query.filter_by(is_active=True)
-        .order_by(Supplier.commercial_name.asc())
-        .all()
-    )
-    sites = Site.query.filter_by(is_active=True).order_by(Site.name.asc()).all()
-    warehouses = (
-        Warehouse.query.filter_by(is_active=True)
-        .order_by(Warehouse.name.asc())
-        .all()
-    )
-    quotation_batches = (
-        QuotationBatch.query.order_by(QuotationBatch.created_at.desc()).all()
-    )
-    units = Unit.query.order_by(Unit.id.asc()).all()
-    articles = (
-        Article.query.filter_by(is_active=True)
-        .order_by(Article.code.asc())
-        .all()
-    )
-    pending_articles = (
-        PendingArticle.query.filter(
-            PendingArticle.status.in_(["PENDIENTE_CODIFICACION", "CODIFICADO"])
-        )
-        .order_by(PendingArticle.created_at.desc())
-        .all()
-    )
+    def _calculate_quote_amounts(line: QuotationLine, quantity: Decimal) -> dict:
+        unit_price = Decimal(str(line.unit_price or 0))
+        tax_factor = Decimal("1.13")
 
-    purchase_request_lines_map: dict[int, list] = {}
-    for pr in purchase_requests:
-        purchase_request_lines_map[pr.id] = list(pr.lines) if pr.lines else []
+        if line.tax_included:
+            unit_cost_without_tax = unit_price / tax_factor
+            subtotal = unit_cost_without_tax * quantity
+            total = unit_price * quantity
+        else:
+            unit_cost_without_tax = unit_price
+            subtotal = unit_cost_without_tax * quantity
+            total = subtotal * tax_factor
 
-    quotation_lines_map: dict[int, list] = {}
-    for batch in quotation_batches:
-        batch_lines = []
-        if batch.lines:
-            for line in batch.lines:
-                is_used = PurchaseOrderLine.query.filter(
-                    PurchaseOrderLine.quotation_line_id == line.id
-                ).first() is not None
-
-                batch_lines.append({
-                    "id": line.id,
-                    "item_name": line.item_name or "Sin artículo",
-                    "item_code": line.item_code or "",
-                    "article_id": line.article_id,
-                    "pending_article_id": line.pending_article_id,
-                    "supplier_id": line.supplier_id,
-                    "currency_code": line.currency_code or "CRC",
-                    "unit_price": str(line.unit_price or 0),
-                    "discount_pct": str(line.discount_pct or 0),
-                    "tax_pct": str(line.tax_pct or 0),
-                    "purchase_request_line_id": line.purchase_request_line_id,
-                    "is_used": is_used,
-                })
-        quotation_lines_map[batch.id] = batch_lines
+        return {
+            "unit_cost_without_tax": unit_cost_without_tax,
+            "subtotal": subtotal,
+            "tax_amount": total - subtotal,
+            "total": total,
+        }
 
     if request.method == "POST":
-        supplier_id = _to_int(request.form.get("supplier_id"))
-        purchase_request_id = _to_int(request.form.get("purchase_request_id"))
-        site_id = _to_int(request.form.get("site_id"))
-        warehouse_id = _to_int(request.form.get("warehouse_id"))
-        payment_terms = request.form.get("payment_terms")
-        currency_code = request.form.get("currency_code") or "CRC"
-        notes = request.form.get("notes")
-
-        pr_line_ids = request.form.getlist("line_purchase_request_line_id[]")
         q_line_ids = request.form.getlist("line_quotation_line_id[]")
-        article_ids = request.form.getlist("line_article_id[]")
-        pending_article_ids = request.form.getlist("line_pending_article_id[]")
         quantities = request.form.getlist("line_quantity_ordered[]")
-        unit_ids = request.form.getlist("line_unit_id[]")
-        unit_costs = request.form.getlist("line_unit_cost[]")
-        discounts = request.form.getlist("line_discount_pct[]")
-        taxes = request.form.getlist("line_tax_pct[]")
-        subtotals = request.form.getlist("line_subtotal[]")
-        totals = request.form.getlist("line_total[]")
         line_notes_list = request.form.getlist("line_notes[]")
 
-        max_len = max(
-            [
-                len(article_ids),
-                len(pending_article_ids),
-                len(quantities),
-                len(pr_line_ids),
-                len(q_line_ids),
-            ],
-            default=0,
+        selected_q_line_ids: list[int] = []
+
+        for raw_id in q_line_ids:
+            q_line_id = _to_int(raw_id)
+            if q_line_id:
+                selected_q_line_ids.append(q_line_id)
+
+        if not selected_q_line_ids:
+            flash("Debe seleccionar al menos una cotización para crear la OC.", "danger")
+            return redirect(url_for("purchases.create_order"))
+
+        quotation_lines = (
+            QuotationLine.query
+            .filter(QuotationLine.id.in_(selected_q_line_ids))
+            .all()
         )
+
+        quotation_by_id = {line.id: line for line in quotation_lines}
+
+        if len(quotation_by_id) != len(set(selected_q_line_ids)):
+            flash("Una o más cotizaciones seleccionadas no existen.", "danger")
+            return redirect(url_for("purchases.create_order"))
+
+        supplier_id = None
+        purchase_request_id = None
+        site_id = None
+        warehouse_id = None
+        currency_code = None
+        payment_terms = None
 
         lines: list[PurchaseOrderLinePayload] = []
 
-        for index in range(max_len):
-            quantity_raw = quantities[index] if index < len(quantities) else None
-            article_id = _to_int(article_ids[index] if index < len(article_ids) else None)
-            pending_article_id = _to_int(
-                pending_article_ids[index] if index < len(pending_article_ids) else None
-            )
-            pr_line_id = _to_int(pr_line_ids[index] if index < len(pr_line_ids) else None)
-            q_line_id = _to_int(q_line_ids[index] if index < len(q_line_ids) else None)
+        for index, q_line_id in enumerate(selected_q_line_ids):
+            quotation_line = quotation_by_id.get(q_line_id)
 
-            if not any([quantity_raw, article_id, pending_article_id, pr_line_id, q_line_id]):
+            if not quotation_line:
                 continue
 
+            is_used = PurchaseOrderLine.query.filter(
+                PurchaseOrderLine.quotation_line_id == quotation_line.id
+            ).first() is not None
+
+            if is_used:
+                flash(
+                    f"La cotización de la línea {index + 1} ya fue utilizada en otra OC.",
+                    "danger",
+                )
+                return redirect(url_for("purchases.create_order"))
+
+            if supplier_id is None:
+                supplier_id = quotation_line.supplier_id
+            elif quotation_line.supplier_id != supplier_id:
+                flash("Todas las líneas de una OC deben pertenecer al mismo proveedor.", "danger")
+                return redirect(url_for("purchases.create_order"))
+
+            if purchase_request_id is None and quotation_line.purchase_request_line:
+                purchase_request_id = quotation_line.purchase_request_line.purchase_request_id
+
+                if quotation_line.purchase_request_line.purchase_request:
+                    pr = quotation_line.purchase_request_line.purchase_request
+                    site_id = pr.site_id
+                    warehouse_id = pr.warehouse_id
+
+            if currency_code is None:
+                currency_code = quotation_line.currency_code or "CRC"
+
+            if payment_terms is None:
+                if quotation_line.payment_type:
+                    if quotation_line.payment_term_months:
+                        payment_terms = f"{quotation_line.payment_type} {quotation_line.payment_term_months} meses"
+                    else:
+                        payment_terms = quotation_line.payment_type
+
+            quantity_raw = quantities[index] if index < len(quantities) else None
+
             try:
-                quantity_ordered = _to_decimal(quantity_raw)
-                unit_cost = _to_decimal(
-                    unit_costs[index] if index < len(unit_costs) else None
-                )
-                discount_pct = _to_decimal(
-                    discounts[index] if index < len(discounts) else None
-                )
-                tax_pct = _to_decimal(
-                    taxes[index] if index < len(taxes) else None
-                )
-                line_subtotal = _to_decimal(
-                    subtotals[index] if index < len(subtotals) else None
-                )
-                line_total = _to_decimal(
-                    totals[index] if index < len(totals) else None
-                )
+                quantity_ordered = _to_decimal(quantity_raw, default="1")
             except ValueError:
-                flash(f"Hay valores inválidos en la línea {index + 1} de la orden.", "danger")
-                return render_template(
-                    "purchases/orders/create.html",
-                    purchase_requests=purchase_requests,
-                    purchase_request_lines_map=purchase_request_lines_map,
-                    suppliers=suppliers,
-                    sites=sites,
-                    warehouses=warehouses,
-                    quotation_batches=quotation_batches,
-                    quotation_lines_map=quotation_lines_map,
-                    units=units,
-                    articles=articles,
-                    pending_articles=pending_articles,
-                )
+                flash(f"La cantidad de la línea {index + 1} no es válida.", "danger")
+                return redirect(url_for("purchases.create_order"))
+
+            if quantity_ordered <= 0:
+                flash(f"La cantidad de la línea {index + 1} debe ser mayor a cero.", "danger")
+                return redirect(url_for("purchases.create_order"))
+
+            note = line_notes_list[index] if index < len(line_notes_list) else None
 
             lines.append(
                 PurchaseOrderLinePayload(
                     quantity_ordered=quantity_ordered,
-                    unit_cost=unit_cost,
-                    article_id=article_id,
-                    pending_article_id=pending_article_id,
-                    purchase_request_line_id=pr_line_id,
-                    quotation_line_id=q_line_id,
-                    unit_id=_to_int(unit_ids[index] if index < len(unit_ids) else None),
-                    discount_pct=discount_pct,
-                    tax_pct=tax_pct,
-                    line_subtotal=line_subtotal,
-                    line_total=line_total,
-                    line_notes=line_notes_list[index] if index < len(line_notes_list) else None,
+                    unit_cost=Decimal("0"),
+                    article_id=quotation_line.article_id,
+                    pending_article_id=quotation_line.pending_article_id,
+                    purchase_request_line_id=quotation_line.purchase_request_line_id,
+                    quotation_line_id=quotation_line.id,
+                    unit_id=(
+                        quotation_line.article.unit_id
+                        if quotation_line.article and quotation_line.article.unit_id
+                        else quotation_line.purchase_request_line.unit_id
+                        if quotation_line.purchase_request_line and quotation_line.purchase_request_line.unit_id
+                        else None
+                    ),
+                    discount_pct=quotation_line.discount_pct or Decimal("0"),
+                    tax_pct=Decimal("13"),
+                    line_subtotal=Decimal("0"),
+                    line_total=Decimal("0"),
+                    line_notes=note or quotation_line.notes,
                 )
             )
 
@@ -824,43 +803,124 @@ def create_order():
                 site_id=site_id,
                 warehouse_id=warehouse_id,
                 payment_terms=payment_terms,
-                currency_code=currency_code,
-                notes=notes,
+                currency_code=currency_code or "CRC",
+                notes=request.form.get("notes"),
                 lines=lines,
             )
         except PurchaseOrderServiceError as exc:
             flash(str(exc), "danger")
-            return render_template(
-                "purchases/orders/create.html",
-                purchase_requests=purchase_requests,
-                purchase_request_lines_map=purchase_request_lines_map,
-                suppliers=suppliers,
-                sites=sites,
-                warehouses=warehouses,
-                quotation_batches=quotation_batches,
-                quotation_lines_map=quotation_lines_map,
-                units=units,
-                articles=articles,
-                pending_articles=pending_articles,
+            return redirect(url_for("purchases.create_order"))
+
+        flash("Orden de compra creada correctamente y enviada a aprobación.", "success")
+        return redirect(url_for("purchases.order_print", order_id=purchase_order.id))
+
+    used_quotation_line_ids = {
+        row[0]
+        for row in (
+            db.session.query(PurchaseOrderLine.quotation_line_id)
+            .filter(PurchaseOrderLine.quotation_line_id.isnot(None))
+            .all()
+        )
+    }
+
+    quotation_lines = (
+        QuotationLine.query
+        .filter(QuotationLine.status == "COTIZADA")
+        .order_by(
+            QuotationLine.purchase_request_line_id.asc(),
+            QuotationLine.quote_date.desc(),
+            QuotationLine.id.desc(),
+        )
+        .all()
+    )
+
+    quotation_groups_map: dict[str, dict] = {}
+
+    for line in quotation_lines:
+        if line.id in used_quotation_line_ids:
+            continue
+
+        quantity = Decimal("1")
+
+        if line.purchase_request_line and line.purchase_request_line.quantity_requested:
+            quantity = Decimal(str(line.purchase_request_line.quantity_requested))
+
+        amounts = _calculate_quote_amounts(line, quantity)
+
+        if line.purchase_request_line_id:
+            group_key = f"pr-line-{line.purchase_request_line_id}"
+        else:
+            group_key = f"quotation-line-{line.id}"
+
+        if group_key not in quotation_groups_map:
+            purchase_request = (
+                line.purchase_request_line.purchase_request
+                if line.purchase_request_line and line.purchase_request_line.purchase_request
+                else None
             )
 
-        flash("Orden de compra creada correctamente.", "success")
-        return redirect(url_for("purchases.order_print", order_id=purchase_order.id))
+            quotation_groups_map[group_key] = {
+                "key": group_key,
+                "purchase_request_line_id": line.purchase_request_line_id,
+                "purchase_request_number": purchase_request.number if purchase_request else "-",
+                "item_code": line.item_code or "",
+                "item_name": line.item_name or "Sin artículo",
+                "quantity_requested": str(quantity),
+                "unit_name": (
+                    line.purchase_request_line.unit.name
+                    if line.purchase_request_line
+                    and line.purchase_request_line.unit
+                    else line.article.unit.name
+                    if line.article and line.article.unit
+                    else "-"
+                ),
+                "options": [],
+            }
+
+        quotation_groups_map[group_key]["options"].append(
+            {
+                "quotation_line_id": line.id,
+                "supplier_id": line.supplier_id,
+                "supplier_name": line.supplier.commercial_name if line.supplier else "-",
+                "unit_price": str(line.unit_price or 0),
+                "currency_code": line.currency_code or "CRC",
+                "discount_pct": str(line.discount_pct or 0),
+                "tax_pct": str(line.tax_pct or 0),
+                "tax_included": bool(line.tax_included),
+                "quote_date": line.quote_date.strftime("%d/%m/%Y") if line.quote_date else "-",
+                "payment_type": line.payment_type or "",
+                "payment_term_months": line.payment_term_months or "",
+                "origin_type": line.origin_type or "",
+                "brand_model": line.brand_model or "",
+                "notes": line.notes or "",
+                "estimated_subtotal": str(amounts["subtotal"]),
+                "estimated_tax": str(amounts["tax_amount"]),
+                "estimated_total": str(amounts["total"]),
+            }
+        )
+
+    quotation_groups = list(quotation_groups_map.values())
+
+    quotation_groups.sort(
+        key=lambda item: (
+            item["purchase_request_number"] or "",
+            item["item_name"] or "",
+        )
+    )
 
     return render_template(
         "purchases/orders/create.html",
-        purchase_requests=purchase_requests,
-        purchase_request_lines_map=purchase_request_lines_map,
-        suppliers=suppliers,
-        sites=sites,
-        warehouses=warehouses,
-        quotation_batches=quotation_batches,
-        quotation_lines_map=quotation_lines_map,
-        units=units,
-        articles=articles,
-        pending_articles=pending_articles,
+        quotation_groups=quotation_groups,
     )
 
+@purchases_bp.route("/orders/create/manual", methods=["GET", "POST"])
+@login_required
+def create_order_manual():
+    flash(
+        "Módulo manual pendiente de separar. Por ahora use la creación desde cotización.",
+        "warning",
+    )
+    return redirect(url_for("purchases.create_order"))
 
 @purchases_bp.route("/orders/<int:order_id>")
 @login_required
