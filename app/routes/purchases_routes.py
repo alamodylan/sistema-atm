@@ -723,6 +723,19 @@ def create_order():
             if not quotation_line:
                 continue
 
+            # 🔥 VALIDACIÓN: la línea de solicitud ya fue usada en otra OC
+            if quotation_line.purchase_request_line_id:
+                already_used_request_line = PurchaseOrderLine.query.filter(
+                    PurchaseOrderLine.purchase_request_line_id == quotation_line.purchase_request_line_id
+                ).first()
+
+                if already_used_request_line:
+                    flash(
+                        f"La línea {index + 1} ya fue utilizada en otra orden de compra.",
+                        "danger",
+                    )
+                    return redirect(url_for("purchases.create_order"))
+
             is_used = PurchaseOrderLine.query.filter(
                 PurchaseOrderLine.quotation_line_id == quotation_line.id
             ).first() is not None
@@ -823,6 +836,15 @@ def create_order():
         )
     }
 
+    used_purchase_request_line_ids = {
+        row[0]
+        for row in (
+            db.session.query(PurchaseOrderLine.purchase_request_line_id)
+            .filter(PurchaseOrderLine.purchase_request_line_id.isnot(None))
+            .all()
+        )
+    }
+
     quotation_lines = (
         QuotationLine.query
         .filter(QuotationLine.status == "COTIZADA")
@@ -837,6 +859,10 @@ def create_order():
     quotation_groups_map: dict[str, dict] = {}
 
     for line in quotation_lines:
+
+        if line.purchase_request_line_id and line.purchase_request_line_id in used_purchase_request_line_ids:
+            continue
+
         if line.id in used_quotation_line_ids:
             continue
 
