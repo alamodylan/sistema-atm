@@ -21,6 +21,7 @@ from flask import (
     render_template,
     request,
     url_for,
+    Response,
 )
 from flask_login import current_user, login_required
 
@@ -1449,25 +1450,32 @@ def print_quotation_comparison(line_id: int):
 def upload_approved_pdf(order_id):
     file = request.files.get("file")
 
-    if not file:
+    if not file or not file.filename:
         flash("Debe subir un archivo PDF.", "danger")
         return redirect(url_for("purchases.order_detail", order_id=order_id))
 
-    filename = file.filename
-    path = f"uploads/oc/{order_id}_{filename}"
+    if not file.filename.lower().endswith(".pdf"):
+        flash("El archivo debe ser PDF.", "danger")
+        return redirect(url_for("purchases.order_detail", order_id=order_id))
 
-    file.save(path)
+    order = PurchaseOrder.query.get_or_404(order_id)
+
+    file_data = file.read()
+
+    if not file_data:
+        flash("El archivo PDF está vacío.", "danger")
+        return redirect(url_for("purchases.order_detail", order_id=order_id))
 
     approval = PurchaseOrderApproval(
         purchase_order_id=order_id,
         approved_by_user_id=current_user.id,
         status="APROBADA",
-        approved_pdf_path=path,
-        approved_pdf_original_name=filename,
+        reason="OC firmada y adjuntada en PDF.",
+        approved_pdf_data=file_data,
+        approved_pdf_mime_type=file.mimetype or "application/pdf",
+        approved_pdf_original_name=file.filename,
         approved_pdf_uploaded_at=datetime.now(UTC),
     )
-
-    order = PurchaseOrder.query.get(order_id)
 
     order.approval_status = "APROBADA"
     order.approved_at = datetime.now(UTC)
@@ -1475,6 +1483,34 @@ def upload_approved_pdf(order_id):
     db.session.add(approval)
     db.session.commit()
 
-    flash("Orden aprobada con documento.", "success")
-
+    flash("Orden aprobada correctamente con PDF firmado.", "success")
     return redirect(url_for("purchases.order_detail", order_id=order_id))
+
+
+@purchases_bp.route("/orders/<int:order_id>/approved-pdf")
+@login_required
+def view_approved_pdf(order_id):
+    approval = (
+        PurchaseOrderApproval.query
+        .filter(
+            PurchaseOrderApproval.purchase_order_id == order_id,
+            PurchaseOrderApproval.status == "APROBADA",
+            PurchaseOrderApproval.approved_pdf_data.isnot(None),
+        )
+        .order_by(PurchaseOrderApproval.created_at.desc())
+        .first()
+    )
+
+    if not approval:
+        flash("No hay PDF aprobado para esta orden.", "warning")
+        return redirect(url_for("purchases.order_detail", order_id=order_id))
+
+    filename = approval.approved_pdf_original_name or f"OC_{order_id}.pdf"
+
+    return Response(
+        approval.approved_pdf_data,
+        mimetype=approval.approved_pdf_mime_type or "application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"'
+        },
+    )

@@ -25,6 +25,8 @@ class PurchaseOrderApproval(db.Model):
     approved_pdf_path = db.Column(db.Text, nullable=True)
     approved_pdf_original_name = db.Column(db.String(255), nullable=True)
     approved_pdf_uploaded_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    approved_pdf_data = db.Column(db.LargeBinary, nullable=True)
+    approved_pdf_mime_type = db.Column(db.String(100), nullable=True)
 
     created_at = db.Column(
         db.DateTime(timezone=True),

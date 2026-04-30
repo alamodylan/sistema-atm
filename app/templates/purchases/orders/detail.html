@@ -4,7 +4,7 @@
 {% set approved_doc = none %}
 {% if purchase_order.approvals %}
     {% for approval in purchase_order.approvals %}
-        {% if approval.status == "APROBADA" and approval.approved_pdf_path %}
+        {% if approval.status == "APROBADA" and approval.approved_pdf_data %}
             {% set approved_doc = approval %}
         {% endif %}
     {% endfor %}
@@ -27,6 +27,14 @@
                class="btn btn-outline-dark rounded-3">
                 <i class="bi bi-printer me-2"></i>Imprimir / PDF
             </a>
+
+            {% if approved_doc %}
+                <a href="{{ url_for('purchases.view_approved_pdf', order_id=purchase_order.id) }}"
+                   target="_blank"
+                   class="btn btn-outline-success rounded-3">
+                    <i class="bi bi-file-earmark-pdf me-2"></i>Ver PDF aprobado
+                </a>
+            {% endif %}
 
             {% if purchase_order.approval_status in ['APROBADA', 'RECIBIDA_PARCIAL'] %}
                 <a href="{{ url_for('purchases.create_entry') }}" class="btn btn-dark rounded-3">
@@ -51,11 +59,7 @@
 
                         <dt class="col-5 text-muted">Solicitud</dt>
                         <dd class="col-7">
-                            {% if purchase_order.purchase_request %}
-                                {{ purchase_order.purchase_request.number }}
-                            {% else %}
-                                -
-                            {% endif %}
+                            {{ purchase_order.purchase_request.number if purchase_order.purchase_request else '-' }}
                         </dd>
 
                         <dt class="col-5 text-muted">Estado</dt>
@@ -113,7 +117,7 @@
                     <div class="card-body p-4">
                         <h5 class="fw-bold mb-2">Subir OC firmada</h5>
                         <p class="text-muted small mb-3">
-                            La orden solo pasará a <strong>APROBADA</strong> cuando se adjunte el PDF firmado.
+                            La orden pasará a <strong>APROBADA</strong> al adjuntar el PDF firmado.
                         </p>
 
                         <form method="post"
@@ -140,7 +144,7 @@
                             {{ approved_doc.approved_pdf_original_name or 'PDF aprobado' }}
                         </p>
 
-                        <a href="/{{ approved_doc.approved_pdf_path }}"
+                        <a href="{{ url_for('purchases.view_approved_pdf', order_id=purchase_order.id) }}"
                            target="_blank"
                            class="btn btn-outline-success w-100 rounded-3">
                             <i class="bi bi-file-earmark-pdf me-2"></i>Ver PDF aprobado
@@ -168,14 +172,18 @@
                                         <div class="fw-semibold">{{ item.status }}</div>
                                         <small class="text-muted">{{ cr_datetime(item.created_at) }}</small>
                                     </div>
+
                                     <div class="text-muted small mb-1">
                                         {{ item.approved_by_user.name if item.approved_by_user and item.approved_by_user.name else item.approved_by_user.username if item.approved_by_user else 'Sin usuario' }}
                                     </div>
+
                                     <div class="small text-muted">{{ item.reason or 'Sin observación' }}</div>
 
-                                    {% if item.approved_pdf_path %}
+                                    {% if item.approved_pdf_data %}
                                         <div class="mt-2">
-                                            <a href="/{{ item.approved_pdf_path }}" target="_blank" class="small text-success text-decoration-none">
+                                            <a href="{{ url_for('purchases.view_approved_pdf', order_id=purchase_order.id) }}"
+                                               target="_blank"
+                                               class="small text-success text-decoration-none">
                                                 <i class="bi bi-file-earmark-pdf me-1"></i>Ver PDF firmado
                                             </a>
                                         </div>
@@ -248,6 +256,19 @@
                     {% endif %}
                 </div>
             </div>
+
+            {% if approved_doc %}
+                <div class="card border-0 shadow-sm rounded-4 mt-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3">Vista previa del PDF aprobado</h5>
+
+                        <iframe src="{{ url_for('purchases.view_approved_pdf', order_id=purchase_order.id) }}"
+                                style="width: 100%; height: 720px; border: 1px solid #dee2e6; border-radius: 12px;"
+                                title="PDF aprobado">
+                        </iframe>
+                    </div>
+                </div>
+            {% endif %}
 
             {% if purchase_order.inventory_entries %}
                 <div class="card border-0 shadow-sm rounded-4 mt-4">
