@@ -91,7 +91,11 @@
 
                         <dt class="col-5 text-muted">Creado por</dt>
                         <dd class="col-7">
-                            {{ purchase_order.generated_by_user.name if purchase_order.generated_by_user and purchase_order.generated_by_user.name else purchase_order.generated_by_user.username if purchase_order.generated_by_user else '-' }}
+                            {% if purchase_order.generated_by_user %}
+                                {{ purchase_order.generated_by_user.full_name or purchase_order.generated_by_user.username }}
+                            {% else %}
+                                -
+                            {% endif %}
                         </dd>
 
                         <dt class="col-5 text-muted">Fecha creación</dt>
@@ -152,7 +156,7 @@
 
                         <div class="small text-muted mt-3">
                             Subido por:
-                            {{ approved_doc.approved_by_user.name if approved_doc.approved_by_user and approved_doc.approved_by_user.name else approved_doc.approved_by_user.username if approved_doc.approved_by_user else 'Sin usuario' }}
+                            {{ approved_doc.approved_by_user.full_name if approved_doc.approved_by_user and approved_doc.approved_by_user.full_name else approved_doc.approved_by_user.username if approved_doc.approved_by_user else 'Sin usuario' }}
                             <br>
                             Fecha: {{ cr_datetime(approved_doc.approved_pdf_uploaded_at) }}
                         </div>
@@ -174,7 +178,7 @@
                                     </div>
 
                                     <div class="text-muted small mb-1">
-                                        {{ item.approved_by_user.name if item.approved_by_user and item.approved_by_user.name else item.approved_by_user.username if item.approved_by_user else 'Sin usuario' }}
+                                        {{ item.approved_by_user.full_name if item.approved_by_user and item.approved_by_user.full_name else item.approved_by_user.username if item.approved_by_user else 'Sin usuario' }}
                                     </div>
 
                                     <div class="small text-muted">{{ item.reason or 'Sin observación' }}</div>

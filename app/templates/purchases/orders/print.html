@@ -332,7 +332,11 @@
             <div class="info-row">
                 <div class="info-label">Creado por</div>
                 <div class="info-value">
-                    {{ purchase_order.generated_by_user.name if purchase_order.generated_by_user and purchase_order.generated_by_user.name else purchase_order.generated_by_user.username if purchase_order.generated_by_user else '-' }}
+                    {% if purchase_order.generated_by_user %}
+                        {{ purchase_order.generated_by_user.full_name or purchase_order.generated_by_user.username }}
+                    {% else %}
+                        -
+                    {% endif %}
                 </div>
             </div>
 
