@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="fw-bold">{{ inventory.number }}</h4>
+            <small class="text-muted">Bodega: {{ inventory.warehouse.name }}</small>
+        </div>
+
+        <div class="d-flex gap-2">
+
+            {% if inventory.status in ["BORRADOR","EN_CONTEO"] %}
+            <form method="POST" action="{{ url_for('physical_inventory.close', inventory_id=inventory.id) }}">
+                <button class="btn btn-warning">Cerrar inventario</button>
+            </form>
+            {% endif %}
+
+        </div>
+    </div>
+
+    <!-- ADVERTENCIA -->
+    {% if inventory.status == "CERRADO" %}
+    <div class="alert alert-danger">
+        Este proceso ajustará TODO el inventario real.
+    </div>
+
+    <form method="POST"
+          action="{{ url_for('physical_inventory.apply_adjustment', inventory_id=inventory.id) }}">
+        <div class="row g-2">
+
+            <div class="col-md-6">
+                <input type="text"
+                       name="confirmation_text"
+                       class="form-control"
+                       placeholder="Escriba: AJUSTAR INVENTARIO"
+                       required>
+            </div>
+
+            <div class="col-md-3">
+                <button class="btn btn-danger w-100">
+                    Aplicar ajuste
+                </button>
+            </div>
+
+        </div>
+    </form>
+    {% endif %}
+
+    <!-- TABLA -->
+    <div class="card mt-3 shadow-sm border-0">
+        <div class="card-body p-0">
+
+            <table class="table mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Sistema</th>
+                        <th>Físico</th>
+                        <th>Diferencia</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                {% for line in lines %}
+                <tr data-barcode="{{ line.article.barcode }}"
+                    data-system="{{ line.system_quantity }}">
+
+                    <td>{{ line.article.code }}</td>
+                    <td>{{ line.article.name }}</td>
+                    <td>{{ line.system_quantity }}</td>
+
+                    <td>
+                        <input type="number"
+                               class="form-control qty-input"
+                               data-line-id="{{ line.id }}"
+                               value="{{ line.physical_quantity or '' }}"
+                               {% if inventory.status not in ["BORRADOR","EN_CONTEO"] %}disabled{% endif %}>
+                    </td>
+
+                    <td class="diff">
+                        {{ line.difference_quantity or '' }}
+                    </td>
+
+                </tr>
+                {% endfor %}
+
+                </tbody>
+            </table>
+
+        </div>
+    </div>
+
+</div>
+
+<script>
+
+let buffer = ""
+
+document.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){
+        procesarCodigo(buffer)
+        buffer = ""
+    } else {
+        buffer += e.key
+    }
+})
+
+function procesarCodigo(code){
+    const row = document.querySelector(`[data-barcode="${code}"]`)
+    if(!row) return
+
+    const input = row.querySelector(".qty-input")
+    input.focus()
+    input.select()
+}
+
+document.querySelectorAll(".qty-input").forEach(input => {
+
+    input.addEventListener("change", async function(){
+
+        const row = this.closest("tr")
+
+        const system = parseFloat(row.dataset.system)
+        const physical = parseFloat(this.value || 0)
+
+        const diff = physical - system
+
+        const cell = row.querySelector(".diff")
+
+        cell.innerText = diff
+
+        cell.classList.remove("text-success","text-warning","text-danger")
+
+        if(diff === 0) cell.classList.add("text-success")
+        else if(diff > 0) cell.classList.add("text-warning")
+        else cell.classList.add("text-danger")
+
+        await fetch("/physical-inventory/update-line", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({
+                line_id: this.dataset.lineId,
+                physical_quantity: this.value
+            })
+        })
+
+    })
+
+})
+
+</script>
+
+{% endblock %}
