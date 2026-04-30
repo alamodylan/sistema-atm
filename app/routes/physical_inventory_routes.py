@@ -254,7 +254,7 @@ def close(inventory_id: int):
         )
         return redirect(url_for("physical_inventory.detail", inventory_id=inventory.id))
 
-    inventory.status = "CERRADO"
+    inventory.status = "FINALIZADO"
     db.session.commit()
 
     flash("Inventario físico cerrado correctamente.", "success")
@@ -267,8 +267,8 @@ def apply_adjustment(inventory_id: int):
     inventory = PhysicalInventory.query.get_or_404(inventory_id)
 
     # 🔒 Validación de estado
-    if inventory.status != "CERRADO":
-        flash("El inventario debe estar CERRADO antes de aplicar ajustes.", "danger")
+    if inventory.status != "FINALIZADO":
+        flash("El inventario debe estar FINALIZADO antes de aplicar ajustes.", "danger")
         return redirect(url_for("physical_inventory.detail", inventory_id=inventory.id))
 
     # 🔒 Confirmación fuerte

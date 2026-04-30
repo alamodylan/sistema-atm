@@ -51,8 +51,8 @@ def apply_physical_inventory_adjustment(inventory_id, user_id):
     if inventory.status == "AJUSTADO":
         raise Exception("Este inventario ya fue ajustado.")
 
-    if inventory.status not in ["CERRADO"]:
-        raise Exception("El inventario debe estar CERRADO para aplicar ajustes.")
+    if inventory.status not in ["FINALIZADO"]:
+        raise Exception("El inventario debe estar FINALIZADO para aplicar ajustes.")
 
     lines = PhysicalInventoryLine.query.filter_by(
         physical_inventory_id=inventory.id
