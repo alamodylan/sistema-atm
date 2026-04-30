@@ -72,9 +72,10 @@
                 <i class="bi bi-arrow-left-right me-2"></i>Traslados
             </a>
 
-            <span class="nav-link sidebar-link disabled">
+            <a href="{{ url_for('physical_inventory.index') }}"
+               class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('physical_inventory.') %}active{% endif %}">
                 <i class="bi bi-list-check me-2"></i>Inventario físico
-            </span>
+            </a>
 
             <span class="nav-link sidebar-link disabled">
                 <i class="bi bi-shield-check me-2"></i>Auditoría
