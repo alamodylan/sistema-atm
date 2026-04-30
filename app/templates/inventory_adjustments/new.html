@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1">Nuevo Ajuste de Inventario</h4>
+            <p class="text-muted mb-0">Escanee o ingrese códigos para ajustar cantidades por bodega</p>
+        </div>
+
+        <a href="{{ url_for('inventory_adjustments.index') }}" class="btn btn-outline-secondary">
+            Volver
+        </a>
+    </div>
+
+    <form method="POST" action="{{ url_for('inventory_adjustments.create') }}" id="adjustmentForm">
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+
+                <div class="row g-3">
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Bodega</label>
+                        <select name="warehouse_id" id="warehouse_id" class="form-select" required>
+                            <option value="">Seleccione una bodega</option>
+                            {% for w in warehouses %}
+                                <option value="{{ w.id }}">{{ w.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-5">
+                        <label class="form-label fw-semibold">Código / Barcode</label>
+                        <input type="text"
+                               id="codeInput"
+                               class="form-control"
+                               placeholder="Escanee o escriba el código del artículo">
+                    </div>
+
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="button" id="btnSearchArticle" class="btn btn-primary w-100">
+                            Buscar / Agregar
+                        </button>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Notas</label>
+                        <textarea name="notes"
+                                  class="form-control"
+                                  rows="2"
+                                  placeholder="Motivo o comentario del ajuste"></textarea>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="adjustmentTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Código</th>
+                                <th>Artículo</th>
+                                <th class="text-end">Cantidad actual</th>
+                                <th class="text-end">Cantidad nueva</th>
+                                <th class="text-end">Diferencia</th>
+                                <th class="text-end">Acción</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="adjustmentLines">
+                            <tr id="emptyRow">
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    No hay artículos agregados
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+
+            <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+                <div class="text-muted small">
+                    La cantidad nueva debe ser un número entero y no negativo.
+                </div>
+
+                <button type="submit" class="btn btn-success">
+                    Guardar Ajuste
+                </button>
+            </div>
+        </div>
+
+    </form>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const warehouseSelect = document.getElementById("warehouse_id");
+    const codeInput = document.getElementById("codeInput");
+    const btnSearchArticle = document.getElementById("btnSearchArticle");
+    const adjustmentLines = document.getElementById("adjustmentLines");
+    const adjustmentForm = document.getElementById("adjustmentForm");
+
+    function removeEmptyRow() {
+        const emptyRow = document.getElementById("emptyRow");
+        if (emptyRow) {
+            emptyRow.remove();
+        }
+    }
+
+    function restoreEmptyRowIfNeeded() {
+        if (adjustmentLines.children.length === 0) {
+            adjustmentLines.innerHTML = `
+                <tr id="emptyRow">
+                    <td colspan="6" class="text-center text-muted py-4">
+                        No hay artículos agregados
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+    function articleAlreadyAdded(articleId) {
+        return document.querySelector(`tr[data-article-id="${articleId}"]`) !== null;
+    }
+
+    function formatNumber(value) {
+        const number = Number(value);
+        if (Number.isNaN(number)) {
+            return "0";
+        }
+        return number.toLocaleString("es-CR", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        });
+    }
+
+    function updateDifference(row) {
+        const currentQty = Number(row.dataset.currentQuantity || 0);
+        const newQtyInput = row.querySelector(".quantity-after-input");
+        const differenceCell = row.querySelector(".difference-cell");
+
+        let newQty = Number(newQtyInput.value);
+
+        if (Number.isNaN(newQty) || newQty < 0) {
+            differenceCell.textContent = "-";
+            differenceCell.className = "text-end difference-cell text-danger fw-semibold";
+            return;
+        }
+
+        const difference = newQty - currentQty;
+        differenceCell.textContent = formatNumber(difference);
+
+        differenceCell.className = "text-end difference-cell fw-semibold";
+
+        if (difference > 0) {
+            differenceCell.classList.add("text-primary");
+        } else if (difference < 0) {
+            differenceCell.classList.add("text-danger");
+        } else {
+            differenceCell.classList.add("text-success");
+        }
+    }
+
+    function addArticleRow(article) {
+        if (articleAlreadyAdded(article.id)) {
+            alert("Este artículo ya fue agregado al ajuste.");
+            return;
+        }
+
+        removeEmptyRow();
+
+        const currentQuantity = Number(article.current_quantity || 0);
+
+        const row = document.createElement("tr");
+        row.dataset.articleId = article.id;
+        row.dataset.currentQuantity = currentQuantity;
+
+        row.innerHTML = `
+            <td class="fw-semibold">
+                ${article.code || "-"}
+                <input type="hidden" name="article_id[]" value="${article.id}">
+            </td>
+
+            <td>
+                ${article.name || "-"}
+            </td>
+
+            <td class="text-end">
+                ${formatNumber(currentQuantity)}
+            </td>
+
+            <td class="text-end" style="max-width: 160px;">
+                <input type="number"
+                       name="quantity_after[]"
+                       class="form-control form-control-sm text-end quantity-after-input"
+                       min="0"
+                       step="1"
+                       required
+                       value="${formatNumber(currentQuantity).replace(/\D/g, '')}">
+            </td>
+
+            <td class="text-end difference-cell fw-semibold text-success">
+                0
+            </td>
+
+            <td class="text-end">
+                <button type="button" class="btn btn-sm btn-outline-danger btn-remove-line">
+                    Quitar
+                </button>
+            </td>
+        `;
+
+        adjustmentLines.appendChild(row);
+
+        const qtyInput = row.querySelector(".quantity-after-input");
+        qtyInput.focus();
+        qtyInput.select();
+
+        qtyInput.addEventListener("input", function () {
+            updateDifference(row);
+        });
+
+        row.querySelector(".btn-remove-line").addEventListener("click", function () {
+            row.remove();
+            restoreEmptyRowIfNeeded();
+        });
+    }
+
+    async function searchArticle() {
+        const warehouseId = warehouseSelect.value;
+        const code = codeInput.value.trim();
+
+        if (!warehouseId) {
+            alert("Primero seleccione una bodega.");
+            warehouseSelect.focus();
+            return;
+        }
+
+        if (!code) {
+            alert("Ingrese o escanee un código.");
+            codeInput.focus();
+            return;
+        }
+
+        const url = `{{ url_for('inventory_adjustments.article_lookup') }}?warehouse_id=${encodeURIComponent(warehouseId)}&code=${encodeURIComponent(code)}`;
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (!data.ok) {
+                alert(data.message || "No se pudo buscar el artículo.");
+                codeInput.focus();
+                codeInput.select();
+                return;
+            }
+
+            addArticleRow(data.article);
+
+            codeInput.value = "";
+            codeInput.focus();
+
+        } catch (error) {
+            alert("Error al buscar el artículo.");
+        }
+    }
+
+    btnSearchArticle.addEventListener("click", searchArticle);
+
+    codeInput.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            searchArticle();
+        }
+    });
+
+    adjustmentForm.addEventListener("submit", function (event) {
+        const rows = adjustmentLines.querySelectorAll("tr[data-article-id]");
+
+        if (rows.length === 0) {
+            event.preventDefault();
+            alert("Debe agregar al menos un artículo al ajuste.");
+            codeInput.focus();
+            return;
+        }
+
+        for (const row of rows) {
+            const input = row.querySelector(".quantity-after-input");
+            const value = Number(input.value);
+
+            if (Number.isNaN(value) || value < 0 || !Number.isInteger(value)) {
+                event.preventDefault();
+                alert("Todas las cantidades nuevas deben ser enteras y no negativas.");
+                input.focus();
+                return;
+            }
+        }
+
+        const confirmed = confirm(
+            "Este ajuste modificará el inventario real y quedará registrado en kardex. ¿Desea continuar?"
+        );
+
+        if (!confirmed) {
+            event.preventDefault();
+        }
+    });
+});
+</script>
+
+{% endblock %}

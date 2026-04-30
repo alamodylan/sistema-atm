@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container-fluid py-4">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1">Ajustes de Inventario</h4>
+            <p class="text-muted mb-0">Historial de ajustes manuales por bodega</p>
+        </div>
+
+        <a href="{{ url_for('inventory_adjustments.new') }}" class="btn btn-primary">
+            + Nuevo Ajuste
+        </a>
+    </div>
+
+    <!-- FILTRO -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="GET">
+                <div class="row align-items-end">
+
+                    <div class="col-md-4">
+                        <label class="form-label">Bodega</label>
+                        <select name="warehouse_id" class="form-select">
+                            <option value="">Todas</option>
+                            {% for w in warehouses %}
+                                <option value="{{ w.id }}"
+                                    {% if selected_warehouse_id == w.id %}selected{% endif %}>
+                                    {{ w.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-outline-primary w-100">
+                            Filtrar
+                        </button>
+                    </div>
+
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TABLA -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+
+                    <thead class="table-light">
+                        <tr>
+                            <th># Ajuste</th>
+                            <th>Bodega</th>
+                            <th>Usuario</th>
+                            <th>Fecha</th>
+                            <th>Notas</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% if adjustments %}
+                            {% for adj in adjustments %}
+                                <tr>
+
+                                    <td class="fw-semibold">
+                                        {{ adj.number }}
+                                    </td>
+
+                                    <td>
+                                        {{ adj.warehouse.name if adj.warehouse else '-' }}
+                                    </td>
+
+                                    <td>
+                                        {{ adj.created_by_user.name if adj.created_by_user else '-' }}
+                                    </td>
+
+                                    <td>
+                                        {{ adj.created_at.strftime("%d/%m/%Y %H:%M") }}
+                                    </td>
+
+                                    <td>
+                                        {{ adj.notes or '-' }}
+                                    </td>
+
+                                    <td class="text-end">
+                                        <a href="{{ url_for('inventory_adjustments.show', adjustment_id=adj.id) }}"
+                                           class="btn btn-sm btn-outline-primary">
+                                            Ver
+                                        </a>
+                                    </td>
+
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">
+                                    No hay ajustes registrados
+                                </td>
+                            </tr>
+                        {% endif %}
+
+                    </tbody>
+
+                </table>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
