@@ -115,15 +115,6 @@ def create_inventory_adjustment(
     """
     Crea un ajuste manual de inventario.
 
-    lines esperado:
-    [
-        {
-            "article_id": 1,
-            "quantity_after": 10
-        },
-        ...
-    ]
-
     Este método:
     1. Crea encabezado inventory_adjustments.
     2. Crea líneas inventory_adjustment_lines.
@@ -162,6 +153,8 @@ def create_inventory_adjustment(
 
         if not article_id:
             raise InventoryAdjustmentServiceError("Hay una línea sin artículo.")
+
+        article_id = int(article_id)
 
         if article_id in seen_articles:
             raise InventoryAdjustmentServiceError(
@@ -243,7 +236,7 @@ def create_inventory_adjustment(
             stock.quantity_on_hand = quantity_after
 
             ledger = InventoryLedger(
-                movement_type="ADJUSTMENT",
+                movement_type="AJUSTE_MANUAL",
                 warehouse_id=warehouse_id,
                 related_warehouse_id=None,
                 warehouse_location_id=None,
