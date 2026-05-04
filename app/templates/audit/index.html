@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container-fluid py-4">
+
+    <!-- HEADER -->
+    <div class="mb-4">
+        <h4 class="fw-bold mb-1">Auditoría del sistema</h4>
+        <p class="text-muted mb-0">
+            Registro detallado de todas las acciones realizadas en el sistema
+        </p>
+    </div>
+
+    <!-- FILTROS -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+
+            <form method="GET">
+                <div class="row g-3">
+
+                    <!-- Usuario -->
+                    <div class="col-md-3">
+                        <label class="form-label">Usuario</label>
+                        <select name="user_id" class="form-select">
+                            <option value="">Todos</option>
+                            {% for u in users %}
+                                <option value="{{ u.id }}"
+                                    {% if selected_user_id == u.id %}selected{% endif %}>
+                                    {{ u.full_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Acción -->
+                    <div class="col-md-3">
+                        <label class="form-label">Acción</label>
+                        <select name="action" class="form-select">
+                            <option value="">Todas</option>
+                            {% for a in actions %}
+                                <option value="{{ a }}"
+                                    {% if selected_action == a %}selected{% endif %}>
+                                    {{ a.replace('_', ' ') }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Módulo -->
+                    <div class="col-md-3">
+                        <label class="form-label">Módulo</label>
+                        <select name="table_name" class="form-select">
+                            <option value="">Todos</option>
+                            {% for t in tables %}
+                                <option value="{{ t }}"
+                                    {% if selected_table_name == t %}selected{% endif %}>
+                                    {{ t.replace('_', ' ') }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Búsqueda -->
+                    <div class="col-md-3">
+                        <label class="form-label">Buscar</label>
+                        <input type="text" name="search" value="{{ search }}" class="form-control" placeholder="OT, artículo, etc.">
+                    </div>
+
+                    <!-- Fechas -->
+                    <div class="col-md-3">
+                        <label class="form-label">Desde</label>
+                        <input type="date" name="date_from" value="{{ date_from }}" class="form-control">
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Hasta</label>
+                        <input type="date" name="date_to" value="{{ date_to }}" class="form-control">
+                    </div>
+
+                    <!-- Botón -->
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-primary w-100">
+                            Filtrar
+                        </button>
+                    </div>
+
+                </div>
+            </form>
+
+        </div>
+    </div>
+
+    <!-- TABLA -->
+    <div class="card shadow-sm">
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+
+                <thead class="table-light">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Usuario</th>
+                        <th>Acción</th>
+                        <th>Módulo</th>
+                        <th>Documento</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                {% for log in logs %}
+                    <tr>
+
+                        <!-- Fecha -->
+                        <td>
+                            {{ log.created_at|cr_datetime }}
+                        </td>
+
+                        <!-- Usuario -->
+                        <td>
+                            {{ log.user.full_name if log.user else '-' }}
+                        </td>
+
+                        <!-- Acción -->
+                        <td>
+                            <span class="fw-semibold">
+                                {{ log.action_label }}
+                            </span>
+                        </td>
+
+                        <!-- Módulo -->
+                        <td>
+                            {{ log.module_label }}
+                        </td>
+
+                        <!-- Documento -->
+                        <td class="fw-semibold">
+                            {{ log.record_id }}
+                        </td>
+
+                        <!-- Detalle -->
+                        <td class="text-muted small">
+                            {{ log.description or '-' }}
+                        </td>
+
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            No hay registros para los filtros seleccionados
+                        </td>
+                    </tr>
+                {% endfor %}
+
+                </tbody>
+
+            </table>
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

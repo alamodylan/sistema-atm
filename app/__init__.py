@@ -1,4 +1,4 @@
-from flask import Flask, render_template, session
+from flask import Flask, app, render_template, session
 from flask_login import current_user
 
 from .config import Config
@@ -42,7 +42,7 @@ def create_app():
     from app.routes.inventory_adjustments import inventory_adjustments_bp
     from app.routes.kardex import kardex_bp
     from app.utils.datetime_helpers import format_costa_rica_datetime
-
+    from app.routes.audit_routes import audit_bp
 
 
 
@@ -65,7 +65,8 @@ def create_app():
     app.register_blueprint(physical_inventory_bp)
     app.register_blueprint(inventory_adjustments_bp)
     app.register_blueprint(kardex_bp)
-    app.jinja_env.filters["cr_datetime"] = format_costa_rica_datetime
+    app.jinja_env.filters["cr_datetime"] = format_costa_rica_datetime  
+    app.register_blueprint(audit_bp)
 
 
 
