@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+
+{% block title %}Estadísticas | Sistema de Bodega{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid py-4">
+
+    <!-- HEADER -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div>
+            <h3 class="fw-bold mb-0">Estadísticas de mecánicos</h3>
+            <small class="text-muted">
+                Comparativa de rendimiento, tiempos promedio y participación en trabajos
+            </small>
+        </div>
+    </div>
+
+    <!-- FILTROS -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3 align-items-end">
+
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Predio</label>
+                    <select name="site_id" class="form-select">
+                        {% for site in sites %}
+                            <option value="{{ site.id }}"
+                                {% if selected_site_id == site.id %}selected{% endif %}>
+                                {{ site.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-2">
+                    <button class="btn btn-primary w-100">
+                        Consultar
+                    </button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <!-- KPIS -->
+    <div class="row g-4 mb-4">
+
+        <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <small class="text-muted">Mecánicos evaluados</small>
+                    <h3 class="fw-bold mb-0">{{ stats|length }}</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <small class="text-muted">Trabajos registrados</small>
+                    <h3 class="fw-bold mb-0">
+                        {{ stats|sum(attribute='total_jobs') }}
+                    </h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <small class="text-muted">Tiempo total trabajado</small>
+                    <h3 class="fw-bold mb-0" id="totalHoursKpi">-</h3>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- RANKINGS -->
+    <div class="row g-4 mb-4">
+
+        <!-- MEJORES -->
+        <div class="col-12 col-xl-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Mecánicos con mejor eficiencia</h5>
+                    <p class="text-muted small">
+                        Menor tiempo promedio por trabajo finalizado.
+                    </p>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Mecánico</th>
+                                    <th class="text-end">Trabajos</th>
+                                    <th class="text-end">Promedio</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for m in best_mechanics %}
+                                    <tr>
+                                        <td class="fw-semibold">{{ m.name }}</td>
+                                        <td class="text-end">{{ m.total_jobs }}</td>
+                                        <td class="text-end">
+                                            <span class="badge text-bg-success">
+                                                {{ (m.avg_seconds / 60)|round(1) }} min
+                                            </span>
+                                        </td>
+                                    </tr>
+                                {% else %}
+                                    <tr>
+                                        <td colspan="3" class="text-center text-muted py-3">
+                                            Sin datos
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- PEORES -->
+        <div class="col-12 col-xl-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Mecánicos con mayor tiempo promedio</h5>
+                    <p class="text-muted small">
+                        Requiere revisión: puede ser baja eficiencia o trabajos de mayor complejidad.
+                    </p>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Mecánico</th>
+                                    <th class="text-end">Trabajos</th>
+                                    <th class="text-end">Promedio</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for m in worst_mechanics %}
+                                    <tr>
+                                        <td class="fw-semibold">{{ m.name }}</td>
+                                        <td class="text-end">{{ m.total_jobs }}</td>
+                                        <td class="text-end">
+                                            <span class="badge text-bg-warning">
+                                                {{ (m.avg_seconds / 60)|round(1) }} min
+                                            </span>
+                                        </td>
+                                    </tr>
+                                {% else %}
+                                    <tr>
+                                        <td colspan="3" class="text-center text-muted py-3">
+                                            Sin datos
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- GRAFICOS -->
+    <div class="row g-4 mb-4">
+
+        <div class="col-12 col-xl-7">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-1">Tiempo promedio por mecánico</h5>
+                    <p class="text-muted small mb-4">
+                        Promedio en minutos por trabajo registrado.
+                    </p>
+                    <canvas id="avgTimeChart" height="120"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-5">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-1">Cantidad de trabajos</h5>
+                    <p class="text-muted small mb-4">
+                        Total de trabajos realizados por mecánico.
+                    </p>
+                    <canvas id="jobsChart" height="160"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- TABLA DETALLADA -->
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body">
+            <h5 class="fw-bold mb-3">Detalle por mecánico</h5>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mecánico</th>
+                            <th class="text-end">Trabajos</th>
+                            <th class="text-end">Tiempo total</th>
+                            <th class="text-end">Promedio por trabajo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for m in stats %}
+                            <tr>
+                                <td class="fw-semibold">{{ m.name }}</td>
+                                <td class="text-end">{{ m.total_jobs }}</td>
+                                <td class="text-end">
+                                    {{ (m.total_seconds / 3600)|round(2) }} h
+                                </td>
+                                <td class="text-end">
+                                    {{ (m.avg_seconds / 60)|round(1) }} min
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-4">
+                                    No hay estadísticas disponibles para este predio.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script id="stats-payload" type="application/json">
+{
+    "labels": {{ chart_labels|tojson|safe }},
+    "avgSeconds": {{ chart_avg|tojson|safe }},
+    "jobs": {{ chart_jobs|tojson|safe }},
+    "stats": {{ stats|tojson|safe }}
+}
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const payloadElement = document.getElementById("stats-payload");
+
+    if (!payloadElement) {
+        return;
+    }
+
+    const payload = JSON.parse(payloadElement.textContent);
+
+    const labels = payload.labels || [];
+    const avgSeconds = payload.avgSeconds || [];
+    const jobs = payload.jobs || [];
+    const stats = payload.stats || [];
+
+    const avgMinutes = avgSeconds.map(function (value) {
+        return Number(value || 0) / 60;
+    });
+
+    const totalSeconds = stats.reduce(function (acc, item) {
+        return acc + Number(item.total_seconds || 0);
+    }, 0);
+
+    const totalHoursElement = document.getElementById("totalHoursKpi");
+
+    if (totalHoursElement) {
+        totalHoursElement.textContent = (totalSeconds / 3600).toFixed(2) + " h";
+    }
+
+    const commonOptions = {
+        responsive: true,
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                callbacks: {
+                    label: function (context) {
+                        return context.raw;
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    };
+
+    const avgTimeCanvas = document.getElementById("avgTimeChart");
+
+    if (avgTimeCanvas) {
+        new Chart(avgTimeCanvas, {
+            type: "bar",
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: "Minutos promedio",
+                        data: avgMinutes.map(function (value) {
+                            return Number(value.toFixed(1));
+                        }),
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                return context.raw + " min promedio";
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    const jobsCanvas = document.getElementById("jobsChart");
+
+    if (jobsCanvas) {
+        new Chart(jobsCanvas, {
+            type: "doughnut",
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: "Trabajos",
+                        data: jobs,
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                return context.label + ": " + context.raw + " trabajos";
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
