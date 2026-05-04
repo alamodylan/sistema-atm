@@ -55,6 +55,15 @@ ACTION_LABELS = {
     "UPDATE_REQUEST_LINE_REQUESTED_QUANTITY": "Actualizó cantidad solicitada",
     "REJECT_REQUEST_LINE_BY_MANAGEMENT": "Solicitud rechazada por jefatura",
     "SEND_REQUEST_TO_WAREHOUSE": "Envió solicitud a bodega",
+    "CREATE_TRANSFER_DRAFT_FROM_REQUEST": "Creó traslado (borrador)",
+    "SEND_TRANSFER_REQUEST_TO_WAREHOUSE": "Envió solicitud de traslado a bodega",
+    "FINALIZE_TRANSFER_REQUEST_REVIEW": "Finalizó revisión de solicitud de traslado",
+    "REVIEW_TRANSFER_REQUEST_LINE": "Revisó artículo en solicitud de traslado",
+    "SEND_TRANSFER_REQUEST": "Envió solicitud de traslado",
+    "ADD_TRANSFER_REQUEST_LINE": "Agregó artículo a solicitud de traslado",
+
+    "CHANGE_WASTE_ACT_STATUS": "Cambió estado de acta de desecho",
+    "UPLOAD_WASTE_ACT_SIGNED_PDF": "Subió acta de desecho firmada",
 }
 
 
