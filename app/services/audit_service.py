@@ -52,6 +52,9 @@ ACTION_LABELS = {
     "CREATE_QUOTATION": "Creó cotización",
     "CREATE_PURCHASE_ORDER": "Creó orden de compra",
     "PRINT_PURCHASE_ORDER": "Imprimió orden de compra",
+    "UPDATE_REQUEST_LINE_REQUESTED_QUANTITY": "Actualizó cantidad solicitada",
+    "REJECT_REQUEST_LINE_BY_MANAGEMENT": "Solicitud rechazada por jefatura",
+    "SEND_REQUEST_TO_WAREHOUSE": "Envió solicitud a bodega",
 }
 
 
