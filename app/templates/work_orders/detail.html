@@ -110,14 +110,14 @@
                             <div class="small text-muted mt-1">
                                 Creada por:
                                 <strong>{{ req.requested_by_user.full_name if req.requested_by_user else '-' }}</strong>
-                                · {{ req.created_at }}
+                                · {{ req.created_at|cr_datetime }}
                             </div>
 
                             {% if req.approved_by_user %}
                             <div class="small text-muted mt-1">
                                 Aprobó jefatura:
                                 <strong>{{ req.approved_by_user.full_name }}</strong>
-                                {% if req.approved_at %}· {{ req.approved_at|cr_datetime }}{% endif %}
+                                {% if req.approved_at|cr_datetime %}· {{ req.approved_at|cr_datetime }}{% endif %}
                             </div>
                             {% endif %}
 
@@ -125,7 +125,7 @@
                             <div class="small text-muted mt-1">
                                 Enviada a bodega:
                                 <strong>{{ req.sent_to_warehouse_by_user.full_name if req.sent_to_warehouse_by_user else '-' }}</strong>
-                                · {{ req.sent_to_warehouse_at }}
+                                · {{ req.sent_to_warehouse_at|cr_datetime }}
                             </div>
                             {% endif %}
                         </div>
@@ -378,7 +378,7 @@
                                     {% endif %}
                                 </td>
 
-                                <td>{{ t.started_at or '-' }}</td>
+                                <td>{{ t.started_at|cr_datetime or '-' }}</td>
 
                                 <td>
                                     {% if t.status == "PENDIENTE" %}
