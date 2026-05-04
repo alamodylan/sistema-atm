@@ -43,6 +43,8 @@ def create_app():
     from app.routes.kardex import kardex_bp
     from app.utils.datetime_helpers import format_costa_rica_datetime
     from app.routes.audit_routes import audit_bp
+    from app.routes.stats_routes import stats_bp
+
 
 
 
@@ -67,6 +69,7 @@ def create_app():
     app.register_blueprint(kardex_bp)
     app.jinja_env.filters["cr_datetime"] = format_costa_rica_datetime  
     app.register_blueprint(audit_bp)
+    app.register_blueprint(stats_bp)
 
 
 
