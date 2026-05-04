@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container-fluid py-4">
+
+    <!-- HEADER -->
+    <div class="mb-4">
+        <h4 class="fw-bold mb-1">Kardex de inventario</h4>
+        <p class="text-muted mb-0">Historial detallado por artículo con saldo acumulado</p>
+    </div>
+
+    <!-- FILTROS -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+
+            <form method="GET">
+                <div class="row g-3 align-items-end">
+
+                    <div class="col-md-3">
+                        <label class="form-label">Bodega</label>
+                        <select name="warehouse_id" class="form-select" required>
+                            <option value="">Seleccione</option>
+                            {% for w in warehouses %}
+                                <option value="{{ w.id }}"
+                                    {% if selected_warehouse_id == w.id %}selected{% endif %}>
+                                    {{ w.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Código / Barcode</label>
+                        <input type="text"
+                               name="code"
+                               value="{{ code }}"
+                               class="form-control"
+                               required>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label">Desde</label>
+                        <input type="date"
+                               name="date_from"
+                               value="{{ date_from }}"
+                               class="form-control"
+                               required>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label">Hasta</label>
+                        <input type="date"
+                               name="date_to"
+                               value="{{ date_to }}"
+                               class="form-control"
+                               required>
+                    </div>
+
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            Consultar
+                        </button>
+                    </div>
+
+                </div>
+            </form>
+
+        </div>
+    </div>
+
+    {% if kardex %}
+
+    <!-- RESUMEN -->
+    <div class="row g-3 mb-3">
+
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted">Saldo inicial</small>
+                    <h5 class="fw-bold mb-0">
+                        {{ "%.2f"|format(kardex.initial_balance) }}
+                    </h5>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted">Saldo final</small>
+                    <h5 class="fw-bold mb-0">
+                        {{ "%.2f"|format(kardex.final_balance) }}
+                    </h5>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- TABLA -->
+    <div class="card shadow-sm">
+
+        <div class="card-body p-0">
+
+            <div class="table-responsive">
+                <table class="table table-hover table-sm align-middle mb-0">
+
+                    <thead class="table-light">
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Movimiento</th>
+                            <th>Documento</th>
+                            <th>Referencia</th>
+                            <th>Bodega</th>
+                            <th>Bodega destino</th>
+                            <th class="text-end">Cantidad</th>
+                            <th class="text-end">Costo</th>
+                            <th class="text-end">Total</th>
+                            <th class="text-end">Acumulado</th>
+                            <th>Usuario</th>
+                            <th>Detalle</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for line in kardex.lines %}
+                            <tr>
+
+                                <td>
+                                    {{ line.date.strftime("%d/%m/%Y %H:%M") }}
+                                </td>
+
+                                <td>
+                                    <span class="badge bg-light text-dark">
+                                        {{ line.movement_type }}
+                                    </span>
+                                </td>
+
+                                <td>
+                                    {{ line.reference_type }}
+                                </td>
+
+                                <td class="fw-semibold">
+                                    {{ line.reference }}
+                                </td>
+
+                                <td>
+                                    {{ line.warehouse_name }}
+                                </td>
+
+                                <td>
+                                    {{ line.related_warehouse_name or '-' }}
+                                </td>
+
+                                <td class="text-end
+                                    {% if line.quantity > 0 %}
+                                        text-primary
+                                    {% elif line.quantity < 0 %}
+                                        text-danger
+                                    {% endif %}
+                                ">
+                                    {{ "%.2f"|format(line.quantity) }}
+                                </td>
+
+                                <td class="text-end">
+                                    {{ "%.2f"|format(line.unit_cost) if line.unit_cost else '-' }}
+                                </td>
+
+                                <td class="text-end">
+                                    {{ "%.2f"|format(line.total_cost) if line.total_cost else '-' }}
+                                </td>
+
+                                <td class="text-end fw-bold">
+                                    {{ "%.2f"|format(line.balance) }}
+                                </td>
+
+                                <td>
+                                    {{ line.user or '-' }}
+                                </td>
+
+                                <td class="text-muted small">
+                                    {{ line.notes or '-' }}
+                                </td>
+
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="12" class="text-center py-4 text-muted">
+                                    No hay movimientos en el rango seleccionado
+                                </td>
+                            </tr>
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+            </div>
+
+        </div>
+
+    </div>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

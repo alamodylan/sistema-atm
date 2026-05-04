@@ -40,6 +40,8 @@ def create_app():
     from .routes.repair_type_routes import repair_type_bp
     from app.routes.physical_inventory_routes import physical_inventory_bp
     from app.routes.inventory_adjustments import inventory_adjustments_bp
+    from app.routes.kardex import kardex_bp
+
 
 
     app.register_blueprint(auth_bp, url_prefix="/auth")
@@ -59,6 +61,7 @@ def create_app():
     app.register_blueprint(repair_type_bp)
     app.register_blueprint(physical_inventory_bp)
     app.register_blueprint(inventory_adjustments_bp)
+    app.register_blueprint(kardex_bp)
 
 
 
