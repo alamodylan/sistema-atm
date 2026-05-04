@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container-fluid py-4">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1">
+                Ajuste {{ adjustment.number }}
+            </h4>
+            <p class="text-muted mb-0">
+                Detalle del ajuste de inventario
+            </p>
+        </div>
+
+        <a href="{{ url_for('inventory_adjustments.index') }}" class="btn btn-outline-secondary">
+            Volver
+        </a>
+    </div>
+
+    <!-- INFO GENERAL -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+
+            <div class="row g-3">
+
+                <div class="col-md-3">
+                    <small class="text-muted">Número</small>
+                    <div class="fw-semibold">{{ adjustment.number }}</div>
+                </div>
+
+                <div class="col-md-3">
+                    <small class="text-muted">Bodega</small>
+                    <div class="fw-semibold">
+                        {{ adjustment.warehouse.name if adjustment.warehouse else '-' }}
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <small class="text-muted">Usuario</small>
+                    <div class="fw-semibold">
+                        {{ adjustment.created_by_user.username if adjustment.created_by_user else '-' }}
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <small class="text-muted">Fecha</small>
+                    <div class="fw-semibold">
+                        {{ adjustment.created_at.strftime("%d/%m/%Y %H:%M") }}
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <small class="text-muted">Notas</small>
+                    <div class="fw-semibold">
+                        {{ adjustment.notes or '-' }}
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- TABLA -->
+    <div class="card shadow-sm">
+
+        <div class="card-header bg-white">
+            <h6 class="mb-0 fw-bold">Líneas del ajuste</h6>
+        </div>
+
+        <div class="card-body p-0">
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+
+                    <thead class="table-light">
+                        <tr>
+                            <th>Código</th>
+                            <th>Artículo</th>
+                            <th class="text-end">Cantidad anterior</th>
+                            <th class="text-end">Cantidad nueva</th>
+                            <th class="text-end">Diferencia</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% set lines = adjustment.lines.all() if adjustment.lines is not none else [] %}
+
+                        {% if lines %}
+                            {% for line in lines %}
+                                <tr>
+
+                                    <td class="fw-semibold">
+                                        {{ line.article.code if line.article else '-' }}
+                                    </td>
+
+                                    <td>
+                                        {{ line.article.name if line.article else '-' }}
+                                    </td>
+
+                                    <td class="text-end">
+                                        {{ "%.0f"|format(line.quantity_before) }}
+                                    </td>
+
+                                    <td class="text-end">
+                                        {{ "%.0f"|format(line.quantity_after) }}
+                                    </td>
+
+                                    <td class="text-end fw-semibold
+                                        {% if line.difference > 0 %}
+                                            text-primary
+                                        {% elif line.difference < 0 %}
+                                            text-danger
+                                        {% else %}
+                                            text-success
+                                        {% endif %}
+                                    ">
+                                        {{ "%.0f"|format(line.difference) }}
+                                    </td>
+
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    Este ajuste no tiene líneas
+                                </td>
+                            </tr>
+                        {% endif %}
+
+                    </tbody>
+
+                </table>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

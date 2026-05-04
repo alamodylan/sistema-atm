@@ -158,7 +158,10 @@ def create():
 def show(adjustment_id):
     adjustment = get_adjustment_by_id(adjustment_id)
 
+    lines = adjustment.lines.all() if hasattr(adjustment.lines, "all") else adjustment.lines
+
     return render_template(
         "inventory_adjustments/show.html",
         adjustment=adjustment,
+        lines=lines,
     )
