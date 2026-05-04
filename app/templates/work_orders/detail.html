@@ -51,17 +51,17 @@
 
                 <div class="mb-3">
                     <div class="text-secondary small">Fecha creación</div>
-                    <div class="fw-semibold">{{ work_order.created_at }}</div>
+                    <div class="fw-semibold">{{ work_order.created_at|cr_datetime }}</div>
                 </div>
 
                 <div class="mb-3">
                     <div class="text-secondary small">Fecha finalización</div>
-                    <div class="fw-semibold">{{ work_order.finalized_at or '-' }}</div>
+                    <div class="fw-semibold">{{ work_order.finalized_at|cr_datetime or '-' }}</div>
                 </div>
 
                 <div class="mb-3">
                     <div class="text-secondary small">Fecha cierre</div>
-                    <div class="fw-semibold">{{ work_order.closed_at or '-' }}</div>
+                    <div class="fw-semibold">{{ work_order.closed_at|cr_datetime or '-' }}</div>
                 </div>
 
                 <div class="mb-0">
@@ -117,7 +117,7 @@
                             <div class="small text-muted mt-1">
                                 Aprobó jefatura:
                                 <strong>{{ req.approved_by_user.full_name }}</strong>
-                                {% if req.approved_at %}· {{ req.approved_at }}{% endif %}
+                                {% if req.approved_at %}· {{ req.approved_at|cr_datetime }}{% endif %}
                             </div>
                             {% endif %}
 

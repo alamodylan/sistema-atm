@@ -65,7 +65,7 @@
                         <td>
                             <span class="badge bg-secondary">{{ inv.status }}</span>
                         </td>
-                        <td>{{ inv.created_at }}</td>
+                        <td>{{ inv.created_at|cr_datetime }}</td>
                         <td>
                             <a href="{{ url_for('physical_inventory.detail', inventory_id=inv.id) }}"
                                class="btn btn-sm btn-outline-dark">

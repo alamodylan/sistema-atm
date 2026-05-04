@@ -79,7 +79,7 @@
                         <td>{{ pr.priority }}</td>
                         <td>{{ pr.status }}</td>
                         <td>{{ pr.requested_by_user.name if pr.requested_by_user and pr.requested_by_user.name else pr.requested_by_user.email if pr.requested_by_user else '-' }}</td>
-                        <td>{{ pr.created_at.strftime('%d/%m/%Y %H:%M') if pr.created_at else '-' }}</td>
+                        <td>{{ pr.created_at|cr_datetime if pr.created_at else '-' }}</td>
                         <td class="text-end pe-4">
                             <a href="{{ url_for('purchases.request_detail', request_id=pr.id) }}"
                                class="btn btn-sm btn-outline-dark rounded-3">

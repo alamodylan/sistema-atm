@@ -78,7 +78,7 @@
                                     </td>
 
                                     <td>
-                                        {{ item.last_quote_date.strftime("%d/%m/%Y") if item.last_quote_date else "-" }}
+                                        {{ item.last_quote_date|cr_datetime if item.last_quote_date else "-" }}
                                     </td>
 
                                     <td class="text-end pe-4">

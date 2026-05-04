@@ -97,7 +97,7 @@
                                     </td>
                                     <td>{{ item.currency_code }}</td>
                                     <td>{{ item.warehouse.name if item.warehouse else 'No definida' }}</td>
-                                    <td>{{ item.created_at.strftime('%d/%m/%Y %H:%M') if item.created_at else '-' }}</td>
+                                    <td>{{ item.created_at|cr_datetime if item.created_at else '-' }}</td>
                                     <td class="text-end pe-4">
                                         <a href="{{ url_for('purchases.order_detail', order_id=item.id) }}"
                                            class="btn btn-sm btn-outline-dark rounded-3">

@@ -99,13 +99,13 @@
                         </dd>
 
                         <dt class="col-5 text-muted">Fecha creación</dt>
-                        <dd class="col-7">{{ cr_datetime(purchase_order.created_at) }}</dd>
+                        <dd class="col-7">{{ purchase_order.created_at|cr_datetime }}</dd>
 
                         <dt class="col-5 text-muted">Enviada aprobación</dt>
-                        <dd class="col-7">{{ cr_datetime(purchase_order.submitted_for_approval_at) }}</dd>
+                        <dd class="col-7">{{ purchase_order.submitted_for_approval_at|cr_datetime }}</dd>
 
                         <dt class="col-5 text-muted">Aprobada</dt>
-                        <dd class="col-7">{{ cr_datetime(purchase_order.approved_at) }}</dd>
+                        <dd class="col-7">{{ purchase_order.approved_at|cr_datetime }}</dd>
                     </dl>
 
                     {% if purchase_order.notes %}
@@ -158,7 +158,7 @@
                             Subido por:
                             {{ approved_doc.approved_by_user.full_name if approved_doc.approved_by_user and approved_doc.approved_by_user.full_name else approved_doc.approved_by_user.username if approved_doc.approved_by_user else 'Sin usuario' }}
                             <br>
-                            Fecha: {{ cr_datetime(approved_doc.approved_pdf_uploaded_at) }}
+                            Fecha: {{ approved_doc.approved_pdf_uploaded_at|cr_datetime }}
                         </div>
                     </div>
                 </div>
@@ -174,7 +174,7 @@
                                 <div class="border rounded-3 p-3">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
                                         <div class="fw-semibold">{{ item.status }}</div>
-                                        <small class="text-muted">{{ cr_datetime(item.created_at) }}</small>
+                                        <small class="text-muted">{{ item.created_at|cr_datetime }}</small>
                                     </div>
 
                                     <div class="text-muted small mb-1">
@@ -286,7 +286,7 @@
                                         <div class="fw-semibold text-dark">{{ item.number }}</div>
                                         <small class="text-muted">
                                             Factura: {{ item.invoice_number }} |
-                                            {{ cr_datetime(item.created_at) }}
+                                            {{ item.created_at|cr_datetime }}
                                         </small>
                                     </div>
                                     <i class="bi bi-arrow-right text-dark"></i>

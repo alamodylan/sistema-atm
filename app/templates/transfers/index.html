@@ -33,7 +33,7 @@
                         <td>{{ r.origin_warehouse.name }}</td>
                         <td>{{ r.destination_warehouse.name }}</td>
                         <td>{{ r.status }}</td>
-                        <td>{{ r.created_at }}</td>
+                        <td>{{ r.created_at|cr_datetime }}</td>
                         <td>
                             <a href="{{ url_for('transfers.detail_request', transfer_request_id=r.id) }}" class="btn btn-sm btn-outline-primary">
                                 Ver

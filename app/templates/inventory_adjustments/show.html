@@ -48,7 +48,7 @@
                 <div class="col-md-3">
                     <small class="text-muted">Fecha</small>
                     <div class="fw-semibold">
-                        {{ adjustment.created_at.strftime("%d/%m/%Y %H:%M") }}
+                        {{ adjustment.created_at|cr_datetime }}
                     </div>
                 </div>
 

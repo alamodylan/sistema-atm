@@ -111,7 +111,7 @@
                         <dd class="col-7">{{ purchase_request.warehouse.name if purchase_request.warehouse else 'No definida' }}</dd>
 
                         <dt class="col-5 text-muted">Fecha</dt>
-                        <dd class="col-7">{{ purchase_request.created_at.strftime('%d/%m/%Y %H:%M') if purchase_request.created_at else '-' }}</dd>
+                        <dd class="col-7">{{ purchase_request.created_at|cr_datetime if purchase_request.created_at else '-' }}</dd>
                     </dl>
 
                     {% if purchase_request.notes %}
@@ -186,7 +186,7 @@
                                     <div>
                                         <div class="fw-semibold text-dark">{{ item.number }}</div>
                                         <small class="text-muted">
-                                            {{ item.quote_date.strftime('%d/%m/%Y') if item.quote_date else '-' }}
+                                            {{ item.quote_date|cr_datetime if item.quote_date else '-' }}
                                         </small>
                                     </div>
                                     <i class="bi bi-arrow-right text-dark"></i>
@@ -209,7 +209,7 @@
                                     <div>
                                         <div class="fw-semibold text-dark">{{ order.number }}</div>
                                         <small class="text-muted">
-                                            {{ order.created_at.strftime('%d/%m/%Y') if order.created_at else '-' }}
+                                            {{ order.created_at|cr_datetime if order.created_at else '-' }}
                                         </small>
                                     </div>
                                     <i class="bi bi-arrow-right text-dark"></i>

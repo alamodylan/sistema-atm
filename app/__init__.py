@@ -41,6 +41,9 @@ def create_app():
     from app.routes.physical_inventory_routes import physical_inventory_bp
     from app.routes.inventory_adjustments import inventory_adjustments_bp
     from app.routes.kardex import kardex_bp
+    from app.utils.datetime_helpers import format_costa_rica_datetime
+
+
 
 
 
@@ -62,6 +65,7 @@ def create_app():
     app.register_blueprint(physical_inventory_bp)
     app.register_blueprint(inventory_adjustments_bp)
     app.register_blueprint(kardex_bp)
+    app.jinja_env.filters["cr_datetime"] = format_costa_rica_datetime
 
 
 

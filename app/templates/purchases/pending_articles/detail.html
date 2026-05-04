@@ -55,7 +55,7 @@
 
                         <dt class="col-5 text-muted">Fecha</dt>
                         <dd class="col-7">
-                            {{ pending_article.created_at.strftime('%d/%m/%Y %H:%M') if pending_article.created_at else '-' }}
+                            {{ pending_article.created_at|cr_datetime if pending_article.created_at else '-' }}
                         </dd>
                     </dl>
 

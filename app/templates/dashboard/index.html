@@ -28,7 +28,7 @@
                         <div class="small text-muted">
                             Última actualización:
                             <strong id="lastRefreshLabel">
-                                {{ current_time.strftime('%d/%m/%Y %I:%M %p') if current_time else '-' }}
+                                {{ current_time.created_at|cr_datetime if current_time else '-' }}
                             </strong>
                         </div>
                     </div>

@@ -83,7 +83,7 @@
                                             <span class="badge text-bg-warning">{{ item.status }}</span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ item.created_at.strftime('%d/%m/%Y %H:%M') if item.created_at else '-' }}</td>
+                                    <td>{{ item.created_at|cr_datetime if item.created_at else '-' }}</td>
                                     <td class="text-end pe-4">
                                         <a href="{{ url_for('purchases.pending_article_detail', pending_article_id=item.id) }}"
                                            class="btn btn-sm btn-outline-dark rounded-3">

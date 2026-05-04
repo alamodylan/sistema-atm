@@ -101,7 +101,7 @@
                         </div>
                         <div class="col-12 col-md-6">
                             <div class="text-muted">Fecha</div>
-                            <div class="fw-semibold text-dark">{{ req.created_at }}</div>
+                            <div class="fw-semibold text-dark">{{ req.created_at|cr_datetime }}</div>
                         </div>
                     </div>
                 </div>
@@ -291,7 +291,7 @@
                         <div class="col-12 col-md-6">
                             <div class="text-muted">Fecha solicitud</div>
                             <div class="fw-semibold text-dark">
-                                {{ req.requested_at if req.requested_at else req.created_at }}
+                                {{ req.requested_at|cr_datetime if req.requested_at|cr_datetime else req.created_at|cr_datetime }}
                             </div>
                         </div>
 
@@ -398,7 +398,7 @@
                         </div>
                         <div class="col-12 col-md-4">
                             <div class="small text-muted">Fecha</div>
-                            <div class="fw-semibold text-dark">{{ req.created_at }}</div>
+                            <div class="fw-semibold text-dark">{{ req.created_at|cr_datetime }}</div>
                         </div>
                     </div>
                 </div>

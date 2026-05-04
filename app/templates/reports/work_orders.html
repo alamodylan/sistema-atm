@@ -84,15 +84,15 @@
                                 </td>
 
                                 <td>
-                                    {{ work_order.created_at.strftime('%Y-%m-%d %H:%M') if work_order.created_at else "-" }}
+                                    {{ work_order.created_at|cr_datetime if work_order.created_at else "-" }}
                                 </td>
 
                                 <td>
-                                    {{ work_order.finalized_at.strftime('%Y-%m-%d %H:%M') if work_order.finalized_at else "-" }}
+                                    {{ work_order.finalized_at|cr_datetime if work_order.finalized_at else "-" }}
                                 </td>
 
                                 <td>
-                                    {{ work_order.closed_at.strftime('%Y-%m-%d %H:%M') if work_order.closed_at else "-" }}
+                                    {{ work_order.closed_at|cr_datetime if work_order.closed_at else "-" }}
                                 </td>
                             </tr>
                         {% endfor %}
