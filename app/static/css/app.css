@@ -565,3 +565,24 @@ textarea.form-control:focus {
         border: 1px solid #ddd !important;
     }
 }
+
+/* =========================================================
+   SIDEBAR RESPONSIVE FIX
+========================================================= */
+
+@media (min-width: 992px) {
+    .sidebar-wrapper {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        transform: none !important;
+        visibility: visible !important;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .sidebar-wrapper {
+        width: 280px !important;
+        max-width: 85%;
+    }
+}
