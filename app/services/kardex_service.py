@@ -43,6 +43,14 @@ def get_kardex_warehouses_for_site(site_id):
         .all()
     )
 
+def get_all_warehouses():
+    return (
+        Warehouse.query
+        .filter(Warehouse.is_active.is_(True))
+        .order_by(Warehouse.name.asc())
+        .all()
+    )
+
 
 def get_kardex_data(
     *,
@@ -57,9 +65,6 @@ def get_kardex_data(
 
     if not warehouse:
         raise KardexServiceError("La bodega no existe.")
-
-    if warehouse.site_id != site_id:
-        raise KardexServiceError("La bodega no pertenece al predio activo.")
 
     # 🔹 Saldo inicial
     initial_balance = (

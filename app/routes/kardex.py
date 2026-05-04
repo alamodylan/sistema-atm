@@ -2,6 +2,7 @@ from datetime import datetime, time
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import login_required
+from app.services.kardex_service import get_all_warehouses
 
 from app.services.kardex_service import (
     KardexServiceError,
@@ -27,7 +28,7 @@ def index():
         flash("Debe seleccionar un predio activo.", "warning")
         return redirect(url_for("dashboard.index"))
 
-    warehouses = get_kardex_warehouses_for_site(site_id)
+    warehouses = get_all_warehouses()
 
     selected_warehouse_id = request.args.get("warehouse_id", type=int)
     code = request.args.get("code", "", type=str).strip()
