@@ -1,0 +1,480 @@
+{% extends "base.html" %}
+
+{% block title %}Estadísticas de equipos | Sistema de Bodega{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid py-4">
+
+    <!-- HEADER -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div>
+            <h3 class="fw-bold mb-0">Estadísticas de equipos</h3>
+            <small class="text-muted">
+                Análisis de equipos más reparados, ingresos a taller, costos estimados y tipos de reparación
+            </small>
+        </div>
+
+        <a href="{{ url_for('stats.index') }}" class="btn btn-outline-secondary">
+            Estadísticas de mecánicos
+        </a>
+    </div>
+
+    <!-- FILTROS -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3 align-items-end">
+
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Predio</label>
+                    <select name="site_id" class="form-select">
+                        {% for site in sites %}
+                            <option value="{{ site.id }}"
+                                {% if selected_site_id == site.id %}selected{% endif %}>
+                                {{ site.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <label class="form-label fw-semibold">Desde</label>
+                    <input type="date"
+                           name="date_from"
+                           value="{{ date_from }}"
+                           class="form-control">
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <label class="form-label fw-semibold">Hasta</label>
+                    <input type="date"
+                           name="date_to"
+                           value="{{ date_to }}"
+                           class="form-control">
+                </div>
+
+                <div class="col-12 col-md-2">
+                    <button class="btn btn-primary w-100">
+                        Consultar
+                    </button>
+                </div>
+
+                <div class="col-12 col-md-2">
+                    <a href="{{ url_for('equipment_stats.index') }}" class="btn btn-outline-secondary w-100">
+                        Limpiar
+                    </a>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <!-- KPIS -->
+    <div class="row g-4 mb-4">
+
+        <div class="col-12 col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <small class="text-muted">Ingresos a taller</small>
+                    <h3 class="fw-bold mb-0">{{ summary.total_entries }}</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <small class="text-muted">Reparaciones finalizadas</small>
+                    <h3 class="fw-bold mb-0">{{ summary.total_repaired }}</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <small class="text-muted">Equipos únicos</small>
+                    <h3 class="fw-bold mb-0">{{ summary.total_equipment }}</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <small class="text-muted">Gasto estimado</small>
+                    <h3 class="fw-bold mb-0">
+                        ₡{{ "{:,.2f}".format(summary.total_cost) }}
+                    </h3>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- GRAFICOS PRINCIPALES -->
+    <div class="row g-4 mb-4">
+
+        <div class="col-12 col-xl-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-1">Top 10 equipos más reparados</h5>
+                    <p class="text-muted small mb-4">
+                        Cantidad de OT finalizadas o cerradas por equipo.
+                    </p>
+                    <canvas id="mostRepairedChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-1">Top 10 equipos con mayor gasto</h5>
+                    <p class="text-muted small mb-4">
+                        Suma de artículos utilizados en OT: cantidad × último costo.
+                    </p>
+                    <canvas id="topCostChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- GRAFICOS SECUNDARIOS -->
+    <div class="row g-4 mb-4">
+
+        <div class="col-12 col-xl-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-1">Equipos reparados por predio</h5>
+                    <p class="text-muted small mb-4">
+                        Comparativa general de reparaciones finalizadas por predio.
+                    </p>
+                    <canvas id="bySiteChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-1">Tipos de reparación más frecuentes</h5>
+                    <p class="text-muted small mb-4">
+                        Trabajos registrados por tipo de reparación en equipos.
+                    </p>
+                    <canvas id="repairTypesChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- TABLAS -->
+    <div class="row g-4 mb-4">
+
+        <!-- TOP REPARADOS -->
+        <div class="col-12 col-xl-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Equipos más reparados</h5>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Equipo</th>
+                                    <th class="text-end">Reparaciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in most_repaired %}
+                                    <tr>
+                                        <td class="fw-semibold">{{ item.equipment }}</td>
+                                        <td class="text-end">
+                                            <span class="badge text-bg-primary">
+                                                {{ item.total_repairs }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                {% else %}
+                                    <tr>
+                                        <td colspan="2" class="text-center text-muted py-4">
+                                            No hay reparaciones registradas.
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- TOP INGRESOS -->
+        <div class="col-12 col-xl-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Equipos más ingresados a taller</h5>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Equipo</th>
+                                    <th class="text-end">Ingresos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in most_entered %}
+                                    <tr>
+                                        <td class="fw-semibold">{{ item.equipment }}</td>
+                                        <td class="text-end">
+                                            <span class="badge text-bg-secondary">
+                                                {{ item.total_entries }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                {% else %}
+                                    <tr>
+                                        <td colspan="2" class="text-center text-muted py-4">
+                                            No hay ingresos registrados.
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- TABLA COSTOS -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body">
+            <h5 class="fw-bold mb-3">Equipos con mayor gasto estimado</h5>
+            <p class="text-muted small">
+                El costo se calcula con los artículos agregados a la OT asignada al equipo:
+                cantidad utilizada × último costo del artículo en inventario.
+            </p>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Equipo</th>
+                            <th class="text-end">OT</th>
+                            <th class="text-end">Líneas de artículos</th>
+                            <th class="text-end">Gasto total</th>
+                            <th class="text-end">Promedio por OT</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in top_cost %}
+                            <tr>
+                                <td class="fw-semibold">{{ item.equipment }}</td>
+                                <td class="text-end">{{ item.total_work_orders }}</td>
+                                <td class="text-end">{{ item.total_lines }}</td>
+                                <td class="text-end fw-semibold">
+                                    ₡{{ "{:,.2f}".format(item.total_cost) }}
+                                </td>
+                                <td class="text-end">
+                                    ₡{{ "{:,.2f}".format(item.avg_cost_per_work_order) }}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    No hay costos registrados para el rango seleccionado.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- TABLA TIPOS REPARACION -->
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body">
+            <h5 class="fw-bold mb-3">Tipos de reparación más dados en equipos</h5>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tipo de reparación</th>
+                            <th class="text-end">Cantidad de trabajos</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in repair_types %}
+                            <tr>
+                                <td class="fw-semibold">{{ item.repair_type_name }}</td>
+                                <td class="text-end">
+                                    <span class="badge text-bg-info">
+                                        {{ item.total_jobs }}
+                                    </span>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="2" class="text-center text-muted py-4">
+                                    No hay tipos de reparación registrados.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script id="equipment-stats-payload" type="application/json">
+{
+    "mostRepairedLabels": {{ most_repaired|map(attribute='equipment')|list|tojson|safe }},
+    "mostRepairedValues": {{ most_repaired|map(attribute='total_repairs')|list|tojson|safe }},
+
+    "topCostLabels": {{ top_cost|map(attribute='equipment')|list|tojson|safe }},
+    "topCostValues": {{ top_cost|map(attribute='total_cost')|list|tojson|safe }},
+
+    "bySiteLabels": {{ by_site|map(attribute='site_name')|list|tojson|safe }},
+    "bySiteValues": {{ by_site|map(attribute='total_repairs')|list|tojson|safe }},
+
+    "repairTypeLabels": {{ repair_types|map(attribute='repair_type_name')|list|tojson|safe }},
+    "repairTypeValues": {{ repair_types|map(attribute='total_jobs')|list|tojson|safe }}
+}
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const payloadElement = document.getElementById("equipment-stats-payload");
+
+    if (!payloadElement) {
+        return;
+    }
+
+    const payload = JSON.parse(payloadElement.textContent);
+
+    function createBarChart(canvasId, labels, data, label, suffix) {
+        const canvas = document.getElementById(canvasId);
+
+        if (!canvas) {
+            return;
+        }
+
+        new Chart(canvas, {
+            type: "bar",
+            data: {
+                labels: labels || [],
+                datasets: [
+                    {
+                        label: label,
+                        data: data || [],
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                indexAxis: "y",
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                return context.raw + suffix;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    function createDoughnutChart(canvasId, labels, data, suffix) {
+        const canvas = document.getElementById(canvasId);
+
+        if (!canvas) {
+            return;
+        }
+
+        new Chart(canvas, {
+            type: "doughnut",
+            data: {
+                labels: labels || [],
+                datasets: [
+                    {
+                        data: data || [],
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                return context.label + ": " + context.raw + suffix;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    createBarChart(
+        "mostRepairedChart",
+        payload.mostRepairedLabels,
+        payload.mostRepairedValues,
+        "Reparaciones",
+        " reparaciones"
+    );
+
+    createBarChart(
+        "topCostChart",
+        payload.topCostLabels,
+        payload.topCostValues,
+        "Gasto estimado",
+        " colones"
+    );
+
+    createDoughnutChart(
+        "bySiteChart",
+        payload.bySiteLabels,
+        payload.bySiteValues,
+        " reparaciones"
+    );
+
+    createDoughnutChart(
+        "repairTypesChart",
+        payload.repairTypeLabels,
+        payload.repairTypeValues,
+        " trabajos"
+    );
+});
+</script>
+{% endblock %}

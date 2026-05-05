@@ -567,7 +567,7 @@ textarea.form-control:focus {
 }
 
 /* =========================================================
-   SIDEBAR RESPONSIVE FIX
+   SIDEBAR MOBILE FIX DEFINITIVO
 ========================================================= */
 
 @media (min-width: 992px) {
@@ -575,30 +575,47 @@ textarea.form-control:focus {
         position: sticky;
         top: 0;
         height: 100vh;
+        z-index: 1030;
         transform: none !important;
         visibility: visible !important;
+    }
+
+    .sidebar-wrapper .offcanvas-body {
+        height: calc(100vh - 72px);
+        overflow-y: auto;
     }
 }
 
 @media (max-width: 991.98px) {
     .sidebar-wrapper {
         width: 280px !important;
-        max-width: 85%;
+        max-width: 85vw;
+        height: 100vh !important;
+        z-index: 1060 !important;
+        background: #fff;
     }
-}
 
-/* FIX SIDEBAR LINKS EN MÓVIL */
-@media (max-width: 991.98px) {
+    .sidebar-wrapper.show {
+        visibility: visible !important;
+    }
 
-    .sidebar-link {
-        color: var(--color-text) !important;
-        opacity: 1 !important;
+    .sidebar-wrapper .offcanvas-body {
+        height: calc(100vh - 72px);
+        overflow-y: auto !important;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .sidebar-wrapper .nav {
+        padding-bottom: 2rem;
+    }
+
+    .sidebar-link:not(.disabled) {
         pointer-events: auto !important;
+        opacity: 1 !important;
     }
 
-    .sidebar-link.disabled {
-        color: var(--color-text-muted);
-        opacity: 0.5;
+    .offcanvas-backdrop {
+        z-index: 1040 !important;
     }
-
 }

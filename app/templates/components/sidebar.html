@@ -91,6 +91,11 @@
                 <i class="bi bi-graph-up me-2"></i>Estadísticas de Mecanicos
             </a>
 
+            <a href="{{ url_for('equipment_stats.index') }}"
+               class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('equipment_stats.') %}active{% endif %}">
+                <i class="bi bi-truck-front me-2"></i>Estadísticas de equipos
+            </a>
+
             <span class="nav-link sidebar-link disabled">
                 <i class="bi bi-people me-2"></i>Usuarios
             </span>

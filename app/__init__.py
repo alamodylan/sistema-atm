@@ -44,6 +44,8 @@ def create_app():
     from app.utils.datetime_helpers import format_costa_rica_datetime
     from app.routes.audit_routes import audit_bp
     from app.routes.stats_routes import stats_bp
+    from app.routes.stats_routes_equipos import equipment_stats_bp
+
 
 
 
@@ -70,6 +72,7 @@ def create_app():
     app.jinja_env.filters["cr_datetime"] = format_costa_rica_datetime  
     app.register_blueprint(audit_bp)
     app.register_blueprint(stats_bp)
+    app.register_blueprint(equipment_stats_bp)
 
 
 
