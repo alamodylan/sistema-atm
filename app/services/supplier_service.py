@@ -205,6 +205,9 @@ def get_supplier_article_links(supplier_id, include_inactive=True):
 
 
 def add_article_to_supplier(supplier_id, article_id):
+    supplier_id = _parse_required_int(supplier_id, "El proveedor")
+    article_id = _parse_required_int(article_id, "El artículo")
+
     supplier = get_supplier_or_404(supplier_id)
 
     article = Article.query.filter_by(
@@ -241,6 +244,9 @@ def add_article_to_supplier(supplier_id, article_id):
 
 
 def remove_article_from_supplier(supplier_id, article_supplier_id):
+    supplier_id = _parse_required_int(supplier_id, "El proveedor")
+    article_supplier_id = _parse_required_int(article_supplier_id, "La relación artículo-proveedor")
+
     supplier = get_supplier_or_404(supplier_id)
 
     link = ArticleSupplier.query.filter_by(
@@ -272,3 +278,14 @@ def reactivate_article_supplier(supplier_id, article_supplier_id):
     db.session.commit()
 
     return link
+
+def _parse_required_int(value, field_name):
+    value = _clean_text(value)
+
+    if value is None:
+        raise SupplierServiceError(f"{field_name} es obligatorio.")
+
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise SupplierServiceError(f"{field_name} debe ser un número válido.") from exc
