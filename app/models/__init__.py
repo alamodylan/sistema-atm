@@ -53,6 +53,7 @@ from .work_order_task_line_assignment import WorkOrderTaskLineAssignment
 from .work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 from .inventory_adjustment import InventoryAdjustment
 from .inventory_adjustment_line import InventoryAdjustmentLine
+from .equipment_type import EquipmentType   
 
 __all__ = [
     "Role",
@@ -113,4 +114,6 @@ __all__ = [
     "WorkOrderTaskLineFinishRequest",
     "InventoryAdjustment",
     "InventoryAdjustmentLine",
+    "EquipmentType",
+    "Equipment",
 ]

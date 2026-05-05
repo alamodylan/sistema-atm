@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <h4>{{ form_title }}</h4>
+
+    <form method="POST">
+
+        <div class="mb-3">
+            <label class="form-label">Código</label>
+            <input type="text" name="code" class="form-control"
+                   value="{{ equipment.code if equipment else '' }}" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Tipo de equipo</label>
+            <select name="equipment_type_id" class="form-control" required>
+                <option value="">Seleccione...</option>
+                {% for t in equipment_types %}
+                    <option value="{{ t.id }}"
+                        {% if equipment and equipment.equipment_type_id == t.id %}
+                            selected
+                        {% endif %}
+                    >
+                        {{ t.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Descripción</label>
+            <textarea name="description" class="form-control">{{ equipment.description if equipment else '' }}</textarea>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Cantidad de ejes</label>
+            <input type="number" name="axle_count" class="form-control"
+                   value="{{ equipment.axle_count if equipment else '' }}">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Tamaño</label>
+            <input type="text" name="size_label" class="form-control"
+                   value="{{ equipment.size_label if equipment else '' }}">
+        </div>
+
+        {% if equipment %}
+        <div class="form-check mb-3">
+            <input type="checkbox" name="is_active" class="form-check-input"
+                {% if equipment.is_active %}checked{% endif %}>
+            <label class="form-check-label">Activo</label>
+        </div>
+        {% endif %}
+
+        <button class="btn btn-success">{{ submit_label }}</button>
+        <a href="{{ url_for('equipment.index') }}" class="btn btn-secondary">Volver</a>
+
+    </form>
+
+</div>
+{% endblock %}

@@ -1,5 +1,3 @@
-from datetime import datetime, UTC
-
 from app.extensions import db
 
 
@@ -9,17 +7,33 @@ class Equipment(db.Model):
 
     id = db.Column(db.BigInteger, primary_key=True)
 
-    code = db.Column(db.String(100), unique=True, nullable=False, index=True)
-    equipment_type = db.Column(db.String(50), nullable=False, index=True)
-    description = db.Column(db.Text, nullable=True)
-    axle_count = db.Column(db.Integer, nullable=True)
-    size_label = db.Column(db.String(20), nullable=True)
+    code = db.Column(db.String, unique=True, nullable=False)
+
+    equipment_type = db.Column(db.String, nullable=False)
+
+    equipment_type_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("atm.equipment_types.id"),
+        nullable=True,
+    )
+
+    description = db.Column(db.Text)
+
+    axle_count = db.Column(db.Integer)
+
+    size_label = db.Column(db.String)
+
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
     created_at = db.Column(
         db.DateTime(timezone=True),
+        server_default=db.func.now(),
         nullable=False,
-        default=lambda: datetime.now(UTC),
+    )
+
+    equipment_type_ref = db.relationship(
+        "EquipmentType",
+        back_populates="equipment",
     )
 
     work_orders = db.relationship(
@@ -28,5 +42,8 @@ class Equipment(db.Model):
         lazy="dynamic",
     )
 
-    def __repr__(self) -> str:
-        return f"<Equipment {self.code} - {self.equipment_type}>"
+    @property
+    def display_name(self):
+        if self.equipment_type_ref:
+            return f"{self.code} - {self.equipment_type_ref.name}"
+        return f"{self.code} - {self.equipment_type}"
