@@ -586,3 +586,19 @@ textarea.form-control:focus {
         max-width: 85%;
     }
 }
+
+/* FIX SIDEBAR LINKS EN MÓVIL */
+@media (max-width: 991.98px) {
+
+    .sidebar-link {
+        color: var(--color-text) !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    .sidebar-link.disabled {
+        color: var(--color-text-muted);
+        opacity: 0.5;
+    }
+
+}
