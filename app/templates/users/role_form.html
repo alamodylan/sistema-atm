@@ -29,6 +29,28 @@
                                value="{{ role.description if role else '' }}">
                     </div>
 
+                    <!-- 🔥 ESTADO DEL ROL -->
+                    {% if role %}
+                    <div class="col-12">
+                        <div class="d-flex align-items-center gap-3 mt-2">
+                            <div class="fw-semibold">Estado del rol:</div>
+
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       role="switch"
+                                       id="isActiveSwitch"
+                                       name="is_active"
+                                       {% if role.is_active %}checked{% endif %}>
+                                <label class="form-check-label" for="isActiveSwitch">
+                                    {{ "Activo" if role.is_active else "Inactivo" }}
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- PERMISOS -->
                     <div class="col-12">
                         <h6 class="fw-bold mt-3">Permisos</h6>
 
@@ -51,7 +73,7 @@
                     </div>
 
                     <div class="col-12 mt-4 text-end">
-                        <button class="btn btn-primary rounded-pill px-4">
+                        <button class="btn btn-primary rounded-pill px-4 shadow-sm">
                             {{ submit_label }}
                         </button>
                     </div>
