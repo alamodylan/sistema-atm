@@ -3,8 +3,11 @@ from datetime import datetime, UTC
 from app.extensions import db
 
 
-class Role(db.Model):
-    __tablename__ = "roles"
+
+
+
+class Permission(db.Model):
+    __tablename__ = "permissions"
     __table_args__ = {"schema": "atm"}
 
     id = db.Column(db.BigInteger, primary_key=True)
@@ -12,7 +15,6 @@ class Role(db.Model):
     code = db.Column(db.String(50), unique=True, nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    is_active = db.Column(db.Boolean, nullable=False, default=True)
 
     created_at = db.Column(
         db.DateTime(timezone=True),
@@ -20,18 +22,13 @@ class Role(db.Model):
         default=lambda: datetime.now(UTC),
     )
 
-    users = db.relationship(
-        "User",
-        back_populates="role",
-        lazy="dynamic",
-    )
-
     role_permissions = db.relationship(
         "RolePermission",
-        back_populates="role",
+        back_populates="permission",
         cascade="all, delete-orphan",
         lazy="selectin",
     )
 
-    def __repr__(self) -> str:
-        return f"<Role {self.code} - {self.name}>"
+    def __repr__(self):
+        return f"<Permission {self.code}>"
+    

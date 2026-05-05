@@ -1,5 +1,6 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import login_required
+from app.utils.permissions import permission_required
 
 from app.services.supplier_service import (
     SupplierServiceError,
@@ -23,6 +24,7 @@ suppliers_bp = Blueprint(
 
 @suppliers_bp.route("/")
 @login_required
+@permission_required("proveedores")
 def index():
     search = request.args.get("search")
     suppliers = list_suppliers(include_inactive=True, search=search)

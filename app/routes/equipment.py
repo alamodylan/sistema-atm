@@ -1,5 +1,6 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import login_required
+from app.utils.permissions import permission_required
 
 from app.services.equipment_service import (
     EquipmentServiceError,
@@ -24,6 +25,7 @@ equipment_bp = Blueprint(
 
 @equipment_bp.route("/")
 @login_required
+@permission_required("equipos")
 def index():
     equipment_list = list_equipment(include_inactive=True)
     equipment_types = list_equipment_types(include_inactive=True)

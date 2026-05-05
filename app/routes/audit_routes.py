@@ -7,6 +7,7 @@ from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.services.audit_service import get_action_label, get_table_label
 from app.extensions import db
+from app.utils.permissions import permission_required
 
 
 audit_bp = Blueprint(
@@ -18,6 +19,7 @@ audit_bp = Blueprint(
 
 @audit_bp.route("/", methods=["GET"])
 @login_required
+@permission_required("auditoria")
 def index():
     user_id = request.args.get("user_id", type=int)
     action = request.args.get("action", "", type=str).strip()

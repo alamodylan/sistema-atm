@@ -54,6 +54,8 @@ from .work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 from .inventory_adjustment import InventoryAdjustment
 from .inventory_adjustment_line import InventoryAdjustmentLine
 from .equipment_type import EquipmentType   
+from .permission import Permission
+from .role_permission import RolePermission
 
 __all__ = [
     "Role",
@@ -116,4 +118,6 @@ __all__ = [
     "InventoryAdjustmentLine",
     "EquipmentType",
     "Equipment",
+    "Permission",
+    "RolePermission",
 ]

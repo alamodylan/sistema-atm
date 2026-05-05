@@ -5,6 +5,7 @@ import io
 import pandas as pd
 from flask import Blueprint, flash, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user, login_required
+from app.utils.permissions import permission_required
 
 from app.services.bulk_import_service import (
     BulkImportError,
@@ -59,6 +60,7 @@ def _send_template(columns: list[str], filename: str):
 
 @bulk_bp.route("/", methods=["GET"])
 @login_required
+@permission_required("carga_masiva")
 def bulk_home():
     return render_template(
         "bulk/index.html",

@@ -65,6 +65,20 @@ class User(UserMixin, db.Model):
         lazy="dynamic",
     )
 
+    site_accesses = db.relationship(
+        "UserSiteAccess",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    warehouse_accesses = db.relationship(
+        "UserWarehouseAccess",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
     audit_logs = db.relationship("AuditLog", back_populates="user", lazy="dynamic")
 
     responsible_work_orders = db.relationship(
@@ -124,6 +138,60 @@ class User(UserMixin, db.Model):
 
     def get_id(self) -> str:
         return str(self.id)
+
+    @property
+    def role_code(self) -> str | None:
+        if not self.role:
+            return None
+        return self.role.code
+
+    def has_permission(self, permission_code: str) -> bool:
+        if not self.is_active:
+            return False
+
+        if not self.role or not self.role.is_active:
+            return False
+
+        if self.role.code == "SUPER_USUARIO":
+            return True
+
+        for role_permission in self.role.role_permissions:
+            permission = role_permission.permission
+
+            if (
+                permission
+                and permission.is_active
+                and permission.code == permission_code
+            ):
+                return True
+
+        return False
+
+    def can_access_site(self, site_id: int | str | None) -> bool:
+        if not self.is_active:
+            return False
+
+        if self.role and self.role.code == "SUPER_USUARIO":
+            return True
+
+        if site_id is None:
+            return False
+
+        try:
+            site_id = int(site_id)
+        except (TypeError, ValueError):
+            return False
+
+        return any(
+            access.site_id == site_id
+            for access in self.site_accesses
+        )
+
+    def accessible_site_ids(self) -> list[int]:
+        if self.role and self.role.code == "SUPER_USUARIO":
+            return []
+
+        return [access.site_id for access in self.site_accesses]
 
     def __repr__(self) -> str:
         return f"<User {self.username}>"

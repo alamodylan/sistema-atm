@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <h3 class="fw-bold mb-3">{{ form_title }}</h3>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+
+            <form method="POST">
+                <div class="row g-4">
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Código *</label>
+                        <input type="text" name="code" class="form-control"
+                               value="{{ role.code if role else '' }}" required>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Nombre *</label>
+                        <input type="text" name="name" class="form-control"
+                               value="{{ role.name if role else '' }}" required>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Descripción</label>
+                        <input type="text" name="description" class="form-control"
+                               value="{{ role.description if role else '' }}">
+                    </div>
+
+                    <div class="col-12">
+                        <h6 class="fw-bold mt-3">Permisos</h6>
+
+                        <div class="row">
+                            {% for p in permissions %}
+                            <div class="col-md-3">
+                                <div class="form-check">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           name="permission_ids"
+                                           value="{{ p.id }}"
+                                           {% if p.id in selected_permission_ids %}checked{% endif %}>
+                                    <label class="form-check-label">
+                                        {{ p.name }}
+                                    </label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="col-12 mt-4 text-end">
+                        <button class="btn btn-primary rounded-pill px-4">
+                            {{ submit_label }}
+                        </button>
+                    </div>
+
+                </div>
+            </form>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}

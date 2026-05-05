@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between mb-4">
+        <h3 class="fw-bold">Roles / Perfiles</h3>
+
+        <a href="{{ url_for('users.roles_create') }}"
+           class="btn btn-primary rounded-pill px-4">
+            Nuevo rol
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Estado</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for r in roles %}
+                    <tr>
+                        <td>{{ r.code }}</td>
+                        <td>{{ r.name }}</td>
+                        <td>
+                            {% if r.is_active %}
+                                <span class="badge bg-success">Activo</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <a href="{{ url_for('users.roles_edit', role_id=r.id) }}"
+                               class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                                Editar
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+
+            </table>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}

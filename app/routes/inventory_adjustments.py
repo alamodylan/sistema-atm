@@ -1,5 +1,6 @@
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
+from app.utils.permissions import permission_required
 
 from app.services.inventory_adjustment_service import (
     InventoryAdjustmentServiceError,
@@ -19,6 +20,7 @@ inventory_adjustments_bp = Blueprint(
 
 @inventory_adjustments_bp.route("/", methods=["GET"])
 @login_required
+@permission_required("inventario_ajustes")
 def index():
     site_id = session.get("active_site_id")
 

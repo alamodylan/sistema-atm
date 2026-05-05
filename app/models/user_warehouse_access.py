@@ -29,7 +29,11 @@ class UserWarehouseAccess(db.Model):
         default=lambda: datetime.now(UTC),
     )
 
-    user = db.relationship("User")
+    user = db.relationship(
+        "User",
+        back_populates="warehouse_accesses",
+    )
+
     warehouse = db.relationship("Warehouse")
 
     def __repr__(self) -> str:

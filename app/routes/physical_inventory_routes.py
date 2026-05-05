@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
+from app.utils.permissions import permission_required
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
@@ -40,6 +41,7 @@ def _generate_inventory_number() -> str:
 
 @physical_inventory_bp.route("/")
 @login_required
+@permission_required("inventario_fisico")
 def index():
     active_site_id = session.get("active_site_id")
 

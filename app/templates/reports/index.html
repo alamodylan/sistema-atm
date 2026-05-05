@@ -6,6 +6,8 @@
 {% include 'components/page_header.html' with context %}
 
 <div class="row g-4">
+
+    {% if current_user.has_permission("reportes") or current_user.has_permission("reportes_entradas_salidas") %}
     <div class="col-12 col-md-6 col-xl-4">
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body d-flex flex-column">
@@ -21,7 +23,9 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
+    {% if current_user.has_permission("reportes") %}
     <div class="col-12 col-md-6 col-xl-4">
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body d-flex flex-column">
@@ -53,20 +57,34 @@
             </div>
         </div>
     </div>
-</div>
-<div class="col-12 col-md-6 col-xl-4">
-    <div class="card border-0 shadow-sm rounded-4 h-100">
-        <div class="card-body d-flex flex-column">
-            <h5 class="fw-bold">Kardex de inventario</h5>
-            <p class="text-secondary">
-                Historial detallado de movimientos por artículo, con saldo acumulado por línea.
-            </p>
-            <div class="mt-auto">
-                <a href="{{ url_for('kardex.index') }}" class="btn btn-outline-primary">
-                    Abrir kardex
-                </a>
+    {% endif %}
+
+    {% if current_user.has_permission("reportes") or current_user.has_permission("reportes_kardex") %}
+    <div class="col-12 col-md-6 col-xl-4">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body d-flex flex-column">
+                <h5 class="fw-bold">Kardex de inventario</h5>
+                <p class="text-secondary">
+                    Historial detallado de movimientos por artículo, con saldo acumulado por línea.
+                </p>
+                <div class="mt-auto">
+                    <a href="{{ url_for('kardex.index') }}" class="btn btn-outline-primary">
+                        Abrir kardex
+                    </a>
+                </div>
             </div>
         </div>
     </div>
+    {% endif %}
+
 </div>
+
+{% if not current_user.has_permission("reportes")
+      and not current_user.has_permission("reportes_entradas_salidas")
+      and not current_user.has_permission("reportes_kardex") %}
+<div class="alert alert-warning rounded-4 mt-4">
+    No tiene permisos para visualizar reportes.
+</div>
+{% endif %}
+
 {% endblock %}

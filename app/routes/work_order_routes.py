@@ -23,6 +23,7 @@ from app.models.work_order_task_line_assignment import WorkOrderTaskLineAssignme
 from app.models.work_order_request import WorkOrderRequest
 from app.models.work_order_request_line import WorkOrderRequestLine
 from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
+from app.utils.permissions import permission_required
 from app.services.work_order_service import (
     WorkOrderServiceError,
     close_work_order,
@@ -113,6 +114,7 @@ def _build_repair_type_mechanics_map(site_id: int):
 # =========================================================
 @work_order_bp.route("/", methods=["GET"])
 @login_required
+@permission_required("ot")
 def list_work_orders():
     status = (request.args.get("status") or "").strip()
 
@@ -146,6 +148,7 @@ def list_work_orders():
 # =========================================================
 @work_order_bp.route("/create", methods=["GET"])
 @login_required
+@permission_required("ot")
 def create_work_order_page():
     active_site_id = session.get("active_site_id")
 
@@ -194,6 +197,7 @@ def create_work_order_page():
 # =========================================================
 @work_order_bp.route("/", methods=["POST"])
 @login_required
+@permission_required("ot")
 def create_work_order_action():
     try:
         site_id = session.get("active_site_id")
@@ -277,6 +281,7 @@ def create_work_order_action():
 # =========================================================
 @work_order_bp.route("/<int:work_order_id>", methods=["GET"])
 @login_required
+@permission_required("ot")
 def get_work_order(work_order_id: int):
     try:
         source = (request.args.get("source") or "").strip()
@@ -462,6 +467,7 @@ def get_work_order(work_order_id: int):
 # =========================================================
 @work_order_bp.route("/<int:work_order_id>/tasks", methods=["POST"])
 @login_required
+@permission_required("ot_trabajos")
 def create_task_line_action(work_order_id: int):
     try:
         repair_type_id = request.form.get("repair_type_id")
@@ -501,6 +507,7 @@ def create_task_line_action(work_order_id: int):
 # =========================================================
 @work_order_bp.route("/<int:work_order_id>/lines", methods=["POST"])
 @login_required
+@permission_required("ot")
 def add_line_to_work_order(work_order_id: int):
     flash("Las líneas deben generarse desde solicitudes (flujo correcto).", "warning")
     return redirect(url_for("work_orders.get_work_order", work_order_id=work_order_id))
@@ -511,6 +518,7 @@ def add_line_to_work_order(work_order_id: int):
 # =========================================================
 @work_order_bp.route("/<int:work_order_id>/finalize", methods=["POST"])
 @login_required
+@permission_required("ot")
 def finalize_work_order_action(work_order_id: int):
     try:
         finalize_work_order(
@@ -535,6 +543,7 @@ def finalize_work_order_action(work_order_id: int):
 # =========================================================
 @work_order_bp.route("/<int:work_order_id>/close", methods=["POST"])
 @login_required
+@permission_required("ot")
 def close_work_order_action(work_order_id: int):
     try:
         close_work_order(
@@ -577,6 +586,7 @@ def print_work_order(work_order_id: int):
 
 @work_order_bp.route("/tasks/<int:task_id>/pause", methods=["POST"])
 @login_required
+@permission_required("ot_trabajos")
 def pause_task_line_action(task_id):
     try:
         task = WorkOrderTaskLine.query.get_or_404(task_id)
@@ -616,6 +626,7 @@ def pause_task_line_action(task_id):
 
 @work_order_bp.route("/tasks/<int:task_id>/resume", methods=["POST"])
 @login_required
+@permission_required("ot_trabajos")
 def resume_task_line_action(task_id):
     try:
         task = WorkOrderTaskLine.query.get_or_404(task_id)
@@ -649,6 +660,7 @@ def resume_task_line_action(task_id):
 
 @work_order_bp.route("/tasks/<int:task_id>/replace-mechanic", methods=["POST"])
 @login_required
+@permission_required("ot_trabajos")
 def replace_task_line_mechanic_action(task_id):
     try:
         new_mechanic_id = request.form.get("mechanic_id")

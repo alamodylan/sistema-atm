@@ -304,6 +304,7 @@
         </div>
         {% endif %}
 
+        {% if current_user.has_permission("ot_trabajos") %}
         <!-- ===================== TRABAJOS OT ===================== -->
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-body p-4">
@@ -311,7 +312,7 @@
                     <h5 class="fw-bold mb-0">Trabajos de la OT</h5>
                 </div>
 
-                {% if work_order.status == "EN_PROCESO" %}
+                {% if work_order.status == "EN_PROCESO" and current_user.has_permission("ot_trabajos") %}
                 <div class="border rounded-4 p-3 bg-light-subtle mb-4">
                     <form method="POST" action="{{ url_for('work_orders.create_task_line_action', work_order_id=work_order.id) }}" class="row g-3">
 
@@ -399,7 +400,7 @@
                                 </td>
 
                                 <td>
-                                    {% if work_order.status == "EN_PROCESO" and t.status == "EN_PROCESO" %}
+                                    {% if work_order.status == "EN_PROCESO" and t.status == "EN_PROCESO" and current_user.has_permission("ot_trabajos") %}
                                         <div class="d-flex flex-column gap-2">
                                             <form method="POST" action="{{ url_for('work_orders.pause_task_line_action', task_id=t.id) }}">
                                                 <button class="btn btn-sm btn-warning w-100">
@@ -466,7 +467,7 @@
                 </div>
             </div>
         </div>
-
+        {% endif %}
         <!-- ===================== LÍNEAS ===================== -->
         <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body p-4">

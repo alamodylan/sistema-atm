@@ -29,8 +29,15 @@ class UserSiteAccess(db.Model):
         default=lambda: datetime.now(UTC),
     )
 
-    user = db.relationship("User")
-    site = db.relationship("Site", back_populates="user_access")
+    user = db.relationship(
+        "User",
+        back_populates="site_accesses",
+    )
+
+    site = db.relationship(
+        "Site",
+        back_populates="user_access",
+    )
 
     def __repr__(self) -> str:
         return f"<UserSiteAccess user={self.user_id} site={self.site_id}>"
