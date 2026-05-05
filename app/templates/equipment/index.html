@@ -1,66 +1,131 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container-fluid py-4">
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4>Equipos</h4>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
-            <a href="{{ url_for('equipment.create') }}" class="btn btn-primary">
-                + Nuevo equipo
+            <h3 class="fw-bold mb-1">Equipos</h3>
+            <div class="text-secondary">
+                Gestión de chasis, cabezales, mulas, pickup y otros equipos operativos.
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('equipment.types_index') }}" class="btn btn-outline-secondary rounded-pill px-4">
+                <i class="bi bi-tags me-1"></i> Tipos de equipo
             </a>
-            <a href="{{ url_for('equipment.types_index') }}" class="btn btn-secondary">
-                Tipos de equipo
+            <a href="{{ url_for('equipment.create') }}" class="btn btn-primary rounded-pill px-4 shadow-sm">
+                <i class="bi bi-plus-lg me-1"></i> Nuevo equipo
             </a>
         </div>
     </div>
 
-    <table class="table table-bordered table-hover">
-        <thead class="table-light">
-            <tr>
-                <th>Código</th>
-                <th>Tipo</th>
-                <th>Ejes</th>
-                <th>Tamaño</th>
-                <th>Estado</th>
-                <th style="width:150px;">Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for eq in equipment_list %}
-            <tr>
-                <td>{{ eq.code }}</td>
-                <td>
-                    {% if eq.equipment_type_ref %}
-                        {{ eq.equipment_type_ref.name }}
-                    {% else %}
-                        {{ eq.equipment_type }}
-                    {% endif %}
-                </td>
-                <td>{{ eq.axle_count or '-' }}</td>
-                <td>{{ eq.size_label or '-' }}</td>
-                <td>
-                    {% if eq.is_active %}
-                        <span class="badge bg-success">Activo</span>
-                    {% else %}
-                        <span class="badge bg-danger">Inactivo</span>
-                    {% endif %}
-                </td>
-                <td>
-                    <a href="{{ url_for('equipment.edit', equipment_id=eq.id) }}" class="btn btn-sm btn-warning">
-                        Editar
-                    </a>
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body">
+                    <div class="text-secondary small">Total equipos</div>
+                    <div class="fs-3 fw-bold">{{ equipment_list|length }}</div>
+                </div>
+            </div>
+        </div>
 
-                    <form method="POST" action="{{ url_for('equipment.toggle_active', equipment_id=eq.id) }}" style="display:inline;">
-                        <button class="btn btn-sm btn-secondary">
-                            Estado
-                        </button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body">
+                    <div class="text-secondary small">Tipos registrados</div>
+                    <div class="fs-3 fw-bold">{{ equipment_types|length }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body">
+                    <div class="text-secondary small">Activos</div>
+                    <div class="fs-3 fw-bold">
+                        {{ equipment_list|selectattr("is_active")|list|length }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-header bg-white border-0 px-4 pt-4 pb-2">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="fw-bold mb-0">Listado de equipos</h5>
+                    <small class="text-secondary">Equipos disponibles para órdenes de trabajo y estadísticas.</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body px-4 pb-4">
+            <div class="table-responsive">
+                <table class="table align-middle table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Código</th>
+                            <th>Tipo</th>
+                            <th>Descripción</th>
+                            <th>Ejes</th>
+                            <th>Tamaño</th>
+                            <th>Estado</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for eq in equipment_list %}
+                        <tr>
+                            <td class="fw-semibold">{{ eq.code }}</td>
+                            <td>
+                                <span class="badge rounded-pill text-bg-light border">
+                                    {% if eq.equipment_type_ref %}
+                                        {{ eq.equipment_type_ref.name }}
+                                    {% else %}
+                                        {{ eq.equipment_type }}
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td class="text-secondary">{{ eq.description or "Sin descripción" }}</td>
+                            <td>{{ eq.axle_count or "-" }}</td>
+                            <td>{{ eq.size_label or "-" }}</td>
+                            <td>
+                                {% if eq.is_active %}
+                                    <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle">Activo</span>
+                                {% else %}
+                                    <span class="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle">Inactivo</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="{{ url_for('equipment.edit', equipment_id=eq.id) }}"
+                                   class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                                    Editar
+                                </a>
+
+                                <form method="POST"
+                                      action="{{ url_for('equipment.toggle_active', equipment_id=eq.id) }}"
+                                      class="d-inline">
+                                    <button class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                                        Cambiar estado
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-secondary py-5">
+                                No hay equipos registrados todavía.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
 </div>
 {% endblock %}

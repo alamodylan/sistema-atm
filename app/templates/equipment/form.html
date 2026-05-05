@@ -1,63 +1,104 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container-fluid py-4">
 
-    <h4>{{ form_title }}</h4>
+    <div class="mb-4">
+        <a href="{{ url_for('equipment.index') }}" class="text-decoration-none text-secondary">
+            <i class="bi bi-arrow-left"></i> Volver a equipos
+        </a>
+        <h3 class="fw-bold mt-2 mb-1">{{ form_title }}</h3>
+        <div class="text-secondary">Complete los datos operativos del equipo.</div>
+    </div>
 
-    <form method="POST">
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+            <form method="POST">
+                <div class="row g-4">
 
-        <div class="mb-3">
-            <label class="form-label">Código</label>
-            <input type="text" name="code" class="form-control"
-                   value="{{ equipment.code if equipment else '' }}" required>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Código del equipo *</label>
+                        <input type="text"
+                               name="code"
+                               class="form-control form-control-lg rounded-3"
+                               placeholder="Ej: 40118"
+                               value="{{ equipment.code if equipment else '' }}"
+                               required>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Tipo de equipo *</label>
+                        <select name="equipment_type_id"
+                                class="form-select form-select-lg rounded-3"
+                                required>
+                            <option value="">Seleccione un tipo</option>
+                            {% for t in equipment_types %}
+                                <option value="{{ t.id }}"
+                                    {% if equipment and equipment.equipment_type_id == t.id %}selected{% endif %}>
+                                    {{ t.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">Ejes</label>
+                        <input type="number"
+                               min="0"
+                               step="1"
+                               name="axle_count"
+                               class="form-control form-control-lg rounded-3"
+                               placeholder="Ej: 2"
+                               value="{{ equipment.axle_count if equipment and equipment.axle_count is not none else '' }}">
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">Tamaño</label>
+                        <input type="text"
+                               name="size_label"
+                               class="form-control form-control-lg rounded-3"
+                               placeholder="20 / 40 / 45"
+                               value="{{ equipment.size_label if equipment else '' }}">
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Descripción</label>
+                        <textarea name="description"
+                                  rows="4"
+                                  class="form-control rounded-3"
+                                  placeholder="Detalles adicionales del equipo...">{{ equipment.description if equipment else '' }}</textarea>
+                    </div>
+
+                    {% if equipment %}
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            <input type="checkbox"
+                                   name="is_active"
+                                   class="form-check-input"
+                                   role="switch"
+                                   id="isActiveSwitch"
+                                   {% if equipment.is_active %}checked{% endif %}>
+                            <label class="form-check-label fw-semibold" for="isActiveSwitch">
+                                Equipo activo
+                            </label>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="col-12 d-flex justify-content-end gap-2 border-top pt-4">
+                        <a href="{{ url_for('equipment.index') }}"
+                           class="btn btn-outline-secondary rounded-pill px-4">
+                            Cancelar
+                        </a>
+                        <button class="btn btn-primary rounded-pill px-4 shadow-sm">
+                            {{ submit_label }}
+                        </button>
+                    </div>
+
+                </div>
+            </form>
         </div>
-
-        <div class="mb-3">
-            <label class="form-label">Tipo de equipo</label>
-            <select name="equipment_type_id" class="form-control" required>
-                <option value="">Seleccione...</option>
-                {% for t in equipment_types %}
-                    <option value="{{ t.id }}"
-                        {% if equipment and equipment.equipment_type_id == t.id %}
-                            selected
-                        {% endif %}
-                    >
-                        {{ t.name }}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">Descripción</label>
-            <textarea name="description" class="form-control">{{ equipment.description if equipment else '' }}</textarea>
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">Cantidad de ejes</label>
-            <input type="number" name="axle_count" class="form-control"
-                   value="{{ equipment.axle_count if equipment else '' }}">
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">Tamaño</label>
-            <input type="text" name="size_label" class="form-control"
-                   value="{{ equipment.size_label if equipment else '' }}">
-        </div>
-
-        {% if equipment %}
-        <div class="form-check mb-3">
-            <input type="checkbox" name="is_active" class="form-check-input"
-                {% if equipment.is_active %}checked{% endif %}>
-            <label class="form-check-label">Activo</label>
-        </div>
-        {% endif %}
-
-        <button class="btn btn-success">{{ submit_label }}</button>
-        <a href="{{ url_for('equipment.index') }}" class="btn btn-secondary">Volver</a>
-
-    </form>
+    </div>
 
 </div>
 {% endblock %}
