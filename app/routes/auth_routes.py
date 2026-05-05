@@ -57,7 +57,7 @@ def login():
         pass
 
     flash(f"Bienvenido, {user.full_name}.", "success")
-    return redirect(url_for("dashboard.index"))
+    return redirect(url_for("home.index"))
 
 
 @auth_bp.route("/logout", methods=["POST"])

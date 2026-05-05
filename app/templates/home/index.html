@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Inicio | Sistema ATM{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="rounded-5 border-0 shadow-sm overflow-hidden mb-4"
+         style="background: linear-gradient(135deg, #ffffff 0%, #f4f7fb 48%, #eaf1ff 100%);">
+
+        <div class="row g-0 align-items-center">
+            <div class="col-12 col-lg-7 p-5">
+                <div class="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-pill bg-white shadow-sm mb-4">
+                    <i class="bi bi-shield-check text-primary"></i>
+                    <span class="small fw-semibold text-secondary">Sistema corporativo ATM</span>
+                </div>
+
+                <h1 class="fw-bold display-6 mb-3">
+                    Bienvenido al Sistema ATM
+                </h1>
+
+                <p class="lead text-secondary mb-4">
+                    Plataforma integral para la gestión de bodega, taller, inventario,
+                    compras, reportes y control operativo.
+                </p>
+
+                <div class="alert alert-primary border-0 rounded-4 mb-0">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Seleccione una opción del menú lateral según los permisos asignados a su usuario.
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-5 p-5 text-center">
+                <div class="bg-white rounded-5 shadow-sm p-4 mx-auto" style="max-width: 360px;">
+                    <img src="{{ url_for('static', filename='img/logo.png') }}"
+                         alt="Logo empresa"
+                         class="img-fluid mb-3"
+                         style="max-height: 130px; object-fit: contain;">
+
+                    <div class="fw-bold fs-5">ATM Systems</div>
+                    <div class="text-secondary small">Gestión operativa empresarial</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+
+        <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-4 bg-primary-subtle text-primary d-flex align-items-center justify-content-center"
+                             style="width: 52px; height: 52px;">
+                            <i class="bi bi-person-circle fs-4"></i>
+                        </div>
+                        <div>
+                            <div class="text-secondary small">Usuario conectado</div>
+                            <div class="fw-bold fs-5">{{ current_user.full_name }}</div>
+                            <div class="text-secondary small">{{ current_user.username }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-4 bg-success-subtle text-success d-flex align-items-center justify-content-center"
+                             style="width: 52px; height: 52px;">
+                            <i class="bi bi-person-badge fs-4"></i>
+                        </div>
+                        <div>
+                            <div class="text-secondary small">Rol asignado</div>
+                            <div class="fw-bold fs-5">
+                                {{ current_user.role.name if current_user.role else "Sin rol" }}
+                            </div>
+                            <div class="text-secondary small">
+                                {{ current_user.role.code if current_user.role else "-" }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-4 bg-warning-subtle text-warning d-flex align-items-center justify-content-center"
+                             style="width: 52px; height: 52px;">
+                            <i class="bi bi-geo-alt fs-4"></i>
+                        </div>
+                        <div>
+                            <div class="text-secondary small">Predio activo</div>
+                            <div class="fw-bold fs-5">
+                                {{ active_site.name if active_site else "Sin predio definido" }}
+                            </div>
+                            <div class="text-secondary small">
+                                {{ active_site.code if active_site else "Seleccione un predio" }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mt-4">
+        <div class="card-body p-4">
+            <h5 class="fw-bold mb-3">Accesos disponibles</h5>
+            <div class="row g-3">
+
+                {% if current_user.has_permission("dashboard") %}
+                <div class="col-12 col-md-6 col-xl-3">
+                    <a href="{{ url_for('dashboard.index') }}" class="text-decoration-none">
+                        <div class="border rounded-4 p-3 h-100 bg-light">
+                            <i class="bi bi-speedometer2 text-primary fs-4"></i>
+                            <div class="fw-semibold mt-2 text-dark">Dashboard</div>
+                            <small class="text-secondary">Indicadores principales</small>
+                        </div>
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if current_user.has_permission("inventario") %}
+                <div class="col-12 col-md-6 col-xl-3">
+                    <a href="{{ url_for('inventory.inventory_home') }}" class="text-decoration-none">
+                        <div class="border rounded-4 p-3 h-100 bg-light">
+                            <i class="bi bi-box-seam text-primary fs-4"></i>
+                            <div class="fw-semibold mt-2 text-dark">Inventario</div>
+                            <small class="text-secondary">Bodegas y existencias</small>
+                        </div>
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if current_user.has_permission("ot") %}
+                <div class="col-12 col-md-6 col-xl-3">
+                    <a href="{{ url_for('work_orders.list_work_orders') }}" class="text-decoration-none">
+                        <div class="border rounded-4 p-3 h-100 bg-light">
+                            <i class="bi bi-clipboard-check text-primary fs-4"></i>
+                            <div class="fw-semibold mt-2 text-dark">Órdenes de trabajo</div>
+                            <small class="text-secondary">Taller y consumos</small>
+                        </div>
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if current_user.has_permission("terminal_taller") %}
+                <div class="col-12 col-md-6 col-xl-3">
+                    <a href="{{ url_for('mechanic_terminal.index') }}" class="text-decoration-none">
+                        <div class="border rounded-4 p-3 h-100 bg-light">
+                            <i class="bi bi-upc-scan text-primary fs-4"></i>
+                            <div class="fw-semibold mt-2 text-dark">Terminal taller</div>
+                            <small class="text-secondary">Ingreso por mecánico</small>
+                        </div>
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if current_user.has_permission("compras_total") or current_user.has_permission("compras_solicitudes") %}
+                <div class="col-12 col-md-6 col-xl-3">
+                    <a href="{{ url_for('purchases.home') }}" class="text-decoration-none">
+                        <div class="border rounded-4 p-3 h-100 bg-light">
+                            <i class="bi bi-cart3 text-primary fs-4"></i>
+                            <div class="fw-semibold mt-2 text-dark">Compras</div>
+                            <small class="text-secondary">Solicitudes y procesos</small>
+                        </div>
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if current_user.has_permission("reportes") or current_user.has_permission("reportes_kardex") or current_user.has_permission("reportes_entradas_salidas") %}
+                <div class="col-12 col-md-6 col-xl-3">
+                    <a href="{{ url_for('reports.reports_home') }}" class="text-decoration-none">
+                        <div class="border rounded-4 p-3 h-100 bg-light">
+                            <i class="bi bi-bar-chart-line text-primary fs-4"></i>
+                            <div class="fw-semibold mt-2 text-dark">Reportes</div>
+                            <small class="text-secondary">Consultas operativas</small>
+                        </div>
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if current_user.has_permission("usuarios") %}
+                <div class="col-12 col-md-6 col-xl-3">
+                    <a href="{{ url_for('users.index') }}" class="text-decoration-none">
+                        <div class="border rounded-4 p-3 h-100 bg-light">
+                            <i class="bi bi-people text-primary fs-4"></i>
+                            <div class="fw-semibold mt-2 text-dark">Usuarios</div>
+                            <small class="text-secondary">Roles y accesos</small>
+                        </div>
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if current_user.has_permission("proveedores") %}
+                <div class="col-12 col-md-6 col-xl-3">
+                    <a href="{{ url_for('suppliers.index') }}" class="text-decoration-none">
+                        <div class="border rounded-4 p-3 h-100 bg-light">
+                            <i class="bi bi-building text-primary fs-4"></i>
+                            <div class="fw-semibold mt-2 text-dark">Proveedores</div>
+                            <small class="text-secondary">Catálogo comercial</small>
+                        </div>
+                    </a>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
