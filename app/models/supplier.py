@@ -17,10 +17,18 @@ class Supplier(db.Model):
     payment_terms = db.Column(db.String(100), nullable=True)
     currency_code = db.Column(db.String(10), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
         server_default=db.func.now(),
+    )
+
+    article_suppliers = db.relationship(
+        "ArticleSupplier",
+        back_populates="supplier",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:

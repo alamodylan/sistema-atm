@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="mb-4">
+        <a href="{{ url_for('suppliers.index') }}" class="text-decoration-none text-secondary">
+            <i class="bi bi-arrow-left"></i> Volver a proveedores
+        </a>
+        <h3 class="fw-bold mt-2 mb-1">{{ form_title }}</h3>
+        <div class="text-secondary">
+            Registre la información comercial y de contacto del proveedor.
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+            <form method="POST">
+                <div class="row g-4">
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Código</label>
+                        <input type="text"
+                               name="code"
+                               class="form-control form-control-lg rounded-3 text-uppercase"
+                               placeholder="Ej: GMY"
+                               value="{{ supplier.code if supplier else '' }}">
+                    </div>
+
+                    <div class="col-md-5">
+                        <label class="form-label fw-semibold">Nombre comercial *</label>
+                        <input type="text"
+                               name="commercial_name"
+                               class="form-control form-control-lg rounded-3"
+                               placeholder="Ej: Repuestos La Central"
+                               value="{{ supplier.commercial_name if supplier else '' }}"
+                               required>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Razón social</label>
+                        <input type="text"
+                               name="legal_name"
+                               class="form-control form-control-lg rounded-3"
+                               placeholder="Nombre legal"
+                               value="{{ supplier.legal_name if supplier else '' }}">
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Identificación / Cédula</label>
+                        <input type="text"
+                               name="tax_id"
+                               class="form-control rounded-3"
+                               value="{{ supplier.tax_id if supplier else '' }}">
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Contacto</label>
+                        <input type="text"
+                               name="contact_name"
+                               class="form-control rounded-3"
+                               value="{{ supplier.contact_name if supplier else '' }}">
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Correo</label>
+                        <input type="email"
+                               name="email"
+                               class="form-control rounded-3"
+                               placeholder="correo@proveedor.com"
+                               value="{{ supplier.email if supplier else '' }}">
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Teléfono</label>
+                        <input type="text"
+                               name="phone"
+                               class="form-control rounded-3"
+                               value="{{ supplier.phone if supplier else '' }}">
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Condiciones de pago</label>
+                        <input type="text"
+                               name="payment_terms"
+                               class="form-control rounded-3"
+                               placeholder="Ej: Contado / Crédito 30 días"
+                               value="{{ supplier.payment_terms if supplier else '' }}">
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">Moneda</label>
+                        <input type="text"
+                               name="currency_code"
+                               class="form-control rounded-3 text-uppercase"
+                               placeholder="CRC / USD"
+                               value="{{ supplier.currency_code if supplier else '' }}">
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Dirección</label>
+                        <textarea name="address"
+                                  rows="3"
+                                  class="form-control rounded-3"
+                                  placeholder="Dirección del proveedor...">{{ supplier.address if supplier else '' }}</textarea>
+                    </div>
+
+                    {% if supplier %}
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            <input type="checkbox"
+                                   name="is_active"
+                                   class="form-check-input"
+                                   role="switch"
+                                   id="isActiveSwitch"
+                                   {% if supplier.is_active %}checked{% endif %}>
+                            <label class="form-check-label fw-semibold" for="isActiveSwitch">
+                                Proveedor activo
+                            </label>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="col-12 d-flex justify-content-end gap-2 border-top pt-4">
+                        <a href="{{ url_for('suppliers.index') }}"
+                           class="btn btn-outline-secondary rounded-pill px-4">
+                            Cancelar
+                        </a>
+                        <button class="btn btn-primary rounded-pill px-4 shadow-sm">
+                            {{ submit_label }}
+                        </button>
+                    </div>
+
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

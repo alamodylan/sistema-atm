@@ -46,6 +46,8 @@ def create_app():
     from app.routes.stats_routes import stats_bp
     from app.routes.stats_routes_equipos import equipment_stats_bp
     from app.routes.equipment import equipment_bp
+    from app.routes.suppliers import suppliers_bp
+
 
 
 
@@ -75,6 +77,7 @@ def create_app():
     app.register_blueprint(stats_bp)
     app.register_blueprint(equipment_stats_bp)
     app.register_blueprint(equipment_bp)
+    app.register_blueprint(suppliers_bp)
 
 
 

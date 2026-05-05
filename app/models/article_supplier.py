@@ -37,7 +37,12 @@ class ArticleSupplier(db.Model):
         db.DateTime(timezone=True),
         nullable=False,
         server_default=db.func.now(),
+        onupdate=db.func.now(),
     )
 
     article = db.relationship("Article")
-    supplier = db.relationship("Supplier")
+
+    supplier = db.relationship(
+        "Supplier",
+        back_populates="article_suppliers",
+    )
