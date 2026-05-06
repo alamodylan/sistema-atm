@@ -523,11 +523,18 @@ def import_articles(rows: list[dict]) -> dict:
             if counter % BATCH_SIZE == 0:
                 db.session.commit()
 
-        except Exception:
+        except Exception as exc:
             db.session.rollback()
+
+            print(
+                f"[IMPORT_ARTICLES_ERROR] "
+                f"codigo={code} "
+                f"nombre={name} "
+                f"error={str(exc)}"
+            )
+
             skipped += 1
             continue
-
     db.session.commit()
 
     return {"created": created, "updated": updated, "skipped": skipped}
