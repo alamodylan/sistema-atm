@@ -678,6 +678,8 @@ def import_warehouse_stock(
     updated = 0
     skipped = 0
 
+    cleaned_rows = []
+
     for row in rows:
         try:
             warehouse_code = _clean(row.get("codigo_bodega"))
@@ -697,23 +699,78 @@ def import_warehouse_stock(
                 skipped += 1
                 continue
 
-            warehouse = Warehouse.query.filter_by(
-                code=warehouse_code,
-                site_id=site_id,
-            ).first()
-            if not warehouse:
+            cleaned_rows.append(
+                {
+                    "warehouse_code": warehouse_code,
+                    "article_code": article_code,
+                    "final_quantity": final_quantity,
+                    "last_unit_cost": last_unit_cost,
+                }
+            )
+
+        except Exception:
+            skipped += 1
+            continue
+
+    if not cleaned_rows:
+        db.session.commit()
+        return {"created": created, "updated": updated, "skipped": skipped}
+
+    warehouse_codes = {row["warehouse_code"] for row in cleaned_rows}
+    article_codes = {row["article_code"] for row in cleaned_rows}
+
+    warehouses = (
+        Warehouse.query
+        .filter(
+            Warehouse.site_id == site_id,
+            Warehouse.code.in_(warehouse_codes),
+        )
+        .all()
+    )
+
+    articles = (
+        Article.query
+        .filter(Article.code.in_(article_codes))
+        .all()
+    )
+
+    warehouses_map = {warehouse.code: warehouse for warehouse in warehouses}
+    articles_map = {article.code: article for article in articles}
+
+    warehouse_ids = [warehouse.id for warehouse in warehouses]
+    article_ids = [article.id for article in articles]
+
+    existing_stocks = []
+
+    if warehouse_ids and article_ids:
+        existing_stocks = (
+            WarehouseStock.query
+            .filter(
+                WarehouseStock.warehouse_id.in_(warehouse_ids),
+                WarehouseStock.article_id.in_(article_ids),
+            )
+            .all()
+        )
+
+    stocks_map = {
+        (stock.warehouse_id, stock.article_id): stock
+        for stock in existing_stocks
+    }
+
+    for row in cleaned_rows:
+        try:
+            warehouse = warehouses_map.get(row["warehouse_code"])
+            article = articles_map.get(row["article_code"])
+
+            if not warehouse or not article:
                 skipped += 1
                 continue
 
-            article = Article.query.filter_by(code=article_code).first()
-            if not article:
-                skipped += 1
-                continue
+            final_quantity = row["final_quantity"]
+            last_unit_cost = row["last_unit_cost"]
 
-            stock = WarehouseStock.query.filter_by(
-                warehouse_id=warehouse.id,
-                article_id=article.id,
-            ).first()
+            stock_key = (warehouse.id, article.id)
+            stock = stocks_map.get(stock_key)
 
             if not stock:
                 stock = WarehouseStock(
@@ -728,13 +785,14 @@ def import_warehouse_stock(
                     stock.last_unit_cost = last_unit_cost
 
                 db.session.add(stock)
-                db.session.flush()
+                stocks_map[stock_key] = stock
                 created += 1
 
             if last_unit_cost is not None and hasattr(stock, "last_unit_cost"):
                 stock.last_unit_cost = last_unit_cost
 
             current_quantity = _get_quantity_on_hand(stock)
+
             if current_quantity != final_quantity:
                 diff = final_quantity - current_quantity
                 _set_quantity_on_hand(stock, final_quantity)
@@ -747,6 +805,7 @@ def import_warehouse_stock(
                     performed_by_user_id=performed_by_user_id,
                     notes="Carga masiva de stock por bodega",
                 )
+
                 updated += 1
 
         except Exception:
@@ -754,6 +813,7 @@ def import_warehouse_stock(
             continue
 
     db.session.commit()
+
     return {"created": created, "updated": updated, "skipped": skipped}
 
 
