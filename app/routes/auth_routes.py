@@ -1,16 +1,50 @@
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
+from app.models.site import Site
 from app.models.user import User
+from app.models.user_site_access import UserSiteAccess
 from app.services.audit_service import log_action
 
 auth_bp = Blueprint("auth", __name__)
 
 
+def _set_initial_active_site(user: User) -> None:
+    session.pop("active_site_id", None)
+
+    if user.role and user.role.code == "SUPER_USUARIO":
+        site = (
+            Site.query
+            .filter(Site.is_active.is_(True))
+            .order_by(Site.id.asc())
+            .first()
+        )
+
+        if site:
+            session["active_site_id"] = site.id
+
+        return
+
+    site_access = (
+        UserSiteAccess.query
+        .join(Site, Site.id == UserSiteAccess.site_id)
+        .filter(
+            UserSiteAccess.user_id == user.id,
+            Site.is_active.is_(True),
+        )
+        .order_by(Site.id.asc())
+        .first()
+    )
+
+    if site_access:
+        session["active_site_id"] = site_access.site_id
+
+
 @auth_bp.route("/login", methods=["GET"])
 def login_page():
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard.index"))
+        return redirect(url_for("home.index"))
+
     return render_template("auth/login.html")
 
 
@@ -42,6 +76,7 @@ def login():
         return render_template("auth/login.html"), 401
 
     login_user(user)
+    _set_initial_active_site(user)
 
     try:
         log_action(
@@ -53,7 +88,6 @@ def login():
             commit=True,
         )
     except Exception:
-        # No bloquear el login por una falla de auditoría
         pass
 
     flash(f"Bienvenido, {user.full_name}.", "success")
@@ -76,8 +110,9 @@ def logout():
             commit=True,
         )
     except Exception:
-        # No bloquear el logout por una falla de auditoría
         pass
+
+    session.pop("active_site_id", None)
 
     logout_user()
     flash("Sesión cerrada correctamente.", "info")

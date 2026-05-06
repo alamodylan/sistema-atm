@@ -12,6 +12,7 @@ from app.models.transfer_request import TransferRequest
 from app.models.work_order_task_line import WorkOrderTaskLine
 from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 from app.services.transfer_service import get_request_line_stock_context
+from flask import abort
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -26,8 +27,16 @@ def home():
 @dashboard_bp.route("/set-site/<int:site_id>")
 @login_required
 def set_site(site_id):
+
+    # 🔥 VALIDAR ACCESO
+    if not current_user.can_access_site(site_id):
+        abort(403)
+
+    # 🔥 CAMBIAR PREDIO
     session["active_site_id"] = site_id
-    return redirect(url_for("dashboard.index"))
+
+    # 🔥 REDIRIGIR A INICIO (NO DASHBOARD)
+    return redirect(url_for("home.index"))
 
 
 @dashboard_bp.route("/dashboard")

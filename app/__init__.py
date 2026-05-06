@@ -7,6 +7,7 @@ from .models.user import User
 from .models.site import Site
 from app.routes.bulk_routes import bulk_bp
 from .routes.purchases_routes import purchases_bp
+from app.models.user_site_access import UserSiteAccess
 
 
 def create_app():
@@ -107,15 +108,39 @@ def create_app():
         sites = []
 
         if current_user.is_authenticated:
-            # Obtener todos los predios activos
-            sites = Site.query.filter_by(is_active=True).all()
+            if current_user.role and current_user.role.code == "SUPER_USUARIO":
+                sites = (
+                    Site.query
+                    .filter(Site.is_active.is_(True))
+                    .order_by(Site.id.asc())
+                    .all()
+                )
+            else:
+                sites = (
+                    Site.query
+                    .join(UserSiteAccess, UserSiteAccess.site_id == Site.id)
+                    .filter(
+                        UserSiteAccess.user_id == current_user.id,
+                        Site.is_active.is_(True),
+                    )
+                    .order_by(Site.id.asc())
+                    .all()
+                )
 
+            allowed_site_ids = [site.id for site in sites]
             active_site_id = session.get("active_site_id")
 
             if active_site_id:
-                active_site = Site.query.get(active_site_id)
+                try:
+                    active_site_id = int(active_site_id)
+                except (TypeError, ValueError):
+                    active_site_id = None
 
-            # Si no hay predio activo, asignar el primero disponible
+                if active_site_id in allowed_site_ids:
+                    active_site = Site.query.get(active_site_id)
+                else:
+                    session.pop("active_site_id", None)
+
             if not active_site and sites:
                 active_site = sites[0]
                 session["active_site_id"] = active_site.id
