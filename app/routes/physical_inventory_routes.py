@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from app.utils.permissions import permission_required
 from flask import jsonify
-
+from sqlalchemy.orm import joinedload
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
 
@@ -175,6 +175,7 @@ def detail(inventory_id: int):
 
     pagination = (
         PhysicalInventoryLine.query
+        .options(joinedload(PhysicalInventoryLine.article))
         .filter(PhysicalInventoryLine.physical_inventory_id == inventory.id)
         .join(PhysicalInventoryLine.article)
         .order_by(
@@ -183,7 +184,6 @@ def detail(inventory_id: int):
         )
         .paginate(page=page, per_page=per_page, error_out=False)
     )
-
     lines = pagination.items
 
     return render_template(
