@@ -153,7 +153,9 @@ def warehouse_inventory_detail(warehouse_id: int):
         flash(str(exc), "danger")
         return redirect(url_for("inventory.inventory_home"))
 
-    except Exception:
+    except Exception as exc:
+        print(f"[INVENTORY_DETAIL_ERROR] {str(exc)}")
+
         flash("Error al cargar el detalle del inventario.", "danger")
         return redirect(url_for("inventory.inventory_home"))
 
