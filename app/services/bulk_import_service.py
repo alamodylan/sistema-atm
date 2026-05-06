@@ -379,8 +379,6 @@ def import_locations(rows: list[dict], *, site_id: int) -> dict:
 # =========================================================
 # ARTÍCULOS (GLOBAL)
 # =========================================================
-
-
 def import_articles(rows: list[dict]) -> dict:
     created = 0
     updated = 0
@@ -398,10 +396,10 @@ def import_articles(rows: list[dict]) -> dict:
     articles_map = {a.code: a for a in Article.query.all()}
     barcodes_map = {a.barcode: a for a in Article.query.all() if a.barcode}
 
-    BATCH_SIZE = 200
-    counter = 0
-
     for row in rows:
+        code = ""
+        name = ""
+
         try:
             code = _clean(row.get("codigo"))
             name = _clean(row.get("nombre"))
@@ -497,7 +495,10 @@ def import_articles(rows: list[dict]) -> dict:
                 article.sap_code = sap_code
                 article.is_tool = is_tool
                 article.is_active = is_active
+
+                db.session.flush()
                 updated += 1
+
             else:
                 article = Article(
                     code=code,
@@ -511,17 +512,15 @@ def import_articles(rows: list[dict]) -> dict:
                     is_tool=is_tool,
                     is_active=is_active,
                 )
+
                 db.session.add(article)
+                db.session.flush()
+
                 articles_map[code] = article
                 created += 1
 
             if barcode:
                 barcodes_map[barcode] = article
-
-            counter += 1
-
-            if counter % BATCH_SIZE == 0:
-                db.session.commit()
 
         except Exception as exc:
             db.session.rollback()
@@ -535,6 +534,7 @@ def import_articles(rows: list[dict]) -> dict:
 
             skipped += 1
             continue
+
     db.session.commit()
 
     return {"created": created, "updated": updated, "skipped": skipped}
