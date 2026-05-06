@@ -169,7 +169,10 @@ def detail(inventory_id: int):
         flash("Este inventario físico no pertenece al predio activo.", "danger")
         return redirect(url_for("physical_inventory.index"))
 
-    lines = (
+    page = request.args.get("page", 1, type=int)
+    per_page = 100
+
+    pagination = (
         PhysicalInventoryLine.query
         .filter(PhysicalInventoryLine.physical_inventory_id == inventory.id)
         .join(PhysicalInventoryLine.article)
@@ -177,13 +180,16 @@ def detail(inventory_id: int):
             db.text("atm.articles.code ASC"),
             PhysicalInventoryLine.id.asc(),
         )
-        .all()
+        .paginate(page=page, per_page=per_page, error_out=False)
     )
+
+    lines = pagination.items
 
     return render_template(
         "physical_inventory/detail.html",
         inventory=inventory,
         lines=lines,
+        pagination=pagination,
     )
 
 

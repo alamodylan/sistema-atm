@@ -75,11 +75,11 @@
 
                     <td>
                         <input type="number"
-                                inputmode="decimal"
-                                class="form-control qty-input"
-                                data-line-id="{{ line.id }}"
-                                value="{{ line.physical_quantity or '' }}"
-                                {% if inventory.status not in ["BORRADOR","EN_CONTEO"] %}disabled{% endif %}>
+                               inputmode="decimal"
+                               class="form-control qty-input"
+                               data-line-id="{{ line.id }}"
+                               value="{{ line.physical_quantity or '' }}"
+                               {% if inventory.status not in ["BORRADOR","EN_CONTEO"] %}disabled{% endif %}>
                     </td>
 
                     <td class="diff">
@@ -91,6 +91,35 @@
 
                 </tbody>
             </table>
+
+            {% if pagination.pages > 1 %}
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 p-3 border-top">
+                <div class="text-muted small">
+                    Página {{ pagination.page }} de {{ pagination.pages }}
+                    · Mostrando {{ pagination.items|length }} líneas
+                </div>
+
+                <div class="btn-group">
+                    {% if pagination.has_prev %}
+                    <a class="btn btn-outline-secondary btn-sm"
+                       href="{{ url_for('physical_inventory.detail', inventory_id=inventory.id, page=pagination.prev_num) }}">
+                        Anterior
+                    </a>
+                    {% else %}
+                    <button class="btn btn-outline-secondary btn-sm" disabled>Anterior</button>
+                    {% endif %}
+
+                    {% if pagination.has_next %}
+                    <a class="btn btn-outline-secondary btn-sm"
+                       href="{{ url_for('physical_inventory.detail', inventory_id=inventory.id, page=pagination.next_num) }}">
+                        Siguiente
+                    </a>
+                    {% else %}
+                    <button class="btn btn-outline-secondary btn-sm" disabled>Siguiente</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
 
         </div>
     </div>
@@ -148,7 +177,10 @@
         const row = findRowByScannedCode(cleanCode);
 
         if (!row) {
-            alert("Código no encontrado: " + cleanCode);
+            alert(
+                "Código no encontrado en esta página: " + cleanCode +
+                "\n\nPor ahora use Anterior/Siguiente para ubicarse en la página correcta."
+            );
             clearScanBuffer();
             return;
         }
