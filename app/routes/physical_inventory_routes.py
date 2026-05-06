@@ -171,7 +171,7 @@ def detail(inventory_id: int):
         return redirect(url_for("physical_inventory.index"))
 
     page = request.args.get("page", 1, type=int)
-    per_page = 100
+    per_page = 5000
 
     pagination = (
         PhysicalInventoryLine.query
