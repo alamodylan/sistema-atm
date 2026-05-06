@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from app.utils.permissions import permission_required
+from flask import jsonify
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
@@ -192,6 +193,67 @@ def detail(inventory_id: int):
         pagination=pagination,
     )
 
+@physical_inventory_bp.route("/<int:inventory_id>/find-line")
+@login_required
+def find_line(inventory_id: int):
+    inventory = PhysicalInventory.query.get_or_404(inventory_id)
+
+    code = (request.args.get("code") or "").strip().upper()
+
+    if not code:
+        return jsonify({"ok": False, "message": "Código vacío."}), 400
+
+    per_page = 100
+
+    query = (
+        PhysicalInventoryLine.query
+        .filter(PhysicalInventoryLine.physical_inventory_id == inventory.id)
+        .join(PhysicalInventoryLine.article)
+        .order_by(
+            db.text("atm.articles.code ASC"),
+            PhysicalInventoryLine.id.asc(),
+        )
+    )
+
+    all_ids = [
+        row.id
+        for row in query.with_entities(PhysicalInventoryLine.id).all()
+    ]
+
+    target_line = (
+        query
+        .filter(
+            db.or_(
+                db.text("UPPER(atm.articles.code) = :code"),
+                db.text("UPPER(atm.articles.barcode) = :code"),
+            )
+        )
+        .params(code=code)
+        .first()
+    )
+
+    if not target_line:
+        return jsonify({
+            "ok": False,
+            "message": "Artículo no encontrado.",
+        })
+
+    try:
+        position = all_ids.index(target_line.id)
+    except ValueError:
+        return jsonify({
+            "ok": False,
+            "message": "No se pudo ubicar la línea.",
+        })
+
+    page = (position // per_page) + 1
+
+    return jsonify({
+        "ok": True,
+        "page": page,
+        "line_id": target_line.id,
+        "code": code,
+    })
 
 @physical_inventory_bp.route("/update-line", methods=["POST"])
 @login_required

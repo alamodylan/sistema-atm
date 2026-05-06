@@ -169,36 +169,56 @@
         }, 1200);
     }
 
-    function processScannedCode(code) {
+    async function processScannedCode(code) {
         const cleanCode = normalizeCode(code);
 
         if (!cleanCode) return;
 
         const row = findRowByScannedCode(cleanCode);
 
-        if (!row) {
-            alert(
-                "Código no encontrado en esta página: " + cleanCode +
-                "\n\nPor ahora use Anterior/Siguiente para ubicarse en la página correcta."
-            );
-            clearScanBuffer();
+        if (row) {
+            markRow(row);
+
+            const input = row.querySelector(".qty-input");
+
+            if (input && !input.disabled) {
+                clearScanBuffer();
+
+                input.focus();
+                input.select();
+
+                setTimeout(() => {
+                    input.focus();
+                    input.select();
+                }, 80);
+            }
+
             return;
         }
 
-        markRow(row);
+        try {
+            const response = await fetch(
+                "{{ url_for('physical_inventory.find_line', inventory_id=inventory.id) }}?code=" +
+                encodeURIComponent(cleanCode)
+            );
 
-        const input = row.querySelector(".qty-input");
+            const result = await response.json();
 
-        if (input && !input.disabled) {
+            if (!result.ok) {
+                alert(result.message || "Artículo no encontrado.");
+                clearScanBuffer();
+                return;
+            }
+
+            const url = new URL(window.location.href);
+            url.searchParams.set("page", result.page);
+            url.searchParams.set("focus_code", cleanCode);
+
+            window.location.href = url.toString();
+
+        } catch (error) {
+            alert("Error buscando el artículo.");
             clearScanBuffer();
-
-            input.focus();
-            input.select();
-
-            setTimeout(() => {
-                input.focus();
-                input.select();
-            }, 80);
         }
     }
 
@@ -370,6 +390,25 @@
             this.select();
         });
     });
+
+    const focusCode = new URLSearchParams(window.location.search).get("focus_code");
+
+    if (focusCode) {
+        setTimeout(() => {
+            const row = findRowByScannedCode(focusCode);
+
+            if (!row) return;
+
+            markRow(row);
+
+            const input = row.querySelector(".qty-input");
+
+            if (input && !input.disabled) {
+                input.focus();
+                input.select();
+            }
+        }, 400);
+    }
 })();
 </script>
 
