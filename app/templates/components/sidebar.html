@@ -1,3 +1,5 @@
+{% set can_use_permissions = current_user.is_authenticated and current_user.has_permission is defined %}
+
 <div class="offcanvas-lg offcanvas-start sidebar-wrapper bg-white border-end shadow-sm"
      tabindex="-1"
      id="sidebarOffcanvas"
@@ -23,98 +25,96 @@
 
         <nav class="nav flex-column py-3 px-2 gap-1">
 
-            {% if current_user.has_permission("dashboard") %}
+            {% if can_use_permissions and current_user.has_permission("dashboard") %}
             <a href="{{ url_for('dashboard.index') }}"
                class="nav-link sidebar-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
                 <i class="bi bi-speedometer2 me-2"></i>Dashboard
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("dashboard_jefatura") %}
+            {% if can_use_permissions and current_user.has_permission("dashboard_jefatura") %}
             <a href="{{ url_for('dashboard.manager_dashboard') }}"
                class="nav-link sidebar-link {% if request.endpoint == 'dashboard.manager_dashboard' %}active{% endif %}">
                 <i class="bi bi-clipboard-data me-2"></i>Dashboard Jefatura
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("terminal_taller") %}
+            {% if can_use_permissions and current_user.has_permission("terminal_taller") %}
             <a href="{{ url_for('mechanic_terminal.index') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('mechanic_terminal.') %}active{% endif %}">
                 <i class="bi bi-upc-scan me-2"></i>Terminal taller
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("articulos") %}
+            {% if can_use_permissions and current_user.has_permission("articulos") %}
             <a href="{{ url_for('articles.inventory_home') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('articles.') %}active{% endif %}">
                 <i class="bi bi-box me-2"></i>Artículos
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("inventario") %}
+            {% if can_use_permissions and current_user.has_permission("inventario") %}
             <a href="{{ url_for('inventory.inventory_home') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('inventory.') %}active{% endif %}">
                 <i class="bi bi-box-seam me-2"></i>Inventario
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("inventario_ajustes") %}
+            {% if can_use_permissions and current_user.has_permission("inventario_ajustes") %}
             <a href="{{ url_for('inventory_adjustments.index') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('inventory_adjustments.') %}active{% endif %}">
                 <i class="bi bi-sliders me-2"></i>Ajustes de inventario
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("ot") %}
+            {% if can_use_permissions and current_user.has_permission("ot") %}
             <a href="{{ url_for('work_orders.list_work_orders') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('work_orders.') %}active{% endif %}">
                 <i class="bi bi-clipboard-check me-2"></i>Órdenes de trabajo
             </a>
-            {% endif %}
 
-            {% if current_user.has_permission("ot") %}
             <a href="{{ url_for('waste.list_waste_acts') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('waste.') %}active{% endif %}">
                 <i class="bi bi-trash3 me-2"></i>Actas de desecho
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("reportes") or current_user.has_permission("reportes_kardex") or current_user.has_permission("reportes_entradas_salidas") %}
+            {% if can_use_permissions and (current_user.has_permission("reportes") or current_user.has_permission("reportes_kardex") or current_user.has_permission("reportes_entradas_salidas")) %}
             <a href="{{ url_for('reports.reports_home') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('reports.') %}active{% endif %}">
                 <i class="bi bi-bar-chart-line me-2"></i>Reportes
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("compras_total") or current_user.has_permission("compras_solicitudes") or current_user.has_permission("cotizaciones") %}
+            {% if can_use_permissions and (current_user.has_permission("compras_total") or current_user.has_permission("compras_solicitudes") or current_user.has_permission("cotizaciones")) %}
             <a href="{{ url_for('purchases.home') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('purchases.') %}active{% endif %}">
                 <i class="bi bi-cart3 me-2"></i>Compras
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("inventario") %}
+            {% if can_use_permissions and current_user.has_permission("inventario") %}
             <a href="{{ url_for('transfers.index') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('transfers.') %}active{% endif %}">
                 <i class="bi bi-arrow-left-right me-2"></i>Traslados
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("inventario_fisico") %}
+            {% if can_use_permissions and current_user.has_permission("inventario_fisico") %}
             <a href="{{ url_for('physical_inventory.index') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('physical_inventory.') %}active{% endif %}">
                 <i class="bi bi-list-check me-2"></i>Inventario físico
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("auditoria") %}
+            {% if can_use_permissions and current_user.has_permission("auditoria") %}
             <a href="{{ url_for('audit.index') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('audit.') %}active{% endif %}">
                 <i class="bi bi-shield-check me-2"></i>Auditoría
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("estadisticas") %}
+            {% if can_use_permissions and current_user.has_permission("estadisticas") %}
             <a href="{{ url_for('stats.index') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('stats.') %}active{% endif %}">
                 <i class="bi bi-graph-up me-2"></i>Estadísticas de Mecánicos
@@ -126,51 +126,53 @@
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("usuarios") %}
+            {% if can_use_permissions and current_user.has_permission("usuarios") %}
             <a href="{{ url_for('users.index') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('users.') %}active{% endif %}">
                 <i class="bi bi-people me-2"></i>Usuarios
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("carga_masiva") %}
+            {% if can_use_permissions and current_user.has_permission("carga_masiva") %}
             <a href="{{ url_for('bulk.bulk_home') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('bulk.') %}active{% endif %}">
                 <i class="bi bi-upload me-2"></i>Carga masiva
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("mecanicos")
-                  or current_user.has_permission("tipos_reparacion")
-                  or current_user.has_permission("equipos")
-                  or current_user.has_permission("proveedores") %}
+            {% if can_use_permissions and (
+                current_user.has_permission("mecanicos") or
+                current_user.has_permission("tipos_reparacion") or
+                current_user.has_permission("equipos") or
+                current_user.has_permission("proveedores")
+            ) %}
             <div class="mt-2 px-3 small text-uppercase text-secondary fw-semibold">
                 Gestiones
             </div>
             {% endif %}
 
-            {% if current_user.has_permission("mecanicos") %}
+            {% if can_use_permissions and current_user.has_permission("mecanicos") %}
             <a href="{{ url_for('mechanics.index') }}"
                class="nav-link sidebar-link ps-4 {% if request.endpoint and request.endpoint.startswith('mechanics.') %}active{% endif %}">
                 <i class="bi bi-person-badge me-2"></i>Mecánicos
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("tipos_reparacion") %}
+            {% if can_use_permissions and current_user.has_permission("tipos_reparacion") %}
             <a href="{{ url_for('repair_types.index') }}"
                class="nav-link sidebar-link ps-4 {% if request.endpoint and request.endpoint.startswith('repair_types.') %}active{% endif %}">
                 <i class="bi bi-tools me-2"></i>Tipos de reparación
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("equipos") %}
+            {% if can_use_permissions and current_user.has_permission("equipos") %}
             <a href="{{ url_for('equipment.index') }}"
                class="nav-link sidebar-link ps-4 {% if request.endpoint and request.endpoint.startswith('equipment.') %}active{% endif %}">
                 <i class="bi bi-truck me-2"></i>Equipos
             </a>
             {% endif %}
 
-            {% if current_user.has_permission("proveedores") %}
+            {% if can_use_permissions and current_user.has_permission("proveedores") %}
             <a href="{{ url_for('suppliers.index') }}"
                class="nav-link sidebar-link ps-4 {% if request.endpoint and request.endpoint.startswith('suppliers.') %}active{% endif %}">
                 <i class="bi bi-building me-2"></i>Proveedores
