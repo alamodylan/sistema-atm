@@ -384,7 +384,6 @@ def import_articles(rows: list[dict]) -> dict:
     updated = 0
     skipped = 0
 
-    # CACHE para evitar consultas por cada fila
     units_map = {u.code: u for u in Unit.query.all()}
     categories_map = {c.code: c for c in ItemCategory.query.all()}
 
@@ -420,18 +419,11 @@ def import_articles(rows: list[dict]) -> dict:
                 skipped += 1
                 continue
 
-            # =========================================================
-            # UNIDAD
-            # =========================================================
             unit = units_map.get(unit_code)
             if not unit:
                 skipped += 1
                 continue
 
-            # =========================================================
-            # CATEGORÍA / FAMILIA
-            # Si no existe, se crea automáticamente.
-            # =========================================================
             category = None
 
             if category_code or category_name:
@@ -448,13 +440,8 @@ def import_articles(rows: list[dict]) -> dict:
                     )
                     db.session.add(category)
                     db.session.flush()
-
                     categories_map[category_code] = category
 
-            # =========================================================
-            # SUBCATEGORÍA / SUBFAMILIA
-            # Si no existe dentro de la categoría, se crea automáticamente.
-            # =========================================================
             subcategory = None
 
             if subcategory_name and category:
@@ -468,21 +455,15 @@ def import_articles(rows: list[dict]) -> dict:
                     )
                     db.session.add(subcategory)
                     db.session.flush()
-
                     subcategories_map[key] = subcategory
 
-            # =========================================================
-            # VALIDACIÓN BARCODE ÚNICO
-            # =========================================================
             if barcode:
                 barcode_owner = barcodes_map.get(barcode)
                 if barcode_owner and barcode_owner.code != code:
                     skipped += 1
+                    db.session.rollback()
                     continue
 
-            # =========================================================
-            # CREAR / ACTUALIZAR ARTÍCULO
-            # =========================================================
             article = articles_map.get(code)
 
             if article:
@@ -497,6 +478,8 @@ def import_articles(rows: list[dict]) -> dict:
                 article.is_active = is_active
 
                 db.session.flush()
+                db.session.commit()
+
                 updated += 1
 
             else:
@@ -515,6 +498,7 @@ def import_articles(rows: list[dict]) -> dict:
 
                 db.session.add(article)
                 db.session.flush()
+                db.session.commit()
 
                 articles_map[code] = article
                 created += 1
@@ -534,8 +518,6 @@ def import_articles(rows: list[dict]) -> dict:
 
             skipped += 1
             continue
-
-    db.session.commit()
 
     return {"created": created, "updated": updated, "skipped": skipped}
 
