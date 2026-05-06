@@ -43,9 +43,9 @@
                             <tr>
                                 <td>{{ item.code }}</td>
                                 <td>{{ item.name }}</td>
-                                <td class="text-end">{{ "%.2f"|format(item.quantity_on_hand or 0) }}</td>
-                                <td class="text-end">{{ "%.2f"|format(item.last_unit_cost or 0) }}</td>
-                                <td class="text-end">{{ "%.2f"|format(item.avg_unit_cost or 0) }}</td>
+                                <td class="text-end">{{ (item.quantity_on_hand or 0)|round(2) }}</td>
+                                <td class="text-end">{{ (item.last_unit_cost or 0)|round(2) }}</td>
+                                <td class="text-end">{{ (item.avg_unit_cost or 0)|round(2) }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
