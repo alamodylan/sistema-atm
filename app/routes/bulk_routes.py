@@ -395,7 +395,12 @@ def upload_equipment():
 @login_required
 def download_warehouse_stock_template():
     return _send_template(
-        ["codigo_bodega*", "codigo_articulo*", "cantidad*"],
+        [
+            "codigo_bodega*",
+            "codigo_articulo*",
+            "cantidad*",
+            "ultimo_costo",
+        ],
         "plantilla_stock_bodega.xlsx",
     )
 
@@ -415,7 +420,14 @@ def upload_warehouse_stock():
 
     try:
         df = _read_excel(file)
-        _validate_required_columns(df, {"codigo_bodega", "codigo_articulo", "cantidad"})
+        _validate_required_columns(
+            df,
+            {
+                "codigo_bodega",
+                "codigo_articulo",
+                "cantidad",
+            },
+        )
         result = import_warehouse_stock(
             df.to_dict(orient="records"),
             site_id=int(active_site_id),

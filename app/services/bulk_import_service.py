@@ -684,6 +684,15 @@ def import_warehouse_stock(
             article_code = _clean(row.get("codigo_articulo"))
             final_quantity = _parse_decimal(row.get("cantidad"), "cantidad")
 
+            last_unit_cost_raw = _clean(row.get("ultimo_costo"))
+            last_unit_cost = None
+
+            if last_unit_cost_raw:
+                last_unit_cost = _parse_decimal(
+                    last_unit_cost_raw,
+                    "ultimo_costo",
+                )
+
             if not warehouse_code or not article_code:
                 skipped += 1
                 continue
@@ -712,10 +721,18 @@ def import_warehouse_stock(
                     article_id=article.id,
                     reserved_quantity=Decimal("0"),
                 )
+
                 _set_quantity_on_hand(stock, Decimal("0"))
+
+                if hasattr(stock, "last_unit_cost"):
+                    stock.last_unit_cost = last_unit_cost
+
                 db.session.add(stock)
                 db.session.flush()
                 created += 1
+
+            if last_unit_cost is not None and hasattr(stock, "last_unit_cost"):
+                stock.last_unit_cost = last_unit_cost
 
             current_quantity = _get_quantity_on_hand(stock)
             if current_quantity != final_quantity:
