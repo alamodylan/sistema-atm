@@ -34,6 +34,7 @@ from app.services.transfer_service import (
     send_transfer_request_to_warehouse,
     update_transfer_request_line_quantity,
 )
+from app.utils.permissions import permission_required
 
 transfer_bp = Blueprint(
     "transfers",
@@ -128,6 +129,7 @@ def _redirect_after_request_action(transfer_request_id: int):
 
 @transfer_bp.route("/", methods=["GET"])
 @login_required
+@permission_required("traslados")
 def index():
     active_site_id = _get_active_site_id()
 

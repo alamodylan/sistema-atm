@@ -93,7 +93,7 @@
             </a>
             {% endif %}
 
-            {% if can_use_permissions and current_user.has_permission("inventario") %}
+            {% if can_use_permissions and current_user.has_permission("traslados") %}
             <a href="{{ url_for('transfers.index') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('transfers.') %}active{% endif %}">
                 <i class="bi bi-arrow-left-right me-2"></i>Traslados
