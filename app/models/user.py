@@ -158,11 +158,7 @@ class User(UserMixin, db.Model):
         for role_permission in self.role.role_permissions:
             permission = role_permission.permission
 
-            if (
-                permission
-                and permission.is_active
-                and permission.code == permission_code
-            ):
+            if permission and permission.code == permission_code:
                 return True
 
         return False
