@@ -135,24 +135,26 @@ def create():
     db.session.add(inventory)
     db.session.flush()
 
+    lines_to_insert = []
+
     for stock in stock_items:
         quantity_on_hand = getattr(stock, "quantity_on_hand", None)
 
         if quantity_on_hand is None:
             quantity_on_hand = getattr(stock, "quantity", Decimal("0"))
 
-        line = PhysicalInventoryLine(
-            physical_inventory_id=inventory.id,
-            article_id=stock.article_id,
-            system_quantity=quantity_on_hand or Decimal("0"),
-            physical_quantity=None,
-            difference_quantity=None,
+        lines_to_insert.append(
+            PhysicalInventoryLine(
+                physical_inventory_id=inventory.id,
+                article_id=stock.article_id,
+                system_quantity=quantity_on_hand or Decimal("0"),
+                physical_quantity=None,
+                difference_quantity=None,
+            )
         )
 
-        db.session.add(line)
-
+    db.session.bulk_save_objects(lines_to_insert)
     db.session.commit()
-
     flash("Inventario físico creado correctamente.", "success")
     return redirect(url_for("physical_inventory.detail", inventory_id=inventory.id))
 
