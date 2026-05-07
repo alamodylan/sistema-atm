@@ -6,6 +6,7 @@ import pandas as pd
 from flask import Blueprint, flash, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user, login_required
 from app.utils.permissions import permission_required
+from app.services.bulk_import_service import import_article_categories
 
 from app.services.bulk_import_service import (
     BulkImportError,
@@ -547,5 +548,46 @@ def upload_article_suppliers():
 
     except Exception as exc:
         flash(f"Error al procesar la carga: {exc}", "danger")
+
+    return redirect(url_for("bulk.bulk_home"))
+
+@bulk_bp.route("/articles/categories-template", methods=["GET"])
+@login_required
+def download_article_categories_template():
+    return _send_template(
+        [
+            "codigo*",
+            "codigo_categoria",
+            "nombre_categoria",
+            "nombre_subcategoria",
+        ],
+        "plantilla_categorias_articulos.xlsx",
+    )
+
+
+@bulk_bp.route("/articles/categories-upload", methods=["POST"])
+@login_required
+def upload_article_categories():
+    file = request.files.get("file")
+    if not file or not file.filename:
+        flash("Debe seleccionar un archivo Excel.", "danger")
+        return redirect(url_for("bulk.bulk_home"))
+
+    try:
+        df = _read_excel(file)
+        _validate_required_columns(df, {"codigo"})
+
+        result = import_article_categories(df.to_dict(orient="records"))
+
+        flash(
+            f"Categorías de artículos actualizadas. "
+            f"Actualizados: {result['updated']}. "
+            f"No encontrados: {result['not_found']}. "
+            f"Omitidos: {result['skipped']}.",
+            "success",
+        )
+
+    except Exception as exc:
+        flash(f"Error al procesar categorías de artículos: {exc}", "danger")
 
     return redirect(url_for("bulk.bulk_home"))

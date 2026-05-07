@@ -270,6 +270,82 @@
             </div>
         </div>
     </div>
+        <!-- ACTUALIZAR CATEGORÍAS DE ARTÍCULOS -->
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-4 d-flex flex-column">
+
+                <div class="d-flex align-items-center mb-3">
+                    <div class="rounded-circle bg-warning bg-opacity-10 text-warning d-flex align-items-center justify-content-center me-3"
+                         style="width: 48px; height: 48px;">
+                        <i class="bi bi-diagram-2 fs-5"></i>
+                    </div>
+
+                    <div>
+                        <h5 class="mb-1 fw-bold">
+                            Actualizar categorías de artículos
+                        </h5>
+
+                        <p class="text-muted mb-0 small">
+                            Asigna categorías y subcategorías a artículos ya existentes
+                            de forma rápida.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="small text-muted mb-2">
+                    Columnas esperadas
+                </div>
+
+                <div class="small mb-3">
+                    <span class="badge text-bg-light border">codigo*</span>
+                    <span class="badge text-bg-light border">codigo_categoria</span>
+                    <span class="badge text-bg-light border">nombre_categoria</span>
+                    <span class="badge text-bg-light border">nombre_subcategoria</span>
+                </div>
+
+                <div class="alert alert-light border small">
+                    Esta carga NO crea artículos nuevos.<br>
+                    Solo actualiza la categoría y subcategoría de artículos ya existentes.<br>
+                    Mucho más rápida para cargas masivas grandes.
+                </div>
+
+                <div class="mt-auto">
+
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a href="{{ url_for('bulk.download_article_categories_template') }}"
+                           class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-download me-1"></i>
+                            Descargar plantilla
+                        </a>
+                    </div>
+
+                    <form method="POST"
+                          action="{{ url_for('bulk.upload_article_categories') }}"
+                          enctype="multipart/form-data"
+                          class="row g-2">
+
+                        <div class="col-12 col-md-8">
+                            <input type="file"
+                                   name="file"
+                                   class="form-control"
+                                   accept=".xlsx"
+                                   required>
+                        </div>
+
+                        <div class="col-12 col-md-4 d-grid">
+                            <button type="submit" class="btn btn-warning">
+                                <i class="bi bi-upload me-1"></i>
+                                Actualizar
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
+
+            </div>
+        </div>
+    </div>
 
     <!-- PROVEEDORES -->
     <div class="col-12 col-lg-6">

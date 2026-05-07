@@ -1264,3 +1264,146 @@ def import_article_suppliers(rows: list[dict]):
         "articles_created": articles_created,
         "suppliers_created": suppliers_created,
     }
+
+# =========================================================
+# ARTÍCULOS - ACTUALIZAR SOLO CATEGORÍA / SUBCATEGORÍA
+# =========================================================
+def import_article_categories(rows: list[dict]) -> dict:
+    updated = 0
+    skipped = 0
+    not_found = 0
+
+    normalized_rows = []
+
+    for row in rows:
+        code = _clean(row.get("codigo"))
+        category_code = _clean(row.get("codigo_categoria"))
+        category_name = _clean(row.get("nombre_categoria"))
+        subcategory_name = _clean(row.get("nombre_subcategoria"))
+
+        if not code:
+            skipped += 1
+            continue
+
+        if category_name and not category_code:
+            category_code = category_name.strip().upper().replace(" ", "_")[:50]
+
+        if not category_code and not category_name and not subcategory_name:
+            skipped += 1
+            continue
+
+        normalized_rows.append({
+            "code": code,
+            "category_code": category_code,
+            "category_name": category_name,
+            "subcategory_name": subcategory_name,
+        })
+
+    if not normalized_rows:
+        return {
+            "updated": updated,
+            "skipped": skipped,
+            "not_found": not_found,
+        }
+
+    article_codes = {r["code"] for r in normalized_rows}
+
+    articles_map = {
+        a.code: a
+        for a in Article.query.filter(Article.code.in_(article_codes)).all()
+    }
+
+    categories_map = {
+        c.code: c
+        for c in ItemCategory.query.all()
+    }
+
+    # Crear categorías faltantes
+    missing_categories = {}
+
+    for row in normalized_rows:
+        category_code = row["category_code"]
+        category_name = row["category_name"]
+
+        if category_code and category_code not in categories_map:
+            missing_categories[category_code] = ItemCategory(
+                code=category_code,
+                name=category_name or category_code,
+                description=None,
+            )
+
+    if missing_categories:
+        db.session.add_all(missing_categories.values())
+        db.session.flush()
+
+        for category in missing_categories.values():
+            categories_map[category.code] = category
+
+    subcategories_map = {
+        (sc.category_id, sc.name.strip().lower()): sc
+        for sc in ItemSubcategory.query.all()
+    }
+
+    # Crear subcategorías faltantes
+    missing_subcategories = {}
+
+    for row in normalized_rows:
+        category_code = row["category_code"]
+        subcategory_name = row["subcategory_name"]
+
+        if not category_code or not subcategory_name:
+            continue
+
+        category = categories_map.get(category_code)
+
+        if not category:
+            continue
+
+        key = (category.id, subcategory_name.strip().lower())
+
+        if key not in subcategories_map and key not in missing_subcategories:
+            missing_subcategories[key] = ItemSubcategory(
+                category_id=category.id,
+                name=subcategory_name,
+            )
+
+    if missing_subcategories:
+        db.session.add_all(missing_subcategories.values())
+        db.session.flush()
+
+        for key, subcategory in missing_subcategories.items():
+            subcategories_map[key] = subcategory
+
+    # Actualizar solo artículos existentes
+    for row in normalized_rows:
+        article = articles_map.get(row["code"])
+
+        if not article:
+            not_found += 1
+            continue
+
+        category = None
+        subcategory = None
+
+        if row["category_code"]:
+            category = categories_map.get(row["category_code"])
+
+        if category and row["subcategory_name"]:
+            key = (
+                category.id,
+                row["subcategory_name"].strip().lower(),
+            )
+            subcategory = subcategories_map.get(key)
+
+        article.category_id = category.id if category else None
+        article.subcategory_id = subcategory.id if subcategory else None
+
+        updated += 1
+
+    db.session.commit()
+
+    return {
+        "updated": updated,
+        "skipped": skipped,
+        "not_found": not_found,
+    }
