@@ -13,6 +13,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from app.models.purchase_order_approval import PurchaseOrderApproval
 from app.models.quotation_line import QuotationLine
+from app.models.inventory import WarehouseStock
 
 from flask import (
     Blueprint,
@@ -301,6 +302,58 @@ def create_request():
         search=search,
     )
 
+@purchases_bp.route("/requests/articles/search")
+@login_required
+def search_request_articles():
+    term = (request.args.get("q") or "").strip()
+    warehouse_id = _to_int(request.args.get("warehouse_id"))
+
+    if not warehouse_id:
+        return {"items": []}
+
+    if len(term) < 1:
+        return {"items": []}
+
+    search_like = f"%{term}%"
+
+    rows = (
+        db.session.query(Article, WarehouseStock)
+        .outerjoin(
+            WarehouseStock,
+            db.and_(
+                WarehouseStock.article_id == Article.id,
+                WarehouseStock.warehouse_id == warehouse_id,
+            )
+        )
+        .filter(
+            Article.is_active.is_(True),
+            db.or_(
+                Article.code.ilike(search_like),
+                Article.name.ilike(search_like),
+            )
+        )
+        .order_by(Article.code.asc())
+        .limit(30)
+        .all()
+    )
+
+    items = []
+
+    for article, stock in rows:
+        quantity_on_hand = Decimal(str(stock.quantity_on_hand or 0)) if stock else Decimal("0")
+        available_quantity = Decimal(str(stock.available_quantity or 0)) if stock else Decimal("0")
+
+        items.append({
+            "id": article.id,
+            "code": article.code,
+            "name": article.name,
+            "unit_id": article.unit_id,
+            "unit_name": article.unit.name if article.unit else "",
+            "quantity_on_hand": str(quantity_on_hand),
+            "available_quantity": str(available_quantity),
+        })
+
+    return {"items": items}
 
 @purchases_bp.route("/requests/<int:request_id>")
 @login_required
