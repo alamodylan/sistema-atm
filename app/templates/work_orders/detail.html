@@ -251,10 +251,21 @@
                                             </div>
                                             {% endif %}
 
+                                            {% set is_tool_line = line.article and (line.article.code|int >= 19000 and line.article.code|int <= 19999) %}
+
                                             {% if req.sent_to_warehouse_at and req.request_status in ["ENVIADA", "ATENDIDA"] and line.line_status in ["SOLICITADA", "ATENDIDA_PARCIAL"] and line.warehouse_action_enabled is defined and line.warehouse_action_enabled %}
                                             <div class="border rounded-3 p-2 bg-light-subtle">
-                                                <div class="small fw-semibold mb-2">Bodega</div>
-                                                <form method="POST" action="{{ url_for('work_order_requests.attend_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2 align-items-center">
+
+                                                <div class="small fw-semibold mb-2">
+                                                    Bodega
+                                                </div>
+
+                                                {% if is_tool_line %}
+
+                                                <form method="POST"
+                                                    action="{{ url_for('work_order_requests.mark_request_line_loaned_action', line_id=line.id) }}"
+                                                    class="d-flex flex-wrap gap-2 align-items-center">
+
                                                     <input
                                                         name="quantity"
                                                         class="form-control form-control-sm"
@@ -265,8 +276,38 @@
                                                         value="{{ line.suggested_attend_quantity if line.suggested_attend_quantity is defined else line.quantity_requested }}"
                                                         style="width: 110px;"
                                                     >
-                                                    <button class="btn btn-sm btn-outline-primary">Preparar</button>
+
+                                                    <button class="btn btn-sm btn-outline-warning">
+                                                        Prestar herramienta
+                                                    </button>
+
                                                 </form>
+
+                                                {% else %}
+
+                                                <form method="POST"
+                                                    action="{{ url_for('work_order_requests.attend_request_line_action', line_id=line.id) }}"
+                                                    class="d-flex flex-wrap gap-2 align-items-center">
+
+                                                    <input
+                                                        name="quantity"
+                                                        class="form-control form-control-sm"
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0.01"
+                                                        max="{{ line.stock_available if line.stock_available is defined else '' }}"
+                                                        value="{{ line.suggested_attend_quantity if line.suggested_attend_quantity is defined else line.quantity_requested }}"
+                                                        style="width: 110px;"
+                                                    >
+
+                                                    <button class="btn btn-sm btn-outline-primary">
+                                                        Preparar
+                                                    </button>
+
+                                                </form>
+
+                                                {% endif %}
+
                                             </div>
                                             {% endif %}
 
