@@ -155,7 +155,9 @@ def download_categories_template():
             "codigo*",
             "nombre*",
             "descripcion",
+            "codigo_subcategoria",
             "subcategoria",
+            "descripcion_subcategoria",
         ],
         "plantilla_categorias.xlsx",
     )
@@ -173,11 +175,18 @@ def upload_categories():
         df = _read_excel(file)
         _validate_required_columns(df, {"codigo", "nombre"})
         result = import_categories(df.to_dict(orient="records"))
+
         flash(
-            f"Categorías cargadas. Creadas: {result['created']}. "
-            f"Actualizadas: {result['updated']}. Omitidas: {result['skipped']}.",
+            f"Categorías cargadas. "
+            f"Creadas: {result['created']}. "
+            f"Actualizadas: {result['updated']}. "
+            f"Subcategorías creadas: {result.get('subcategories_created', 0)}. "
+            f"Subcategorías actualizadas: {result.get('subcategories_updated', 0)}. "
+            f"Subcategorías existentes: {result.get('subcategories_existing', 0)}. "
+            f"Omitidas: {result['skipped']}.",
             "success",
         )
+
     except Exception as exc:
         flash(f"Error al procesar la carga de categorías: {exc}", "danger")
 
