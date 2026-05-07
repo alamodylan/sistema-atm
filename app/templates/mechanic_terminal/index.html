@@ -798,19 +798,90 @@ function renderItemRows(items) {
 
     document.getElementById("noItemsMessage").classList.add("d-none");
 
+    const isBorrowedToolsScreen =
+        document.getElementById("itemsTitle").innerText === "Devolver herramienta";
+
     items.forEach(function (item) {
         const row = document.createElement("div");
         row.className = "border rounded-3 p-2 mb-2 d-flex justify-content-between align-items-center bg-white";
 
-        row.innerHTML =
-            '<div>' + item.code + ' - ' + item.name + '</div>' +
-            '<button type="button" class="btn btn-sm btn-success rounded-3">Agregar</button>';
+        if (isBorrowedToolsScreen) {
+            let badge = "";
 
-        row.querySelector("button").onclick = function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            openQuantityForItem(item);
-        };
+            if (item.loan_status === "PRESTADA") {
+                badge = '<span class="badge text-bg-warning text-dark">PRESTADA</span>';
+            } else if (item.loan_status === "DEVOLUCION_SOLICITADA") {
+                badge = '<span class="badge text-bg-primary">PENDIENTE RECEPCIÓN</span>';
+            } else {
+                badge = '<span class="badge text-bg-secondary">' + (item.loan_status || "SIN ESTADO") + '</span>';
+            }
+
+            let buttonHtml = "";
+
+            if (item.loan_status === "PRESTADA") {
+                buttonHtml =
+                    '<button type="button" class="btn btn-sm btn-success rounded-3">Solicitar devolución</button>';
+            }
+
+            row.innerHTML =
+                '<div>' +
+                    '<div>' + item.code + ' - ' + item.name + '</div>' +
+                    '<div class="small text-muted">Cantidad: ' + item.quantity + '</div>' +
+                    '<div class="mt-1">' + badge + '</div>' +
+                '</div>' +
+                buttonHtml;
+
+            const btn = row.querySelector("button");
+
+            if (btn) {
+                btn.onclick = async function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    if (!currentMechanic || !currentMechanic.mechanic_id) {
+                        alert("No hay mecánico escaneado.");
+                        return;
+                    }
+
+                    const res = await fetch(
+                        "/terminal/tools/" + item.tool_loan_id + "/request-return",
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                mechanic_id: currentMechanic.mechanic_id
+                            })
+                        }
+                    );
+
+                    const data = await res.json();
+
+                    if (data.ok) {
+                        scanStatus.innerText = data.message || "Devolución solicitada.";
+
+                        loadItems(
+                            "/terminal/borrowed-tools/" + selectedWorkOrder.id,
+                            "Devolver herramienta"
+                        );
+                    } else {
+                        alert(data.error || "Error al solicitar devolución.");
+                    }
+                };
+            }
+
+        } else {
+            row.innerHTML =
+                '<div>' + item.code + ' - ' + item.name + '</div>' +
+                '<button type="button" class="btn btn-sm btn-success rounded-3">Agregar</button>';
+
+            row.querySelector("button").onclick = function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openQuantityForItem(item);
+            };
+        }
 
         container.appendChild(row);
     });

@@ -9,6 +9,7 @@ from app.models.work_order_line import WorkOrderLine
 from app.models.work_order_request import WorkOrderRequest
 from app.models.work_order_request_line import WorkOrderRequestLine
 from app.services.audit_service import log_action
+from app.models.tool_loan import ToolLoan
 from app.services.inventory_service import (
     InventoryServiceError,
     get_warehouse_stock_record,
@@ -48,6 +49,12 @@ def _sync_request_status(request_obj: WorkOrderRequest) -> None:
     if request_obj.request_status == "CANCELADA":
         request_obj.request_status = "ENVIADA"
 
+def _is_tool_article_code(code: str) -> bool:
+    try:
+        number = int(str(code).strip())
+        return 19000 <= number <= 19999
+    except Exception:
+        return False
 
 def create_request(
     *,
@@ -590,6 +597,7 @@ def mark_request_line_loaned(
         raise WorkOrderRequestServiceError("La línea no existe.")
 
     request_obj = line.work_order_request
+
     if request_obj.request_status != "ENVIADA":
         raise WorkOrderRequestServiceError("Solo se pueden prestar líneas de solicitudes enviadas.")
 
@@ -599,6 +607,14 @@ def mark_request_line_loaned(
     if line.manager_review_status != "APROBADA":
         raise WorkOrderRequestServiceError("La línea no fue aprobada por jefatura.")
 
+    if not line.article:
+        raise WorkOrderRequestServiceError("La línea no tiene artículo asociado.")
+
+    if not _is_tool_article_code(line.article.code):
+        raise WorkOrderRequestServiceError(
+            "Solo los artículos con código entre 19000 y 19999 pueden prestarse como herramienta."
+        )
+
     qty = _to_decimal(quantity)
     remaining = line.quantity_requested - line.quantity_attended
 
@@ -606,14 +622,40 @@ def mark_request_line_loaned(
         raise WorkOrderRequestServiceError("No puede prestar más de lo solicitado.")
 
     work_order = request_obj.work_order
-    stock_record = get_warehouse_stock_record(line.article_id, work_order.warehouse_id)
+
+    stock_record = get_warehouse_stock_record(
+        line.article_id,
+        work_order.warehouse_id,
+    )
 
     if not stock_record:
-        raise WorkOrderRequestServiceError("No hay stock registrado para este artículo en la bodega de la OT.")
+        raise WorkOrderRequestServiceError(
+            "No hay stock registrado para esta herramienta en la bodega de la OT."
+        )
 
     available = Decimal(str(stock_record.available_quantity or 0))
+
     if qty > available:
-        raise WorkOrderRequestServiceError("No hay suficiente stock disponible para esa cantidad.")
+        raise WorkOrderRequestServiceError(
+            f"No hay suficiente stock disponible para prestar esta herramienta. Disponible: {available}."
+        )
+
+    try:
+        subtract_stock(
+            article_id=line.article_id,
+            warehouse_id=work_order.warehouse_id,
+            quantity=qty,
+            performed_by_user_id=performed_by_user_id,
+            movement_type="PRESTAMO_HERRAMIENTA",
+            reason=f"Préstamo de herramienta OT {work_order.number}",
+            reference_type="TOOL_LOAN",
+            reference_id=line.id,
+            reference_number=work_order.number,
+            commit=False,
+        )
+
+    except InventoryServiceError as exc:
+        raise WorkOrderRequestServiceError(str(exc)) from exc
 
     line.quantity_attended += qty
 
@@ -622,20 +664,41 @@ def mark_request_line_loaned(
     else:
         line.line_status = "ATENDIDA_PARCIAL"
 
-    _sync_request_status(request_obj)
+    tool_loan = ToolLoan(
+        work_order_id=work_order.id,
+        request_line_id=line.id,
+        article_id=line.article_id,
+        warehouse_id=work_order.warehouse_id,
+        requested_by_user_id=request_obj.requested_by_user_id,
+        delivered_by_user_id=performed_by_user_id,
+        quantity=qty,
+        loan_status="PRESTADA",
+        notes=line.notes,
+    )
+
+    db.session.add(tool_loan)
     db.session.flush()
+
+    _sync_request_status(request_obj)
 
     log_action(
         user_id=performed_by_user_id,
         action="MARK_REQUEST_LINE_LOANED",
-        table_name="work_order_request_lines",
-        record_id=str(line.id),
+        table_name="tool_loans",
+        record_id=str(tool_loan.id),
         details={
-            "loaned": str(qty),
+            "work_order_id": work_order.id,
+            "work_order_number": work_order.number,
+            "request_id": request_obj.id,
+            "request_line_id": line.id,
+            "article_id": line.article_id,
+            "article_code": line.article.code,
+            "quantity_loaned": str(qty),
             "total_attended": str(line.quantity_attended),
             "line_status": line.line_status,
+            "loan_status": tool_loan.loan_status,
             "warehouse_id": work_order.warehouse_id,
-            "available_quantity": str(available),
+            "available_quantity_before": str(available),
         },
         commit=False,
     )
@@ -657,8 +720,18 @@ def confirm_request_line_to_work_order(
     if not line:
         raise WorkOrderRequestServiceError("La línea no existe.")
 
-    if line.line_status not in ("ENTREGADA", "PRESTADA"):
-        raise WorkOrderRequestServiceError("La línea aún no está lista para confirmarse en la OT.")
+    if line.line_status != "ENTREGADA":
+        raise WorkOrderRequestServiceError(
+            "Solo las líneas entregadas de artículos normales pueden confirmarse en la OT."
+        )
+
+    if not line.article:
+        raise WorkOrderRequestServiceError("La línea no tiene artículo asociado.")
+
+    if _is_tool_article_code(line.article.code):
+        raise WorkOrderRequestServiceError(
+            "Las herramientas no generan líneas de consumo en la OT. Deben manejarse como préstamo."
+        )
 
     request_obj = line.work_order_request
     work_order = request_obj.work_order
@@ -668,10 +741,12 @@ def confirm_request_line_to_work_order(
         .filter_by(request_line_id=line.id)
         .first()
     )
+
     if existing_line:
         raise WorkOrderRequestServiceError("Esta línea ya fue confirmada en la OT.")
 
     qty = Decimal(str(line.quantity_attended or 0))
+
     if qty <= 0:
         raise WorkOrderRequestServiceError("La línea no tiene cantidad atendida para confirmar.")
 
@@ -688,6 +763,7 @@ def confirm_request_line_to_work_order(
             reference_number=work_order.number,
             commit=False,
         )
+
     except InventoryServiceError as exc:
         raise WorkOrderRequestServiceError(str(exc)) from exc
 
@@ -715,6 +791,7 @@ def confirm_request_line_to_work_order(
             "work_order_id": work_order.id,
             "request_line_id": line.id,
             "article_id": line.article_id,
+            "article_code": line.article.code,
             "quantity": str(qty),
             "delivered_by_user_id": delivered_by_user_id,
             "received_by_user_id": received_by_user_id,

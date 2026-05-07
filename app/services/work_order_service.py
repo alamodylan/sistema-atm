@@ -223,21 +223,36 @@ def finalize_work_order(
 ) -> WorkOrder:
 
     work_order = WorkOrder.query.get(work_order_id)
+
     if not work_order:
         raise WorkOrderServiceError("La OT no existe.")
 
     if work_order.status != "EN_PROCESO":
-        raise WorkOrderServiceError("Solo se puede finalizar una OT en proceso.")
-
-    has_open_loans = ToolLoan.query.filter_by(
-        work_order_id=work_order_id,
-        loan_status="PRESTADA",
-    ).count() > 0
-
-    if has_open_loans:
         raise WorkOrderServiceError(
-            "No se puede finalizar la OT porque tiene herramientas prestadas."
+            "Solo se puede finalizar una OT en proceso."
         )
+
+    # =====================================================
+    # VALIDAR HERRAMIENTAS PENDIENTES
+    # =====================================================
+
+    pending_tool_loans = (
+        ToolLoan.query
+        .filter(
+            ToolLoan.work_order_id == work_order_id,
+            ToolLoan.loan_status != "DEVUELTA",
+        )
+        .count()
+    )
+
+    if pending_tool_loans > 0:
+        raise WorkOrderServiceError(
+            "No se puede finalizar la OT porque tiene herramientas pendientes de devolución."
+        )
+
+    # =====================================================
+    # VALIDAR TRABAJOS PENDIENTES
+    # =====================================================
 
     pending_tasks = [
         task_line
@@ -261,7 +276,10 @@ def finalize_work_order(
         action="FINALIZE_WORK_ORDER",
         table_name="work_orders",
         record_id=str(work_order.id),
-        details={"status": work_order.status},
+        details={
+            "status": work_order.status,
+            "pending_tool_loans": pending_tool_loans,
+        },
         commit=commit,
     )
 

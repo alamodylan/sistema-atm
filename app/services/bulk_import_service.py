@@ -847,8 +847,13 @@ def import_equipment(rows: list[dict]) -> dict:
     updated = 0
     skipped = 0
 
-    valid_types = {"CHASIS", "CABEZAL", "OTRO"}
+    valid_types = {"CHASIS", "CABEZAL", "OTRO", "MULA"}
 
+    normalized_rows = []
+
+    # =====================================================
+    # NORMALIZAR Y VALIDAR ARCHIVO
+    # =====================================================
     for row in rows:
         try:
             code = _clean(row.get("codigo"))
@@ -866,36 +871,108 @@ def import_equipment(rows: list[dict]) -> dict:
                 skipped += 1
                 continue
 
-            axle_count = int(axle_count_raw) if axle_count_raw else None
+            axle_count = None
 
-            equipment = Equipment.query.filter_by(code=code).first()
+            if axle_count_raw:
+                try:
+                    axle_count = int(float(axle_count_raw))
+                except Exception:
+                    skipped += 1
+                    continue
 
-            if equipment:
-                equipment.equipment_type = equipment_type
-                equipment.description = description
-                equipment.axle_count = axle_count
-                equipment.size_label = size_label
-                equipment.is_active = is_active
-                updated += 1
-            else:
-                db.session.add(
-                    Equipment(
-                        code=code,
-                        equipment_type=equipment_type,
-                        description=description,
-                        axle_count=axle_count,
-                        size_label=size_label,
-                        is_active=is_active,
-                    )
-                )
-                created += 1
+            normalized_rows.append(
+                {
+                    "code": code,
+                    "equipment_type": equipment_type,
+                    "description": description,
+                    "axle_count": axle_count,
+                    "size_label": size_label,
+                    "is_active": is_active,
+                }
+            )
 
         except Exception:
             skipped += 1
             continue
 
+    if not normalized_rows:
+        return {
+            "created": created,
+            "updated": updated,
+            "skipped": skipped,
+        }
+
+    # =====================================================
+    # EVITAR CÓDIGOS DUPLICADOS DENTRO DEL EXCEL
+    # Si viene repetido, se queda con la última fila.
+    # =====================================================
+    rows_by_code = {}
+
+    for row in normalized_rows:
+        rows_by_code[row["code"]] = row
+
+    normalized_rows = list(rows_by_code.values())
+
+    # =====================================================
+    # CARGAR EQUIPOS EXISTENTES EN UNA SOLA CONSULTA
+    # =====================================================
+    equipment_codes = {row["code"] for row in normalized_rows}
+
+    existing_equipment = (
+        Equipment.query
+        .filter(Equipment.code.in_(equipment_codes))
+        .all()
+    )
+
+    equipment_map = {
+        equipment.code: equipment
+        for equipment in existing_equipment
+    }
+
+    # =====================================================
+    # CREAR / ACTUALIZAR SIN CONSULTAS POR FILA
+    # =====================================================
+    to_create = []
+
+    for row in normalized_rows:
+        equipment = equipment_map.get(row["code"])
+
+        if equipment:
+            equipment.equipment_type = row["equipment_type"]
+            equipment.description = row["description"]
+            equipment.axle_count = row["axle_count"]
+            equipment.size_label = row["size_label"]
+            equipment.is_active = row["is_active"]
+
+            updated += 1
+
+        else:
+            to_create.append(
+                Equipment(
+                    code=row["code"],
+                    equipment_type=row["equipment_type"],
+                    description=row["description"],
+                    axle_count=row["axle_count"],
+                    size_label=row["size_label"],
+                    is_active=row["is_active"],
+                )
+            )
+
+            created += 1
+
+    # =====================================================
+    # INSERTAR NUEVOS EN BLOQUE
+    # =====================================================
+    if to_create:
+        db.session.add_all(to_create)
+
     db.session.commit()
-    return {"created": created, "updated": updated, "skipped": skipped}
+
+    return {
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+    }
 
 
 # =========================================================

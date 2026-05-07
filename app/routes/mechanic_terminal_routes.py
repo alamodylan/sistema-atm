@@ -24,6 +24,12 @@ from app.services.work_order_request_service import (
 
 terminal_bp = Blueprint("mechanic_terminal", __name__, url_prefix="/terminal")
 
+def _is_tool_article_code(code: str) -> bool:
+    try:
+        number = int(str(code).strip())
+        return 19000 <= number <= 19999
+    except Exception:
+        return False
 
 @terminal_bp.route("/")
 @login_required
@@ -111,7 +117,7 @@ def get_articles(warehouse_id):
             }
             for i in items
             if float(i["quantity_on_hand"]) > 0
-            and i["code"] != "19000"
+            and not _is_tool_article_code(i["code"])
         ]
 
         return jsonify({"items": filtered})
@@ -134,7 +140,7 @@ def get_tools(warehouse_id):
             }
             for i in items
             if float(i["quantity_on_hand"]) > 0
-            and i["code"] == "19000"
+            and _is_tool_article_code(i["code"])
         ]
 
         return jsonify({"items": tools})
@@ -161,9 +167,14 @@ def get_borrowed_tools(work_order_id):
 
     loans = (
         ToolLoan.query
-        .filter_by(
-            work_order_id=work_order_id,
-            loan_status="PRESTADA",
+        .filter(
+            ToolLoan.work_order_id == work_order_id,
+            ToolLoan.loan_status.in_(
+                [
+                    "PRESTADA",
+                    "DEVOLUCION_SOLICITADA",
+                ]
+            )
         )
         .all()
     )
@@ -175,6 +186,7 @@ def get_borrowed_tools(work_order_id):
             "code": loan.article.code if loan.article else "",
             "name": loan.article.name if loan.article else "",
             "quantity": str(loan.quantity),
+            "loan_status": loan.loan_status,
             "loaned_at": loan.loaned_at.isoformat() if loan.loaned_at else None,
         }
         for loan in loans
@@ -182,6 +194,62 @@ def get_borrowed_tools(work_order_id):
 
     return jsonify({"items": items})
 
+@terminal_bp.route("/tools/<int:tool_loan_id>/request-return", methods=["POST"])
+@login_required
+def request_tool_return(tool_loan_id):
+    active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return jsonify({"error": "No hay predio activo seleccionado"}), 400
+
+    data = request.get_json(silent=True) or {}
+    mechanic_id = data.get("mechanic_id")
+
+    if not mechanic_id:
+        return jsonify({"error": "Falta el mecánico"}), 400
+
+    mechanic = Mechanic.query.filter_by(
+        id=int(mechanic_id),
+        site_id=active_site_id,
+        is_active=True,
+    ).first()
+
+    if not mechanic:
+        return jsonify({"error": "Mecánico no encontrado"}), 404
+
+    loan = (
+        ToolLoan.query
+        .join(WorkOrder, WorkOrder.id == ToolLoan.work_order_id)
+        .filter(
+            ToolLoan.id == tool_loan_id,
+            WorkOrder.site_id == active_site_id,
+        )
+        .first()
+    )
+
+    if not loan:
+        return jsonify({"error": "Préstamo no encontrado"}), 404
+
+    if loan.loan_status != "PRESTADA":
+        return jsonify({
+            "error": "La herramienta ya fue procesada para devolución."
+        }), 400
+
+    try:
+        loan.loan_status = "DEVOLUCION_SOLICITADA"
+        loan.returned_by_user_id = current_user.id
+        loan.returned_at = datetime.now(UTC)
+
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "message": "Devolución solicitada correctamente."
+        })
+
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 500
 
 @terminal_bp.route("/work-order/<int:work_order_id>/tasks/<int:mechanic_id>")
 @login_required
@@ -582,7 +650,7 @@ def get_articles_tree(warehouse_id):
             if float(i["quantity_on_hand"]) <= 0:
                 continue
 
-            if i["code"] == "19000":
+            if _is_tool_article_code(i["code"]):
                 continue
 
             category = i.get("category_name") or "Sin categoría"

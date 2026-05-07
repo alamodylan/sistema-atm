@@ -469,6 +469,123 @@
         </div>
         {% endif %}
         <!-- ===================== LÍNEAS ===================== -->
+         {% if work_order.tool_loans %}
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body p-4">
+
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold mb-0">
+                        Herramientas prestadas
+                    </h5>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+
+                        <thead class="table-light">
+                            <tr>
+                                <th>Herramienta</th>
+                                <th>Cantidad</th>
+                                <th>Solicitó</th>
+                                <th>Entregó</th>
+                                <th>Solicitó devolución</th>
+                                <th>Recibió devolución</th>
+                                <th>Fecha préstamo</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            {% for loan in work_order.tool_loans %}
+
+                            <tr>
+
+                                <td>
+                                    {% if loan.article %}
+                                        {{ loan.article.code }} - {{ loan.article.name }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ loan.quantity }}
+                                </td>
+
+                                <td>
+                                    {% if loan.requested_by_user %}
+                                        {{ loan.requested_by_user.full_name }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if loan.delivered_by_user %}
+                                        {{ loan.delivered_by_user.full_name }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if loan.returned_by_user %}
+                                        {{ loan.returned_by_user.full_name }}
+                                    {% else %}
+                                        <span class="text-muted">Pendiente</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if loan.received_return_by_user %}
+                                        {{ loan.received_return_by_user.full_name }}
+                                    {% else %}
+                                        <span class="text-muted">Pendiente</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ loan.loaned_at|cr_datetime }}
+                                </td>
+
+                                <td>
+
+                                    {% if loan.loan_status == "PRESTADA" %}
+                                        <span class="badge text-bg-warning text-dark">
+                                            PRESTADA
+                                        </span>
+
+                                    {% elif loan.loan_status == "DEVOLUCION_SOLICITADA" %}
+                                        <span class="badge text-bg-primary">
+                                            PENDIENTE RECEPCIÓN
+                                        </span>
+
+                                    {% elif loan.loan_status == "DEVUELTA" %}
+                                        <span class="badge text-bg-success">
+                                            DEVUELTA
+                                        </span>
+
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">
+                                            {{ loan.loan_status }}
+                                        </span>
+                                    {% endif %}
+
+                                </td>
+
+                            </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+                </div>
+
+            </div>
+        </div>
+        {% endif %}
         <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body p-4">
 
