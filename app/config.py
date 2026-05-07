@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 
 class Config:
@@ -17,3 +18,22 @@ class Config:
 
     # Opcional: mejorar logs en producción
     PROPAGATE_EXCEPTIONS = True
+
+    # =====================================================
+    # SESIONES / SEGURIDAD
+    # =====================================================
+
+    # La sesión NO sobrevive al cerrar navegador/PWA
+    SESSION_PERMANENT = False
+
+    # Expiración por inactividad
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)
+
+    # Seguridad cookies
+    REMEMBER_COOKIE_SECURE = True
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    SESSION_COOKIE_SECURE = True

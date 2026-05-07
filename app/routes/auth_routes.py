@@ -75,7 +75,8 @@ def login():
         flash("Usuario o contraseña inválidos.", "danger")
         return render_template("auth/login.html"), 401
 
-    login_user(user)
+    login_user(user, remember=False)
+    session.permanent = False
     _set_initial_active_site(user)
 
     try:
