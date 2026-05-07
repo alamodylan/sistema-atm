@@ -383,6 +383,8 @@ def import_articles(rows: list[dict]) -> dict:
     created = 0
     updated = 0
     skipped = 0
+    processed_since_commit = 0
+    BATCH_SIZE = 100
 
     units_map = {u.code: u for u in Unit.query.all()}
     categories_map = {c.code: c for c in ItemCategory.query.all()}
@@ -461,7 +463,6 @@ def import_articles(rows: list[dict]) -> dict:
                 barcode_owner = barcodes_map.get(barcode)
                 if barcode_owner and barcode_owner.code != code:
                     skipped += 1
-                    db.session.rollback()
                     continue
 
             article = articles_map.get(code)
@@ -476,9 +477,6 @@ def import_articles(rows: list[dict]) -> dict:
                 article.sap_code = sap_code
                 article.is_tool = is_tool
                 article.is_active = is_active
-
-                db.session.flush()
-                db.session.commit()
 
                 updated += 1
 
@@ -498,7 +496,6 @@ def import_articles(rows: list[dict]) -> dict:
 
                 db.session.add(article)
                 db.session.flush()
-                db.session.commit()
 
                 articles_map[code] = article
                 created += 1
@@ -506,8 +503,15 @@ def import_articles(rows: list[dict]) -> dict:
             if barcode:
                 barcodes_map[barcode] = article
 
+            processed_since_commit += 1
+
+            if processed_since_commit >= BATCH_SIZE:
+                db.session.commit()
+                processed_since_commit = 0
+
         except Exception as exc:
             db.session.rollback()
+            processed_since_commit = 0
 
             print(
                 f"[IMPORT_ARTICLES_ERROR] "
@@ -518,6 +522,8 @@ def import_articles(rows: list[dict]) -> dict:
 
             skipped += 1
             continue
+
+    db.session.commit()
 
     return {"created": created, "updated": updated, "skipped": skipped}
 
