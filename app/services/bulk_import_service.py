@@ -383,6 +383,7 @@ def import_articles(rows: list[dict]) -> dict:
     created = 0
     updated = 0
     skipped = 0
+
     processed_since_commit = 0
     BATCH_SIZE = 100
 
@@ -394,9 +395,47 @@ def import_articles(rows: list[dict]) -> dict:
         key = (sc.category_id, sc.name.lower())
         subcategories_map[key] = sc
 
-    articles_map = {a.code: a for a in Article.query.all()}
-    barcodes_map = {a.barcode: a for a in Article.query.all() if a.barcode}
+    # =====================================================
+    # SOLO CARGAR ARTÍCULOS NECESARIOS DEL EXCEL
+    # =====================================================
+    article_codes = {
+        _clean(row.get("codigo"))
+        for row in rows
+        if _clean(row.get("codigo"))
+    }
 
+    barcode_values = {
+        _clean(row.get("codigo_barras"))
+        for row in rows
+        if _clean(row.get("codigo_barras"))
+    }
+
+    existing_articles = (
+        Article.query
+        .filter(Article.code.in_(article_codes))
+        .all()
+    )
+
+    articles_map = {a.code: a for a in existing_articles}
+
+    existing_barcodes = []
+
+    if barcode_values:
+        existing_barcodes = (
+            Article.query
+            .filter(Article.barcode.in_(barcode_values))
+            .all()
+        )
+
+    barcodes_map = {
+        a.barcode: a
+        for a in existing_barcodes
+        if a.barcode
+    }
+
+    # =====================================================
+    # PROCESAR FILAS
+    # =====================================================
     for row in rows:
         code = ""
         name = ""
@@ -417,20 +456,33 @@ def import_articles(rows: list[dict]) -> dict:
             is_tool = _parse_bool(row.get("es_herramienta"))
             is_active = _parse_bool(row.get("activo"))
 
+            # =================================================
+            # VALIDACIONES
+            # =================================================
             if not code or not name or not unit_code:
                 skipped += 1
                 continue
 
             unit = units_map.get(unit_code)
+
             if not unit:
                 skipped += 1
                 continue
 
+            # =================================================
+            # CATEGORÍA
+            # =================================================
             category = None
 
             if category_code or category_name:
+
                 if not category_code:
-                    category_code = category_name.strip().upper().replace(" ", "_")[:50]
+                    category_code = (
+                        category_name
+                        .strip()
+                        .upper()
+                        .replace(" ", "_")[:50]
+                    )
 
                 category = categories_map.get(category_code)
 
@@ -440,14 +492,21 @@ def import_articles(rows: list[dict]) -> dict:
                         name=category_name or category_code,
                         description=None,
                     )
+
                     db.session.add(category)
                     db.session.flush()
+
                     categories_map[category_code] = category
 
+            # =================================================
+            # SUBCATEGORÍA
+            # =================================================
             subcategory = None
 
             if subcategory_name and category:
+
                 key = (category.id, subcategory_name.lower())
+
                 subcategory = subcategories_map.get(key)
 
                 if not subcategory:
@@ -455,24 +514,41 @@ def import_articles(rows: list[dict]) -> dict:
                         category_id=category.id,
                         name=subcategory_name,
                     )
+
                     db.session.add(subcategory)
                     db.session.flush()
+
                     subcategories_map[key] = subcategory
 
+            # =================================================
+            # VALIDAR BARCODE DUPLICADO
+            # =================================================
             if barcode:
                 barcode_owner = barcodes_map.get(barcode)
+
                 if barcode_owner and barcode_owner.code != code:
                     skipped += 1
                     continue
 
+            # =================================================
+            # UPDATE / CREATE
+            # =================================================
             article = articles_map.get(code)
 
             if article:
+
                 article.name = name
                 article.description = description
                 article.unit_id = unit.id
-                article.category_id = category.id if category else None
-                article.subcategory_id = subcategory.id if subcategory else None
+
+                article.category_id = (
+                    category.id if category else None
+                )
+
+                article.subcategory_id = (
+                    subcategory.id if subcategory else None
+                )
+
                 article.barcode = barcode
                 article.sap_code = sap_code
                 article.is_tool = is_tool
@@ -481,6 +557,7 @@ def import_articles(rows: list[dict]) -> dict:
                 updated += 1
 
             else:
+
                 article = Article(
                     code=code,
                     name=name,
@@ -498,18 +575,26 @@ def import_articles(rows: list[dict]) -> dict:
                 db.session.flush()
 
                 articles_map[code] = article
+
                 created += 1
 
+            # =================================================
+            # ACTUALIZAR CACHE BARCODE
+            # =================================================
             if barcode:
                 barcodes_map[barcode] = article
 
             processed_since_commit += 1
 
+            # =================================================
+            # COMMIT POR BLOQUES
+            # =================================================
             if processed_since_commit >= BATCH_SIZE:
                 db.session.commit()
                 processed_since_commit = 0
 
         except Exception as exc:
+
             db.session.rollback()
             processed_since_commit = 0
 
@@ -523,9 +608,16 @@ def import_articles(rows: list[dict]) -> dict:
             skipped += 1
             continue
 
+    # =====================================================
+    # COMMIT FINAL
+    # =====================================================
     db.session.commit()
 
-    return {"created": created, "updated": updated, "skipped": skipped}
+    return {
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+    }
 
 
 # =========================================================
