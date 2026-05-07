@@ -65,7 +65,7 @@ class ToolLoan(db.Model):
     quantity = db.Column(db.Numeric(14, 2), nullable=False, default=1)
 
     loan_status = db.Column(
-        db.String(20),
+        db.String(30),
         nullable=False,
         default="PRESTADA",
         index=True,
