@@ -527,31 +527,62 @@ def import_articles(rows: list[dict]) -> dict:
     updated = 0
     skipped = 0
 
-    processed_since_commit = 0
-    BATCH_SIZE = 100
+    BATCH_SIZE = 300
 
+    # =====================================================
+    # NORMALIZAR FILAS PRIMERO
+    # =====================================================
+    normalized_rows = []
+
+    for row in rows:
+        code = _clean(row.get("codigo"))
+        name = _clean(row.get("nombre"))
+        unit_code = _clean(row.get("codigo_unidad"))
+
+        if not code or not name or not unit_code:
+            skipped += 1
+            continue
+
+        category_code = _clean(row.get("codigo_categoria"))
+        category_name = _clean(row.get("nombre_categoria"))
+        subcategory_name = _clean(row.get("nombre_subcategoria"))
+
+        if category_name and not category_code:
+            category_code = (
+                category_name.strip().upper().replace(" ", "_")[:50]
+            )
+
+        normalized_rows.append(
+            {
+                "code": code,
+                "name": name,
+                "unit_code": unit_code,
+                "category_code": category_code,
+                "category_name": category_name,
+                "subcategory_name": subcategory_name,
+                "description": _clean(row.get("descripcion")) or None,
+                "barcode": _clean(row.get("codigo_barras")) or None,
+                "sap_code": _clean(row.get("codigo_sap")) or None,
+                "is_tool": _parse_bool(row.get("es_herramienta")),
+                "is_active": _parse_bool(row.get("activo")),
+            }
+        )
+
+    if not normalized_rows:
+        return {
+            "created": created,
+            "updated": updated,
+            "skipped": skipped,
+        }
+
+    # =====================================================
+    # PRECARGAS
+    # =====================================================
     units_map = {u.code: u for u in Unit.query.all()}
     categories_map = {c.code: c for c in ItemCategory.query.all()}
 
-    subcategories_map = {}
-    for sc in ItemSubcategory.query.all():
-        key = (sc.category_id, sc.name.lower())
-        subcategories_map[key] = sc
-
-    # =====================================================
-    # SOLO CARGAR ARTÍCULOS NECESARIOS DEL EXCEL
-    # =====================================================
-    article_codes = {
-        _clean(row.get("codigo"))
-        for row in rows
-        if _clean(row.get("codigo"))
-    }
-
-    barcode_values = {
-        _clean(row.get("codigo_barras"))
-        for row in rows
-        if _clean(row.get("codigo_barras"))
-    }
+    article_codes = {r["code"] for r in normalized_rows}
+    barcode_values = {r["barcode"] for r in normalized_rows if r["barcode"]}
 
     existing_articles = (
         Article.query
@@ -561,7 +592,7 @@ def import_articles(rows: list[dict]) -> dict:
 
     articles_map = {a.code: a for a in existing_articles}
 
-    existing_barcodes = []
+    barcodes_map = {}
 
     if barcode_values:
         existing_barcodes = (
@@ -570,41 +601,87 @@ def import_articles(rows: list[dict]) -> dict:
             .all()
         )
 
-    barcodes_map = {
-        a.barcode: a
-        for a in existing_barcodes
-        if a.barcode
-    }
+        barcodes_map = {
+            a.barcode: a
+            for a in existing_barcodes
+            if a.barcode
+        }
 
     # =====================================================
-    # PROCESAR FILAS
+    # CREAR CATEGORÍAS FALTANTES EN BLOQUE
     # =====================================================
-    for row in rows:
-        code = ""
-        name = ""
+    missing_categories = {}
 
-        try:
-            code = _clean(row.get("codigo"))
-            name = _clean(row.get("nombre"))
-            unit_code = _clean(row.get("codigo_unidad"))
+    for row in normalized_rows:
+        category_code = row["category_code"]
+        category_name = row["category_name"]
 
-            category_code = _clean(row.get("codigo_categoria"))
-            category_name = _clean(row.get("nombre_categoria"))
-            subcategory_name = _clean(row.get("nombre_subcategoria"))
+        if category_code and category_code not in categories_map:
+            missing_categories[category_code] = ItemCategory(
+                code=category_code,
+                name=category_name or category_code,
+                description=None,
+            )
 
-            description = _clean(row.get("descripcion")) or None
-            barcode = _clean(row.get("codigo_barras")) or None
-            sap_code = _clean(row.get("codigo_sap")) or None
+    if missing_categories:
+        db.session.add_all(missing_categories.values())
+        db.session.flush()
 
-            is_tool = _parse_bool(row.get("es_herramienta"))
-            is_active = _parse_bool(row.get("activo"))
+        for category in missing_categories.values():
+            categories_map[category.code] = category
 
-            # =================================================
-            # VALIDACIONES
-            # =================================================
-            if not code or not name or not unit_code:
-                skipped += 1
-                continue
+    # =====================================================
+    # PRECARGAR SUBCATEGORÍAS
+    # =====================================================
+    subcategories_map = {}
+
+    for sc in ItemSubcategory.query.all():
+        key = (sc.category_id, sc.name.strip().lower())
+        subcategories_map[key] = sc
+
+    # =====================================================
+    # CREAR SUBCATEGORÍAS FALTANTES EN BLOQUE
+    # =====================================================
+    missing_subcategories = {}
+
+    for row in normalized_rows:
+        subcategory_name = row["subcategory_name"]
+        category_code = row["category_code"]
+
+        if not subcategory_name or not category_code:
+            continue
+
+        category = categories_map.get(category_code)
+
+        if not category:
+            continue
+
+        key = (category.id, subcategory_name.strip().lower())
+
+        if key not in subcategories_map and key not in missing_subcategories:
+            missing_subcategories[key] = ItemSubcategory(
+                category_id=category.id,
+                name=subcategory_name,
+            )
+
+    if missing_subcategories:
+        db.session.add_all(missing_subcategories.values())
+        db.session.flush()
+
+        for key, subcategory in missing_subcategories.items():
+            subcategories_map[key] = subcategory
+
+    # =====================================================
+    # PROCESAR ARTÍCULOS
+    # =====================================================
+    processed = 0
+
+    try:
+        for row in normalized_rows:
+            code = row["code"]
+            name = row["name"]
+            unit_code = row["unit_code"]
+            barcode = row["barcode"]
 
             unit = units_map.get(unit_code)
 
@@ -612,60 +689,22 @@ def import_articles(rows: list[dict]) -> dict:
                 skipped += 1
                 continue
 
-            # =================================================
-            # CATEGORÍA
-            # =================================================
             category = None
-
-            if category_code or category_name:
-
-                if not category_code:
-                    category_code = (
-                        category_name
-                        .strip()
-                        .upper()
-                        .replace(" ", "_")[:50]
-                    )
-
-                category = categories_map.get(category_code)
-
-                if not category:
-                    category = ItemCategory(
-                        code=category_code,
-                        name=category_name or category_code,
-                        description=None,
-                    )
-
-                    db.session.add(category)
-                    db.session.flush()
-
-                    categories_map[category_code] = category
-
-            # =================================================
-            # SUBCATEGORÍA
-            # =================================================
             subcategory = None
 
-            if subcategory_name and category:
+            if row["category_code"]:
+                category = categories_map.get(row["category_code"])
 
-                key = (category.id, subcategory_name.lower())
+            if category and row["subcategory_name"]:
+                sub_key = (
+                    category.id,
+                    row["subcategory_name"].strip().lower(),
+                )
+                subcategory = subcategories_map.get(sub_key)
 
-                subcategory = subcategories_map.get(key)
-
-                if not subcategory:
-                    subcategory = ItemSubcategory(
-                        category_id=category.id,
-                        name=subcategory_name,
-                    )
-
-                    db.session.add(subcategory)
-                    db.session.flush()
-
-                    subcategories_map[key] = subcategory
-
-            # =================================================
+            # =============================================
             # VALIDAR BARCODE DUPLICADO
-            # =================================================
+            # =============================================
             if barcode:
                 barcode_owner = barcodes_map.get(barcode)
 
@@ -673,88 +712,54 @@ def import_articles(rows: list[dict]) -> dict:
                     skipped += 1
                     continue
 
-            # =================================================
-            # UPDATE / CREATE
-            # =================================================
             article = articles_map.get(code)
 
             if article:
-
                 article.name = name
-                article.description = description
+                article.description = row["description"]
                 article.unit_id = unit.id
-
-                article.category_id = (
-                    category.id if category else None
-                )
-
-                article.subcategory_id = (
-                    subcategory.id if subcategory else None
-                )
-
+                article.category_id = category.id if category else None
+                article.subcategory_id = subcategory.id if subcategory else None
                 article.barcode = barcode
-                article.sap_code = sap_code
-                article.is_tool = is_tool
-                article.is_active = is_active
+                article.sap_code = row["sap_code"]
+                article.is_tool = row["is_tool"]
+                article.is_active = row["is_active"]
 
                 updated += 1
 
             else:
-
                 article = Article(
                     code=code,
                     name=name,
-                    description=description,
+                    description=row["description"],
                     unit_id=unit.id,
                     category_id=category.id if category else None,
                     subcategory_id=subcategory.id if subcategory else None,
                     barcode=barcode,
-                    sap_code=sap_code,
-                    is_tool=is_tool,
-                    is_active=is_active,
+                    sap_code=row["sap_code"],
+                    is_tool=row["is_tool"],
+                    is_active=row["is_active"],
                 )
 
                 db.session.add(article)
-                db.session.flush()
-
                 articles_map[code] = article
 
                 created += 1
 
-            # =================================================
-            # ACTUALIZAR CACHE BARCODE
-            # =================================================
             if barcode:
                 barcodes_map[barcode] = article
 
-            processed_since_commit += 1
+            processed += 1
 
-            # =================================================
-            # COMMIT POR BLOQUES
-            # =================================================
-            if processed_since_commit >= BATCH_SIZE:
+            if processed >= BATCH_SIZE:
                 db.session.commit()
-                processed_since_commit = 0
+                processed = 0
 
-        except Exception as exc:
+        db.session.commit()
 
-            db.session.rollback()
-            processed_since_commit = 0
-
-            print(
-                f"[IMPORT_ARTICLES_ERROR] "
-                f"codigo={code} "
-                f"nombre={name} "
-                f"error={str(exc)}"
-            )
-
-            skipped += 1
-            continue
-
-    # =====================================================
-    # COMMIT FINAL
-    # =====================================================
-    db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        raise Exception(f"Error en carga masiva de artículos: {exc}")
 
     return {
         "created": created,
