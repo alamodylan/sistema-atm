@@ -213,6 +213,7 @@ def import_categories(rows: list[dict]) -> dict:
     updated = 0
     skipped = 0
     subcategories_created = 0
+    subcategories_updated = 0
     subcategories_existing = 0
 
     categories_map = {
@@ -220,21 +221,37 @@ def import_categories(rows: list[dict]) -> dict:
         for category in ItemCategory.query.all()
     }
 
-    subcategories_map = {}
+    subcategories_by_code = {}
+    subcategories_by_name = {}
 
     for subcategory in ItemSubcategory.query.all():
-        key = (
-            subcategory.category_id,
-            subcategory.name.strip().lower(),
-        )
-        subcategories_map[key] = subcategory
+        if subcategory.code:
+            subcategories_by_code[
+                (
+                    subcategory.category_id,
+                    subcategory.code.strip().upper(),
+                )
+            ] = subcategory
+
+        subcategories_by_name[
+            (
+                subcategory.category_id,
+                subcategory.name.strip().lower(),
+            )
+        ] = subcategory
 
     for row in rows:
+        code = ""
+        name = ""
+
         try:
-            code = _clean(row.get("codigo"))
+            code = _clean(row.get("codigo")).upper()
             name = _clean(row.get("nombre"))
             description = _clean(row.get("descripcion")) or None
+
+            subcategory_code = _clean(row.get("codigo_subcategoria")).upper()
             subcategory_name = _clean(row.get("subcategoria"))
+            subcategory_description = _clean(row.get("descripcion_subcategoria")) or None
 
             if not code or not name:
                 skipped += 1
@@ -260,23 +277,92 @@ def import_categories(rows: list[dict]) -> dict:
                 created += 1
 
             if subcategory_name:
-                subcategory_key = (
-                    category.id,
-                    subcategory_name.strip().lower(),
-                )
+                subcategory = None
 
-                if subcategory_key in subcategories_map:
-                    subcategories_existing += 1
+                if subcategory_code:
+                    subcategory = subcategories_by_code.get(
+                        (
+                            category.id,
+                            subcategory_code,
+                        )
+                    )
+
+                if not subcategory:
+                    subcategory = subcategories_by_name.get(
+                        (
+                            category.id,
+                            subcategory_name.strip().lower(),
+                        )
+                    )
+
+                if subcategory:
+                    changed = False
+
+                    if subcategory.code != (subcategory_code or subcategory.code):
+                        subcategory.code = subcategory_code or subcategory.code
+                        changed = True
+
+                    if subcategory.name != subcategory_name:
+                        subcategory.name = subcategory_name
+                        changed = True
+
+                    if subcategory.description != subcategory_description:
+                        subcategory.description = subcategory_description
+                        changed = True
+
+                    if hasattr(subcategory, "is_active") and subcategory.is_active is not True:
+                        subcategory.is_active = True
+                        changed = True
+
+                    if changed:
+                        subcategories_updated += 1
+                    else:
+                        subcategories_existing += 1
+
+                    if subcategory.code:
+                        subcategories_by_code[
+                            (
+                                category.id,
+                                subcategory.code.strip().upper(),
+                            )
+                        ] = subcategory
+
+                    subcategories_by_name[
+                        (
+                            category.id,
+                            subcategory.name.strip().lower(),
+                        )
+                    ] = subcategory
+
                 else:
                     subcategory = ItemSubcategory(
                         category_id=category.id,
+                        code=subcategory_code or None,
                         name=subcategory_name,
+                        description=subcategory_description,
                     )
+
+                    if hasattr(subcategory, "is_active"):
+                        subcategory.is_active = True
 
                     db.session.add(subcategory)
                     db.session.flush()
 
-                    subcategories_map[subcategory_key] = subcategory
+                    if subcategory.code:
+                        subcategories_by_code[
+                            (
+                                category.id,
+                                subcategory.code.strip().upper(),
+                            )
+                        ] = subcategory
+
+                    subcategories_by_name[
+                        (
+                            category.id,
+                            subcategory.name.strip().lower(),
+                        )
+                    ] = subcategory
+
                     subcategories_created += 1
 
         except Exception as exc:
@@ -299,6 +385,7 @@ def import_categories(rows: list[dict]) -> dict:
         "updated": updated,
         "skipped": skipped,
         "subcategories_created": subcategories_created,
+        "subcategories_updated": subcategories_updated,
         "subcategories_existing": subcategories_existing,
     }
 
