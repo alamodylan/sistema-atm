@@ -212,39 +212,95 @@ def import_categories(rows: list[dict]) -> dict:
     created = 0
     updated = 0
     skipped = 0
+    subcategories_created = 0
+    subcategories_existing = 0
+
+    categories_map = {
+        category.code: category
+        for category in ItemCategory.query.all()
+    }
+
+    subcategories_map = {}
+
+    for subcategory in ItemSubcategory.query.all():
+        key = (
+            subcategory.category_id,
+            subcategory.name.strip().lower(),
+        )
+        subcategories_map[key] = subcategory
 
     for row in rows:
         try:
             code = _clean(row.get("codigo"))
             name = _clean(row.get("nombre"))
             description = _clean(row.get("descripcion")) or None
+            subcategory_name = _clean(row.get("subcategoria"))
 
             if not code or not name:
                 skipped += 1
                 continue
 
-            category = ItemCategory.query.filter_by(code=code).first()
+            category = categories_map.get(code)
 
             if category:
                 category.name = name
                 category.description = description
                 updated += 1
             else:
-                db.session.add(
-                    ItemCategory(
-                        code=code,
-                        name=name,
-                        description=description,
-                    )
+                category = ItemCategory(
+                    code=code,
+                    name=name,
+                    description=description,
                 )
+
+                db.session.add(category)
+                db.session.flush()
+
+                categories_map[code] = category
                 created += 1
 
-        except Exception:
+            if subcategory_name:
+                subcategory_key = (
+                    category.id,
+                    subcategory_name.strip().lower(),
+                )
+
+                if subcategory_key in subcategories_map:
+                    subcategories_existing += 1
+                else:
+                    subcategory = ItemSubcategory(
+                        category_id=category.id,
+                        name=subcategory_name,
+                    )
+
+                    db.session.add(subcategory)
+                    db.session.flush()
+
+                    subcategories_map[subcategory_key] = subcategory
+                    subcategories_created += 1
+
+        except Exception as exc:
+            db.session.rollback()
+
+            print(
+                f"[IMPORT_CATEGORIES_ERROR] "
+                f"codigo={code} "
+                f"nombre={name} "
+                f"error={str(exc)}"
+            )
+
             skipped += 1
             continue
 
     db.session.commit()
-    return {"created": created, "updated": updated, "skipped": skipped}
+
+    return {
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+        "subcategories_created": subcategories_created,
+        "subcategories_existing": subcategories_existing,
+    }
 
 
 # =========================================================

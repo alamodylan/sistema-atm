@@ -151,7 +151,12 @@ def upload_units():
 @login_required
 def download_categories_template():
     return _send_template(
-        ["codigo*", "nombre*", "descripcion"],
+        [
+            "codigo*",
+            "nombre*",
+            "descripcion",
+            "subcategoria",
+        ],
         "plantilla_categorias.xlsx",
     )
 
