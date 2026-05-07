@@ -5,6 +5,10 @@ from flask import Blueprint, flash, redirect, request, url_for
 from flask_login import current_user, login_required
 from app.models.work_order_request_line import WorkOrderRequestLine
 from app.models.inventory import WarehouseStock
+from datetime import datetime, UTC
+from app.extensions import db
+from app.models.tool_loan import ToolLoan
+from app.services.inventory_service import add_stock, InventoryServiceError
 
 from app.services.work_order_request_service import (
     WorkOrderRequestServiceError,
@@ -331,5 +335,45 @@ def confirm_request_line_to_work_order_action(line_id: int):
 
     except (WorkOrderRequestServiceError, ValueError) as exc:
         flash(str(exc), "danger")
+
+    return redirect(request.referrer or "/")
+@work_order_request_bp.route("/tool-loans/<int:tool_loan_id>/confirm-return", methods=["POST"])
+@login_required
+def confirm_tool_return_action(tool_loan_id: int):
+    try:
+        loan = ToolLoan.query.get_or_404(tool_loan_id)
+
+        if loan.loan_status != "DEVOLUCION_SOLICITADA":
+            raise WorkOrderRequestServiceError(
+                "Solo se pueden recibir herramientas con devolución solicitada."
+            )
+
+        add_stock(
+            article_id=loan.article_id,
+            warehouse_id=loan.warehouse_id,
+            quantity=loan.quantity,
+            performed_by_user_id=current_user.id,
+            movement_type="DEVOLUCION_HERRAMIENTA",
+            reason=f"Recepción devolución herramienta OT {loan.work_order.number if loan.work_order else ''}",
+            reference_type="TOOL_LOAN",
+            reference_id=loan.id,
+            reference_number=loan.work_order.number if loan.work_order else None,
+            commit=False,
+        )
+
+        loan.loan_status = "DEVUELTA"
+        loan.received_return_by_user_id = current_user.id
+
+        db.session.commit()
+
+        flash("Herramienta recibida correctamente.", "success")
+
+    except (WorkOrderRequestServiceError, InventoryServiceError) as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+
+    except Exception as exc:
+        db.session.rollback()
+        flash(f"Error al recibir herramienta: {exc}", "danger")
 
     return redirect(request.referrer or "/")

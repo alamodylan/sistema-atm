@@ -598,9 +598,18 @@
                                         </span>
 
                                     {% elif loan.loan_status == "DEVOLUCION_SOLICITADA" %}
-                                        <span class="badge text-bg-primary">
-                                            PENDIENTE RECEPCIÓN
-                                        </span>
+                                        <div class="d-flex flex-column gap-2">
+                                            <span class="badge text-bg-primary">
+                                                PENDIENTE RECEPCIÓN
+                                            </span>
+
+                                            <form method="POST"
+                                                  action="{{ url_for('work_order_requests.confirm_tool_return_action', tool_loan_id=loan.id) }}">
+                                                <button class="btn btn-sm btn-success">
+                                                    Recibir herramienta
+                                                </button>
+                                            </form>
+                                        </div>
 
                                     {% elif loan.loan_status == "DEVUELTA" %}
                                         <span class="badge text-bg-success">
