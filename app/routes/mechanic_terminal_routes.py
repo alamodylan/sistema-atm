@@ -15,6 +15,7 @@ from app.models.work_order_task_line_assignment import WorkOrderTaskLineAssignme
 from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 from app.services.work_order_request_service import confirm_request_line_to_work_order
 from app.services.inventory_service import get_inventory_by_warehouse, InventoryServiceError
+from app.models.article import Article
 from app.services.work_order_request_service import (
     WorkOrderRequestServiceError,
     create_request,
@@ -431,44 +432,126 @@ def submit_request(work_order_id):
         return jsonify({"error": "La OT no está en proceso"}), 400
 
     try:
-        request_obj = create_request(
-            work_order_id=work_order.id,
-            requested_by_user_id=current_user.id,
-            mechanic_id=int(mechanic_id),
-            commit=False,
-        )
-
-        db.session.flush()
+        article_ids = []
 
         for line in lines:
             article_id = line.get("article_id")
-            quantity_requested = line.get("quantity")
-            notes = line.get("notes")
 
             if not article_id:
-                raise WorkOrderRequestServiceError("Falta el artículo en una de las líneas.")
+                raise WorkOrderRequestServiceError(
+                    "Falta el artículo en una de las líneas."
+                )
 
-            add_request_line(
-                request_id=request_obj.id,
-                article_id=int(article_id),
-                quantity_requested=quantity_requested,
-                notes=notes,
+            article_ids.append(int(article_id))
+
+        articles = (
+            Article.query
+            .filter(Article.id.in_(article_ids))
+            .all()
+        )
+
+        articles_map = {
+            article.id: article
+            for article in articles
+        }
+
+        tool_lines = []
+        normal_lines = []
+
+        for line in lines:
+            article_id = int(line.get("article_id"))
+            article = articles_map.get(article_id)
+
+            if not article:
+                raise WorkOrderRequestServiceError(
+                    "Uno de los artículos no existe."
+                )
+
+            if _is_tool_article_code(article.code):
+                tool_lines.append(line)
+            else:
+                normal_lines.append(line)
+
+        created_request_ids = []
+
+        # =====================================================
+        # HERRAMIENTAS: VAN DIRECTO A BODEGA
+        # =====================================================
+        if tool_lines:
+            tool_request = create_request(
+                work_order_id=work_order.id,
+                requested_by_user_id=current_user.id,
+                mechanic_id=int(mechanic_id),
                 commit=False,
             )
 
-        db.session.flush()
+            db.session.flush()
 
-        send_request(
-            request_id=request_obj.id,
-            performed_by_user_id=current_user.id,
-            commit=False,
-        )
+            for line in tool_lines:
+                request_line = add_request_line(
+                    request_id=tool_request.id,
+                    article_id=int(line.get("article_id")),
+                    quantity_requested=line.get("quantity"),
+                    notes=line.get("notes"),
+                    commit=False,
+                )
+
+                request_line.manager_review_status = "APROBADA"
+                request_line.manager_reviewed_by_user_id = current_user.id
+                request_line.manager_reviewed_at = db.func.now()
+
+            db.session.flush()
+
+            send_request(
+                request_id=tool_request.id,
+                performed_by_user_id=current_user.id,
+                commit=False,
+            )
+
+            tool_request.approved_by_user_id = current_user.id
+            tool_request.approved_at = db.func.now()
+            tool_request.sent_to_warehouse_by_user_id = current_user.id
+            tool_request.sent_to_warehouse_at = db.func.now()
+
+            created_request_ids.append(tool_request.id)
+
+        # =====================================================
+        # ARTÍCULOS NORMALES: VAN A JEFATURA
+        # =====================================================
+        if normal_lines:
+            normal_request = create_request(
+                work_order_id=work_order.id,
+                requested_by_user_id=current_user.id,
+                mechanic_id=int(mechanic_id),
+                commit=False,
+            )
+
+            db.session.flush()
+
+            for line in normal_lines:
+                add_request_line(
+                    request_id=normal_request.id,
+                    article_id=int(line.get("article_id")),
+                    quantity_requested=line.get("quantity"),
+                    notes=line.get("notes"),
+                    commit=False,
+                )
+
+            db.session.flush()
+
+            send_request(
+                request_id=normal_request.id,
+                performed_by_user_id=current_user.id,
+                commit=False,
+            )
+
+            created_request_ids.append(normal_request.id)
 
         db.session.commit()
 
         return jsonify({
             "ok": True,
-            "request_id": request_obj.id,
+            "request_ids": created_request_ids,
             "message": "Solicitud enviada correctamente.",
         })
 
