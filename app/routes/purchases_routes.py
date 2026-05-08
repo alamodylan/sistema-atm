@@ -65,6 +65,10 @@ from app.services.purchase_request_service import (
     create_purchase_request,
     get_purchase_request_or_404,
     list_purchase_requests,
+    submit_purchase_request,
+    list_purchase_requests_for_manager_review,
+    update_purchase_request_line_by_manager,
+    approve_purchase_request_for_quotation,
 )
 from app.services.quotation_service import (
     QuotationLinePayload,
@@ -367,23 +371,63 @@ def request_detail(request_id: int):
 @purchases_bp.route("/requests/<int:request_id>/send", methods=["POST"])
 @login_required
 def send_request(request_id: int):
-    purchase_request = get_purchase_request_or_404(request_id)
-
-    if purchase_request.status != "BORRADOR":
-        flash("Solo se pueden enviar solicitudes en estado BORRADOR.", "warning")
+    try:
+        purchase_request = submit_purchase_request(request_id=request_id)
+    except PurchaseRequestServiceError as exc:
+        flash(str(exc), "danger")
         return redirect(url_for("purchases.request_detail", request_id=request_id))
 
-    if not purchase_request.lines:
-        flash("La solicitud no tiene líneas.", "danger")
-        return redirect(url_for("purchases.request_detail", request_id=request_id))
+    flash("Solicitud enviada a jefatura correctamente.", "success")
+    return redirect(url_for("purchases.request_detail", request_id=purchase_request.id))
 
-    purchase_request.status = "ENVIADA"
+@purchases_bp.route("/manager/purchase-requests")
+@login_required
+def manager_purchase_requests():
 
-    db.session.commit()
+    purchase_requests = (
+        list_purchase_requests_for_manager_review()
+    )
 
-    flash("Solicitud enviada correctamente.", "success")
-    return redirect(url_for("purchases.request_detail", request_id=request_id))
+    return render_template(
+        "dashboard/manager.html",
+        purchase_requests=purchase_requests,
+    )
 
+@purchases_bp.route("/dashboard/manager/purchase-request-lines/<int:line_id>/update", methods=["POST"])
+@login_required
+def manager_update_request_line(line_id: int):
+    quantity_raw = request.form.get("quantity_requested")
+    cancel_line = request.form.get("cancel_line") == "1"
+
+    line = PurchaseRequestLine.query.get_or_404(line_id)
+
+    try:
+        quantity = Decimal(quantity_raw or "0")
+
+        updated_line = update_purchase_request_line_by_manager(
+            line_id=line_id,
+            quantity_requested=quantity,
+            cancel_line=cancel_line,
+        )
+    except PurchaseRequestServiceError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("dashboard.manager"))
+
+    flash("Línea actualizada correctamente.", "success")
+    return redirect(url_for("dashboard.manager"))
+
+
+@purchases_bp.route("/dashboard/manager/purchase-requests/<int:request_id>/approve", methods=["POST"])
+@login_required
+def manager_approve_request(request_id: int):
+    try:
+        approve_purchase_request_for_quotation(request_id=request_id)
+    except PurchaseRequestServiceError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("dashboard.manager"))
+
+    flash("Solicitud aprobada y enviada a proveeduría correctamente.", "success")
+    return redirect(url_for("dashboard.manager"))
 # =========================
 # PENDING ARTICLES
 # =========================
@@ -523,11 +567,10 @@ def create_quotation():
     purchase_requests = (
         PurchaseRequest.query.filter(
             PurchaseRequest.status.in_([
-                "ENVIADA",
                 "EN_REVISION_PROVEEDURIA",
                 "PARCIALMENTE_COTIZADA",
-            ])
-        )
+                "COTIZADA",
+            ]))
         .order_by(PurchaseRequest.created_at.desc())
         .all()
     )

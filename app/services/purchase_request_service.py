@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
+from datetime import UTC, datetime
 
 from sqlalchemy import func
 
@@ -227,3 +228,89 @@ def list_purchase_requests(
         query.order_by(PurchaseRequest.created_at.desc(), PurchaseRequest.id.desc())
         .all()
     )
+
+def submit_purchase_request(*, request_id: int) -> PurchaseRequest:
+    purchase_request = PurchaseRequest.query.get(request_id)
+
+    if not purchase_request:
+        raise PurchaseRequestServiceError("La solicitud indicada no existe.")
+
+    if purchase_request.status != "BORRADOR":
+        raise PurchaseRequestServiceError("Solo se pueden enviar solicitudes en borrador.")
+
+    active_lines = [
+        line for line in purchase_request.lines
+        if line.line_status != "CANCELADA"
+    ]
+
+    if not active_lines:
+        raise PurchaseRequestServiceError("La solicitud no tiene líneas activas.")
+
+    purchase_request.status = "ENVIADA"
+    db.session.commit()
+
+    return purchase_request
+
+
+def list_purchase_requests_for_manager_review() -> list[PurchaseRequest]:
+    return (
+        PurchaseRequest.query
+        .filter(PurchaseRequest.status == "ENVIADA")
+        .order_by(PurchaseRequest.created_at.desc(), PurchaseRequest.id.desc())
+        .all()
+    )
+
+
+def update_purchase_request_line_by_manager(
+    *,
+    line_id: int,
+    quantity_requested: Decimal,
+    cancel_line: bool = False,
+) -> PurchaseRequestLine:
+    line = PurchaseRequestLine.query.get(line_id)
+
+    if not line:
+        raise PurchaseRequestServiceError("La línea indicada no existe.")
+
+    if line.purchase_request.status != "ENVIADA":
+        raise PurchaseRequestServiceError("Solo se pueden revisar solicitudes enviadas.")
+
+    if cancel_line:
+        line.line_status = "CANCELADA"
+    else:
+        normalized_quantity = _normalize_decimal(quantity_requested)
+
+        if normalized_quantity <= 0:
+            raise PurchaseRequestServiceError("La cantidad debe ser mayor que cero.")
+
+        line.quantity_requested = normalized_quantity
+
+    db.session.commit()
+    return line
+
+
+def approve_purchase_request_for_quotation(*, request_id: int) -> PurchaseRequest:
+    purchase_request = PurchaseRequest.query.get(request_id)
+
+    if not purchase_request:
+        raise PurchaseRequestServiceError("La solicitud indicada no existe.")
+
+    if purchase_request.status != "ENVIADA":
+        raise PurchaseRequestServiceError("Solo se pueden aprobar solicitudes enviadas.")
+
+    active_lines = [
+        line for line in purchase_request.lines
+        if line.line_status != "CANCELADA"
+    ]
+
+    if not active_lines:
+        raise PurchaseRequestServiceError("No existen líneas activas para enviar a cotización.")
+
+    purchase_request.status = "EN_REVISION_PROVEEDURIA"
+
+    for line in active_lines:
+        line.line_status = "ENVIADA_A_COTIZAR"
+        line.sent_to_quote_at = datetime.now(UTC)
+
+    db.session.commit()
+    return purchase_request

@@ -13,6 +13,9 @@ from app.models.work_order_task_line import WorkOrderTaskLine
 from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 from app.services.transfer_service import get_request_line_stock_context
 from flask import abort
+from app.services.purchase_request_service import (
+    list_purchase_requests_for_manager_review,
+)
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -345,6 +348,45 @@ def manager_dashboard():
                 pending_lines_count += 1
 
             req.send_to_warehouse_enabled = all_lines_decided and has_approved_lines
+        # ==========================================
+        # SOLICITUDES DE COMPRA PENDIENTES JEFATURA
+        # ==========================================
+
+        purchase_requests = (
+            list_purchase_requests_for_manager_review()
+        )
+
+        purchase_requests_count = len(purchase_requests)
+
+        purchase_request_lines_count = 0
+
+        for req in purchase_requests:
+
+            req.visible_lines = []
+
+            for line in req.lines:
+
+                if line.line_status == "CANCELADA":
+                    continue
+
+                stock = (
+                    WarehouseStock.query
+                    .filter_by(
+                        article_id=line.article_id,
+                        warehouse_id=req.warehouse_id,
+                    )
+                    .first()
+                )
+
+                line.stock_available = (
+                    stock.available_quantity
+                    if stock and stock.available_quantity
+                    else 0
+                )
+
+                req.visible_lines.append(line)
+
+                purchase_request_lines_count += 1
 
         transfer_pending_requests = (
             TransferRequest.query
@@ -440,6 +482,9 @@ def manager_dashboard():
             transfer_pending_lines_count=transfer_pending_lines_count,
             task_finish_requests=task_finish_requests,
             task_finish_requests_count=task_finish_requests_count,
+            purchase_requests=purchase_requests,
+            purchase_requests_count=purchase_requests_count,
+            purchase_request_lines_count=purchase_request_lines_count,
         )
 
     except Exception as exc:
