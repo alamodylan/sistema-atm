@@ -250,222 +250,213 @@
         {% for req in purchase_requests %}
         <div class="border rounded-4 p-3 p-lg-4 mb-4 bg-white">
 
-            <div class="row g-3 mb-3">
+            <form method="POST"
+                  action="{{ url_for('purchases.manager_approve_request', request_id=req.id) }}"
+                  onsubmit="return confirm('¿Está seguro de aprobar esta solicitud y enviarla a cotización?');">
 
-                <div class="col-12 col-lg-8">
+                <div class="row g-3 mb-3">
 
-                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-                        <span class="badge rounded-pill text-bg-dark">
-                            SOLICITUD DE COMPRA
-                        </span>
+                    <div class="col-12 col-lg-8">
 
-                        <span class="badge rounded-pill text-bg-warning text-dark">
-                            PENDIENTE JEFATURA
-                        </span>
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                            <span class="badge rounded-pill text-bg-dark">
+                                SOLICITUD DE COMPRA
+                            </span>
+
+                            <span class="badge rounded-pill text-bg-warning text-dark">
+                                PENDIENTE JEFATURA
+                            </span>
+                        </div>
+
+                        <h6 class="fw-bold mb-2">
+                            {{ req.number }}
+                        </h6>
+
+                        <div class="row g-2 small">
+
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted">Prioridad</div>
+                                <div class="fw-semibold text-dark">
+                                    {{ req.priority }}
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted">Fecha</div>
+                                <div class="fw-semibold text-dark">
+                                    {{ req.created_at|cr_datetime }}
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted">Estado</div>
+                                <div class="fw-semibold text-dark">
+                                    {{ req.status }}
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted">Predio</div>
+                                <div class="fw-semibold text-dark">
+                                    {{ req.site.name if req.site else '-' }}
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted">Bodega</div>
+                                <div class="fw-semibold text-dark">
+                                    {{ req.warehouse.name if req.warehouse else '-' }}
+                                </div>
+                            </div>
+
+                        </div>
                     </div>
 
-                    <h6 class="fw-bold mb-2">
-                        {{ req.number }}
-                    </h6>
-
-                    <div class="row g-2 small">
-
-                        <div class="col-12 col-md-4">
-                            <div class="text-muted">Prioridad</div>
-                            <div class="fw-semibold text-dark">
-                                {{ req.priority }}
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-4">
-                            <div class="text-muted">Fecha</div>
-                            <div class="fw-semibold text-dark">
-                                {{ req.created_at|cr_datetime }}
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-4">
-                            <div class="text-muted">Estado</div>
-                            <div class="fw-semibold text-dark">
-                                {{ req.status }}
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-6">
-                            <div class="text-muted">Predio</div>
-                            <div class="fw-semibold text-dark">
-                                {{ req.site.name if req.site else '-' }}
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-6">
-                            <div class="text-muted">Bodega</div>
-                            <div class="fw-semibold text-dark">
-                                {{ req.warehouse.name if req.warehouse else '-' }}
-                            </div>
-                        </div>
-
-                    </div>
-                </div>
-
-                <div class="col-12 col-lg-4 d-flex justify-content-lg-end align-items-start">
-
-                    <form method="POST"
-                          action="{{ url_for('purchases.manager_approve_request', request_id=req.id) }}"
-                          onsubmit="return confirm('¿Está seguro de aprobar esta solicitud y enviarla a cotización?');">
-
-                        <button class="btn btn-dark rounded-3 px-4">
+                    <div class="col-12 col-lg-4 d-flex justify-content-lg-end align-items-start">
+                        <button type="submit" class="btn btn-dark rounded-3 px-4">
                             Aprobar y enviar
                         </button>
-                    </form>
+                    </div>
 
                 </div>
 
-            </div>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
 
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Artículo</th>
+                                <th class="text-end">Cantidad solicitada</th>
+                                <th class="text-end">Stock disponible</th>
+                                <th>Estado</th>
+                                <th style="min-width: 340px;">
+                                    Revisión jefatura
+                                </th>
+                            </tr>
+                        </thead>
 
-                    <thead class="table-light">
-                        <tr>
-                            <th>Artículo</th>
-                            <th class="text-end">Cantidad solicitada</th>
-                            <th class="text-end">Stock disponible</th>
-                            <th>Estado</th>
-                            <th style="min-width: 340px;">
-                                Acción jefatura
-                            </th>
-                        </tr>
-                    </thead>
+                        <tbody>
 
-                    <tbody>
+                            {% for line in req.visible_lines %}
+                            <tr class="purchase-request-line-row">
 
-                        {% for line in req.visible_lines %}
-                        <tr>
+                                <td>
+                                    <div class="fw-semibold">
+                                        {{ line.item_code or '-' }}
+                                        -
+                                        {{ line.item_name or '-' }}
+                                    </div>
 
-                            <td>
-                                <div class="fw-semibold">
-                                    {{ line.item_code or '-' }}
-                                    -
-                                    {{ line.item_name or '-' }}
-                                </div>
+                                    {% if line.line_notes %}
+                                    <div class="small text-muted mt-1">
+                                        {{ line.line_notes }}
+                                    </div>
+                                    {% endif %}
+                                </td>
 
-                                {% if line.line_notes %}
-                                <div class="small text-muted mt-1">
-                                    {{ line.line_notes }}
-                                </div>
-                                {% endif %}
-                            </td>
+                                <td class="text-end fw-semibold">
+                                    {{ line.quantity_requested }}
+                                </td>
 
-                            <td class="text-end fw-semibold">
-                                {{ line.quantity_requested }}
-                            </td>
+                                <td class="text-end">
 
-                            <td class="text-end">
+                                    {% if line.stock_available >= line.quantity_requested %}
+                                        <span class="fw-semibold text-success">
+                                            {{ line.stock_available }}
+                                        </span>
 
-                                {% if line.stock_available >= line.quantity_requested %}
-                                    <span class="fw-semibold text-success">
-                                        {{ line.stock_available }}
-                                    </span>
+                                    {% elif line.stock_available > 0 %}
+                                        <span class="fw-semibold text-warning">
+                                            {{ line.stock_available }}
+                                        </span>
 
-                                {% elif line.stock_available > 0 %}
-                                    <span class="fw-semibold text-warning">
-                                        {{ line.stock_available }}
-                                    </span>
+                                    {% else %}
+                                        <span class="fw-semibold text-danger">
+                                            {{ line.stock_available }}
+                                        </span>
+                                    {% endif %}
 
-                                {% else %}
-                                    <span class="fw-semibold text-danger">
-                                        {{ line.stock_available }}
-                                    </span>
-                                {% endif %}
+                                </td>
 
-                            </td>
+                                <td>
+                                    {% if line.line_status == 'CANCELADA' %}
+                                        <span class="badge text-bg-danger rounded-pill">
+                                            CANCELADA
+                                        </span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary rounded-pill">
+                                            {{ line.line_status }}
+                                        </span>
+                                    {% endif %}
+                                </td>
 
-                            <td>
-                                {% if line.line_status == 'CANCELADA' %}
-                                    <span class="badge text-bg-danger rounded-pill">
-                                        CANCELADA
-                                    </span>
-                                {% else %}
-                                    <span class="badge text-bg-secondary rounded-pill">
-                                        {{ line.line_status }}
-                                    </span>
-                                {% endif %}
-                            </td>
+                                <td>
+                                    {% if line.line_status != 'CANCELADA' %}
 
-                            <td>
-
-                                {% if line.line_status != 'CANCELADA' %}
-
-                                <div class="d-flex flex-column flex-lg-row gap-2">
-
-                                    <form method="POST"
-                                          action="{{ url_for('purchases.manager_update_request_line', line_id=line.id) }}"
-                                          class="d-flex flex-wrap gap-2">
-
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0.01"
-                                            name="quantity_requested"
-                                            value="{{ line.quantity_requested }}"
-                                            class="form-control form-control-sm"
-                                            style="width: 120px;"
-                                        >
-
-                                        <button class="btn btn-sm btn-outline-success rounded-3">
-                                            Ajustar
-                                        </button>
-
-                                    </form>
-
-                                    <form method="POST"
-                                          action="{{ url_for('purchases.manager_update_request_line', line_id=line.id) }}"
-                                          onsubmit="return confirm('¿Seguro que desea cancelar esta línea?');">
+                                    <div class="d-flex flex-column flex-lg-row gap-2 align-items-start">
 
                                         <input type="hidden"
-                                               name="cancel_line"
-                                               value="1">
+                                               name="line_id[]"
+                                               value="{{ line.id }}">
 
-                                        <input type="hidden"
-                                               name="quantity_requested"
-                                               value="{{ line.quantity_requested }}">
+                                        <div>
+                                            <label class="small text-muted mb-1">
+                                                Cantidad aprobada
+                                            </label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0.01"
+                                                name="quantity_requested[]"
+                                                value="{{ line.quantity_requested }}"
+                                                class="form-control form-control-sm"
+                                                style="width: 140px;"
+                                            >
+                                        </div>
 
-                                        <button class="btn btn-sm btn-outline-danger rounded-3">
-                                            Cancelar línea
-                                        </button>
+                                        <div class="form-check mt-2 mt-lg-4">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   name="cancel_line[]"
+                                                   value="{{ line.id }}"
+                                                   id="cancel-line-{{ line.id }}">
 
-                                    </form>
+                                            <label class="form-check-label small text-danger"
+                                                   for="cancel-line-{{ line.id }}">
+                                                Cancelar línea
+                                            </label>
+                                        </div>
 
-                                </div>
+                                    </div>
 
-                                {% else %}
+                                    {% else %}
 
-                                <span class="text-muted small">
-                                    Línea cancelada
-                                </span>
+                                    <span class="text-muted small">
+                                        Línea cancelada
+                                    </span>
 
-                                {% endif %}
+                                    {% endif %}
+                                </td>
 
-                            </td>
+                            </tr>
 
-                        </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5"
+                                    class="text-center text-muted py-4">
 
-                        {% else %}
-                        <tr>
-                            <td colspan="5"
-                                class="text-center text-muted py-4">
+                                    Esta solicitud no tiene líneas visibles.
 
-                                Esta solicitud no tiene líneas visibles.
+                                </td>
+                            </tr>
+                            {% endfor %}
 
-                            </td>
-                        </tr>
-                        {% endfor %}
+                        </tbody>
 
-                    </tbody>
+                    </table>
+                </div>
 
-                </table>
-            </div>
+            </form>
 
         </div>
 
@@ -478,6 +469,7 @@
         {% endfor %}
 
     </div>
+</div>
 </div>
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body p-4">

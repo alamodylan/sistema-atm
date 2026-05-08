@@ -420,8 +420,33 @@ def manager_update_request_line(line_id: int):
 @purchases_bp.route("/dashboard/manager/purchase-requests/<int:request_id>/approve", methods=["POST"])
 @login_required
 def manager_approve_request(request_id: int):
+    line_ids = request.form.getlist("line_id[]")
+    quantities = request.form.getlist("quantity_requested[]")
+    cancelled_lines = set(request.form.getlist("cancel_line[]"))
+
+    review_lines = []
+
+    for index, raw_line_id in enumerate(line_ids):
+        line_id = _to_int(raw_line_id)
+
+        if not line_id:
+            continue
+
+        quantity_raw = quantities[index] if index < len(quantities) else None
+
+        review_lines.append(
+            {
+                "line_id": line_id,
+                "quantity_requested": quantity_raw,
+                "cancel_line": str(line_id) in cancelled_lines,
+            }
+        )
+
     try:
-        approve_purchase_request_for_quotation(request_id=request_id)
+        approve_purchase_request_for_quotation(
+            request_id=request_id,
+            review_lines=review_lines,
+        )
     except PurchaseRequestServiceError as exc:
         flash(str(exc), "danger")
         return redirect(url_for("dashboard.manager_dashboard"))

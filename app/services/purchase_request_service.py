@@ -289,7 +289,11 @@ def update_purchase_request_line_by_manager(
     return line
 
 
-def approve_purchase_request_for_quotation(*, request_id: int) -> PurchaseRequest:
+def approve_purchase_request_for_quotation(
+    *,
+    request_id: int,
+    review_lines: list[dict] | None = None,
+) -> PurchaseRequest:
     purchase_request = PurchaseRequest.query.get(request_id)
 
     if not purchase_request:
@@ -298,19 +302,64 @@ def approve_purchase_request_for_quotation(*, request_id: int) -> PurchaseReques
     if purchase_request.status != "ENVIADA":
         raise PurchaseRequestServiceError("Solo se pueden aprobar solicitudes enviadas.")
 
+    request_lines_by_id = {
+        line.id: line
+        for line in purchase_request.lines
+    }
+
+    if review_lines is not None:
+        for item in review_lines:
+            line_id = item.get("line_id")
+            cancel_line = bool(item.get("cancel_line"))
+            quantity_raw = item.get("quantity_requested")
+
+            line = request_lines_by_id.get(line_id)
+
+            if not line:
+                raise PurchaseRequestServiceError(
+                    "Una de las líneas enviadas no pertenece a esta solicitud."
+                )
+
+            if line.line_status in {"CONVERTIDA_A_OC", "RECIBIDA"}:
+                raise PurchaseRequestServiceError(
+                    "Una de las líneas ya fue convertida o recibida y no puede modificarse."
+                )
+
+            if cancel_line:
+                line.line_status = "CANCELADA"
+                continue
+
+            quantity = _normalize_decimal(quantity_raw)
+
+            if quantity <= 0:
+                raise PurchaseRequestServiceError(
+                    "La cantidad de una línea debe ser mayor que cero."
+                )
+
+            line.quantity_requested = quantity
+
+            if line.line_status != "CANCELADA":
+                line.line_status = "ACTIVA"
+
     active_lines = [
         line for line in purchase_request.lines
         if line.line_status != "CANCELADA"
     ]
 
     if not active_lines:
-        raise PurchaseRequestServiceError("No existen líneas activas para enviar a cotización.")
+        purchase_request.status = "CANCELADA"
+        db.session.commit()
+        raise PurchaseRequestServiceError(
+            "Todas las líneas fueron canceladas. La solicitud quedó cancelada."
+        )
 
     purchase_request.status = "EN_REVISION_PROVEEDURIA"
 
+    now = datetime.now(UTC)
+
     for line in active_lines:
         line.line_status = "ENVIADA_A_COTIZAR"
-        line.sent_to_quote_at = datetime.now(UTC)
+        line.sent_to_quote_at = now
 
     db.session.commit()
     return purchase_request
