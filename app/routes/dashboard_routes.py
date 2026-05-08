@@ -279,6 +279,11 @@ def manager_dashboard():
             transfer_pending_requests=[],
             transfer_pending_requests_count=0,
             transfer_pending_lines_count=0,
+            task_finish_requests=[],
+            task_finish_requests_count=0,
+            purchase_requests=[],
+            purchase_requests_count=0,
+            purchase_request_lines_count=0,
         )
 
     try:
@@ -304,76 +309,18 @@ def manager_dashboard():
             req.equipment_code_snapshot = (
                 req.work_order.equipment_code_snapshot if req.work_order else "-"
             )
-            req.requested_by_name = (
-                req.mechanic.name if req.mechanic else "-"
-            )
+            req.requested_by_name = req.mechanic.name if req.mechanic else "-"
 
-            lines = req.lines
             req.visible_lines = []
             has_approved_lines = False
             all_lines_decided = True
 
-            for line in lines:
-                # ===============================
-                # STOCK DE BODEGA (AQUÍ ESTÁ LO NUEVO)
-                # ===============================
-                stock = (
-                    WarehouseStock.query
-                    .filter_by(
-                        article_id=line.article_id,
-                        warehouse_id=req.work_order.warehouse_id
-                    )
-                    .first()
-                )
-
-                line.stock_available = (
-                    stock.available_quantity if stock and stock.available_quantity else 0
-                )
-
-                # ===============================
-                # ESTADO DE JEFATURA
-                # ===============================
-                if line.manager_review_status == "RECHAZADA":
-                    line.manager_decision = "RECHAZADA"
-
-                elif line.manager_review_status == "APROBADA":
-                    line.manager_decision = "APROBADA"
-                    has_approved_lines = True
-
-                else:
-                    line.manager_decision = "PENDIENTE"
-                    all_lines_decided = False
-
-                req.visible_lines.append(line)
-                pending_lines_count += 1
-
-            req.send_to_warehouse_enabled = all_lines_decided and has_approved_lines
-        # ==========================================
-        # SOLICITUDES DE COMPRA PENDIENTES JEFATURA
-        # ==========================================
-
-        purchase_requests = (
-            list_purchase_requests_for_manager_review()
-        )
-
-        purchase_requests_count = len(purchase_requests)
-
-        purchase_request_lines_count = 0
-
-        for req in purchase_requests:
-
-            req.visible_lines = []
-
             for line in req.lines:
-
-                if line.line_status == "CANCELADA":
-                    continue
-
                 stock = (
                     WarehouseStock.query
                     .filter_by(
                         article_id=line.article_id,
-                        warehouse_id=req.warehouse_id,
+                        warehouse_id=req.work_order.warehouse_id,
                     )
                     .first()
                 )
@@ -384,8 +331,49 @@ def manager_dashboard():
                     else 0
                 )
 
-                req.visible_lines.append(line)
+                if line.manager_review_status == "RECHAZADA":
+                    line.manager_decision = "RECHAZADA"
+                elif line.manager_review_status == "APROBADA":
+                    line.manager_decision = "APROBADA"
+                    has_approved_lines = True
+                else:
+                    line.manager_decision = "PENDIENTE"
+                    all_lines_decided = False
 
+                req.visible_lines.append(line)
+                pending_lines_count += 1
+
+            req.send_to_warehouse_enabled = all_lines_decided and has_approved_lines
+
+        purchase_requests = list_purchase_requests_for_manager_review()
+        purchase_requests_count = len(purchase_requests)
+        purchase_request_lines_count = 0
+
+        for req in purchase_requests:
+            req.visible_lines = []
+
+            for line in req.lines:
+                if line.line_status == "CANCELADA":
+                    continue
+
+                stock = None
+                if line.article_id and req.warehouse_id:
+                    stock = (
+                        WarehouseStock.query
+                        .filter_by(
+                            article_id=line.article_id,
+                            warehouse_id=req.warehouse_id,
+                        )
+                        .first()
+                    )
+
+                line.stock_available = (
+                    stock.available_quantity
+                    if stock and stock.available_quantity
+                    else 0
+                )
+
+                req.visible_lines.append(line)
                 purchase_request_lines_count += 1
 
         transfer_pending_requests = (
@@ -415,16 +403,12 @@ def manager_dashboard():
                 elif getattr(req.requested_by_user, "username", None):
                     req.requested_by_name = req.requested_by_user.username
 
-            lines = req.lines
-
-            for line in lines:
+            for line in req.lines:
                 if line.manager_review_status == "RECHAZADA":
                     line.manager_decision = "RECHAZADA"
-
                 elif line.manager_review_status == "APROBADA":
                     line.manager_decision = "APROBADA"
                     has_approved_lines = True
-
                 else:
                     line.manager_decision = "PENDIENTE"
                     all_lines_decided = False
@@ -445,29 +429,27 @@ def manager_dashboard():
                 req.status == "APROBADA" and has_approved_lines
             )
 
-        # ==============================
-        # TRABAJOS PENDIENTES JEFATURA
-        # ==============================
-
         task_finish_requests = (
             WorkOrderTaskLineFinishRequest.query
-            .join(WorkOrderTaskLine, WorkOrderTaskLine.id == WorkOrderTaskLineFinishRequest.task_line_id)
+            .join(
+                WorkOrderTaskLine,
+                WorkOrderTaskLine.id == WorkOrderTaskLineFinishRequest.task_line_id,
+            )
             .join(WorkOrder, WorkOrder.id == WorkOrderTaskLine.work_order_id)
             .filter(
                 WorkOrder.site_id == active_site_id,
-                WorkOrderTaskLineFinishRequest.status == "PENDIENTE"
+                WorkOrderTaskLineFinishRequest.status == "PENDIENTE",
             )
             .order_by(WorkOrderTaskLineFinishRequest.created_at.desc())
             .all()
         )
 
         task_finish_requests_count = len(task_finish_requests)
+
         for task_req in task_finish_requests:
             seconds = task_req.task_line.effective_seconds or 0
-
             hours = int(seconds) // 3600
             minutes = (int(seconds) % 3600) // 60
-
             task_req.formatted_time = f"{hours}h {minutes}m"
 
         return render_template(
@@ -499,4 +481,9 @@ def manager_dashboard():
             transfer_pending_requests=[],
             transfer_pending_requests_count=0,
             transfer_pending_lines_count=0,
+            task_finish_requests=[],
+            task_finish_requests_count=0,
+            purchase_requests=[],
+            purchase_requests_count=0,
+            purchase_request_lines_count=0,
         )
