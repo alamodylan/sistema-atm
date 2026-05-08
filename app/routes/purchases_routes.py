@@ -411,10 +411,10 @@ def manager_update_request_line(line_id: int):
         )
     except PurchaseRequestServiceError as exc:
         flash(str(exc), "danger")
-        return redirect(url_for("dashboard.manager"))
+        return redirect(url_for("dashboard.manager_dashboard"))
 
     flash("Línea actualizada correctamente.", "success")
-    return redirect(url_for("dashboard.manager"))
+    return redirect(url_for("dashboard.manager_dashboard"))
 
 
 @purchases_bp.route("/dashboard/manager/purchase-requests/<int:request_id>/approve", methods=["POST"])
@@ -424,10 +424,10 @@ def manager_approve_request(request_id: int):
         approve_purchase_request_for_quotation(request_id=request_id)
     except PurchaseRequestServiceError as exc:
         flash(str(exc), "danger")
-        return redirect(url_for("dashboard.manager"))
+        return redirect(url_for("dashboard.manager_dashboard"))
 
     flash("Solicitud aprobada y enviada a proveeduría correctamente.", "success")
-    return redirect(url_for("dashboard.manager"))
+    return redirect(url_for("dashboard.manager_dashboard"))
 # =========================
 # PENDING ARTICLES
 # =========================
