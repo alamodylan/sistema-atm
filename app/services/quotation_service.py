@@ -622,20 +622,51 @@ def get_article_supplier_comparison(
         if not last_line:
             continue
 
+        unit_price = Decimal(str(last_line.unit_price or 0))
+        tax_pct = Decimal(str(last_line.tax_pct or 0))
+        discount_pct = Decimal(str(last_line.discount_pct or 0))
+
+        tax_factor = Decimal("1") + (tax_pct / Decimal("100"))
+
+        if last_line.tax_included:
+            subtotal = unit_price / tax_factor if tax_pct > 0 else unit_price
+        else:
+            subtotal = unit_price
+
+        discount_amount = subtotal * (discount_pct / Decimal("100"))
+        taxable_base = subtotal - discount_amount
+        tax_amount = taxable_base * (tax_pct / Decimal("100"))
+        total_amount = taxable_base + tax_amount
+
         comparison.append(
             {
                 "supplier_id": row.supplier_id,
                 "supplier_name": row.commercial_name or row.legal_name or "Proveedor",
-                "last_price": last_line.unit_price,
-                "last_price_with_tax": last_line.unit_price_with_tax,
+
+                "last_price": unit_price,
+                "subtotal": subtotal,
+
+                "discount_pct": discount_pct,
+                "discount_amount": discount_amount,
+
+                "tax_pct": tax_pct,
+                "tax_amount": tax_amount,
+                "tax_included": bool(last_line.tax_included),
+
+                "taxable_base": taxable_base,
+                "total_amount": total_amount,
+
                 "last_quote_date": last_line.quote_date,
                 "currency_code": last_line.currency_code,
+
                 "payment_type": last_line.payment_type,
                 "payment_term_months": last_line.payment_term_months,
                 "origin_type": last_line.origin_type,
+
                 "brand_model": last_line.brand_model,
                 "lead_time_days": last_line.lead_time_days,
                 "notes": last_line.notes,
+
                 "quotation_line_id": last_line.id,
                 "rank": None,
                 "is_best_price": False,
@@ -644,7 +675,7 @@ def get_article_supplier_comparison(
 
     comparison = sorted(
         comparison,
-        key=lambda item: item["last_price_with_tax"] or item["last_price"] or 0,
+        key=lambda item: item["total_amount"] or item["subtotal"] or 0,
     )
 
     for index, item in enumerate(comparison, start=1):

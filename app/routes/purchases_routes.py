@@ -1388,6 +1388,10 @@ def create_quote_for_line(line_id: int):
     unit_price = request.form.get("unit_price")
     use_last_price = request.form.get("use_last_price") == "1"
 
+    discount_pct = request.form.get("discount_pct") or "0"
+    tax_pct = request.form.get("tax_pct") or "13"
+    tax_included = request.form.get("tax_included") == "1"
+
     payment_type = request.form.get("payment_type") or None
     payment_term = _to_int(request.form.get("payment_term_months"))
     origin_type = request.form.get("origin_type") or None
@@ -1405,6 +1409,9 @@ def create_quote_for_line(line_id: int):
             created_by_user_id=current_user.id,
             unit_price=unit_price,
             use_last_price=use_last_price,
+            discount_pct=discount_pct,
+            tax_pct=tax_pct,
+            tax_included=tax_included,
             payment_type=payment_type,
             payment_term_months=payment_term,
             origin_type=origin_type,
@@ -1469,7 +1476,7 @@ def export_quotation_comparison_excel(line_id: int):
     ws.title = "Comparativo"
 
     title = "Comparativo de Cotizaciones"
-    ws.merge_cells("A1:H1")
+    ws.merge_cells("A1:L1")
     ws["A1"] = title
     ws["A1"].font = Font(bold=True, size=16)
     ws["A1"].alignment = Alignment(horizontal="center")
@@ -1484,12 +1491,16 @@ def export_quotation_comparison_excel(line_id: int):
     headers = [
         "#",
         "Proveedor",
-        "Último precio",
+        "Monto ingresado",
+        "Tipo IVA",
+        "Subtotal",
+        "Descuento %",
+        "Monto descuento",
+        "IVA %",
+        "Monto IVA",
+        "Total",
         "Fecha",
-        "Tipo de pago",
-        "Plazo pago",
-        "Origen",
-        "Marca / Modelo",
+        "Pago",
     ]
 
     start_row = 7
@@ -1506,17 +1517,23 @@ def export_quotation_comparison_excel(line_id: int):
     for index, item in enumerate(comparison, start=1):
         row = start_row + index
 
-        price = item.get("last_price_with_tax") or item.get("last_price")
-
         values = [
             "MEJOR" if item.get("is_best_price") else item.get("rank"),
             item.get("supplier_name"),
-            float(price or 0),
+            float(item.get("last_price") or 0),
+            "Con IVA" if item.get("tax_included") else "Sin IVA",
+            float(item.get("subtotal") or 0),
+            float(item.get("discount_pct") or 0),
+            float(item.get("discount_amount") or 0),
+            float(item.get("tax_pct") or 0),
+            float(item.get("tax_amount") or 0),
+            float(item.get("total_amount") or 0),
             item.get("last_quote_date").strftime("%d/%m/%Y") if item.get("last_quote_date") else "-",
-            item.get("payment_type") or "-",
-            item.get("payment_term_months") or "-",
-            item.get("origin_type") or "-",
-            item.get("brand_model") or "-",
+            (
+                f"{item.get('payment_type')} / {item.get('payment_term_months')} meses"
+                if item.get("payment_type") and item.get("payment_term_months")
+                else item.get("payment_type") or "-"
+            ),
         ]
 
         for col, value in enumerate(values, start=1):
@@ -1524,8 +1541,11 @@ def export_quotation_comparison_excel(line_id: int):
             cell.border = border
             cell.alignment = Alignment(vertical="center")
 
-            if col == 3:
+            if col in [3, 5, 7, 9, 10]:
                 cell.number_format = '#,##0.00'
+
+            if col in [6, 8]:
+                cell.number_format = '0.00'
 
             if item.get("is_best_price"):
                 cell.fill = PatternFill("solid", fgColor="DCFCE7")

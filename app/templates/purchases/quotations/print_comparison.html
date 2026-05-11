@@ -44,20 +44,25 @@
         th {
             background-color: #1f2937;
             color: #fff;
-            font-size: 13px;
+            font-size: 12px;
             padding: 8px;
             border: 1px solid #ccc;
             text-align: center;
         }
 
         td {
-            font-size: 13px;
+            font-size: 12px;
             padding: 8px;
             border: 1px solid #ccc;
+            vertical-align: top;
         }
 
         .center {
             text-align: center;
+        }
+
+        .right {
+            text-align: right;
         }
 
         .best {
@@ -69,6 +74,11 @@
             margin-top: 40px;
             font-size: 12px;
             color: #666;
+        }
+
+        .small {
+            font-size: 11px;
+            color: #555;
         }
 
         @media print {
@@ -92,7 +102,7 @@
 </div>
 
 <div class="header" style="display:flex; justify-content:space-between; align-items:center;">
-    
+
     <div>
         <div class="title">Comparativo de Cotizaciones</div>
         <div class="subtitle">Alamo Terminales Marítimos</div>
@@ -118,17 +128,24 @@
         <tr>
             <th>#</th>
             <th>Proveedor</th>
-            <th>Precio</th>
-            <th>Fecha</th>
-            <th>Tipo de pago</th>
-            <th>Plazo</th>
+            <th>Monto ingresado</th>
+            <th>IVA</th>
+            <th>Subtotal</th>
+            <th>Desc %</th>
+            <th>Desc ₡</th>
+            <th>IVA ₡</th>
+            <th>Total</th>
+            <th>Pago</th>
             <th>Origen</th>
-            <th>Marca / Modelo</th>
         </tr>
     </thead>
+
     <tbody>
+
         {% for item in comparison %}
+
         <tr class="{% if item.is_best_price %}best{% endif %}">
+
             <td class="center">
                 {% if item.is_best_price %}
                     MEJOR
@@ -137,34 +154,74 @@
                 {% endif %}
             </td>
 
-            <td>{{ item.supplier_name }}</td>
-
             <td>
+                <strong>{{ item.supplier_name }}</strong>
+
+                {% if item.brand_model %}
+                    <div class="small">
+                        {{ item.brand_model }}
+                    </div>
+                {% endif %}
+            </td>
+
+            <td class="right">
                 {{ item.currency_code or "CRC" }}
-                {{ "{:,.2f}".format(item.last_price_with_tax or item.last_price or 0) }}
+                {{ "{:,.2f}".format(item.last_price or 0) }}
             </td>
 
             <td class="center">
-                {{ item.last_quote_date.strftime("%d/%m/%Y") if item.last_quote_date else "-" }}
+                {% if item.tax_included %}
+                    Con IVA
+                {% else %}
+                    Sin IVA
+                {% endif %}
+            </td>
+
+            <td class="right">
+                {{ "{:,.2f}".format(item.subtotal or 0) }}
             </td>
 
             <td class="center">
-                {{ item.payment_type or "-" }}
+                {{ "{:,.2f}".format(item.discount_pct or 0) }}%
+            </td>
+
+            <td class="right">
+                {{ "{:,.2f}".format(item.discount_amount or 0) }}
+            </td>
+
+            <td class="right">
+                {{ "{:,.2f}".format(item.tax_amount or 0) }}
+            </td>
+
+            <td class="right">
+                <strong>
+                    {{ "{:,.2f}".format(item.total_amount or 0) }}
+                </strong>
             </td>
 
             <td class="center">
-                {{ item.payment_term_months or "-" }}
+
+                {% if item.payment_type %}
+                    {{ item.payment_type }}
+
+                    {% if item.payment_term_months %}
+                        <div class="small">
+                            {{ item.payment_term_months }} meses
+                        </div>
+                    {% endif %}
+                {% else %}
+                    -
+                {% endif %}
             </td>
 
             <td class="center">
                 {{ item.origin_type or "-" }}
             </td>
 
-            <td>
-                {{ item.brand_model or "-" }}
-            </td>
         </tr>
+
         {% endfor %}
+
     </tbody>
 </table>
 

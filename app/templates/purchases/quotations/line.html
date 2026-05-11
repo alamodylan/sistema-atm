@@ -101,7 +101,7 @@
                                         <td class="fw-semibold">{{ item.supplier_name }}</td>
                                         <td>
                                             {{ item.currency_code or "CRC" }}
-                                            {{ item.last_price_with_tax or item.last_price }}
+                                            {{ item.total_amount or item.last_price }}
                                         </td>
                                         <td>
                                             {{ item.last_quote_date.strftime("%d/%m/%Y") if item.last_quote_date else "-" }}
@@ -227,6 +227,81 @@
                                    required>
                         </div>
 
+                        <div class="border rounded-4 p-3 mb-3 bg-light-subtle">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold">Tipo de IVA</label>
+
+                                    <div class="d-flex flex-column gap-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input"
+                                                   type="radio"
+                                                   name="tax_included"
+                                                   id="tax_excluded"
+                                                   value="0"
+                                                   checked>
+                                            <label class="form-check-label" for="tax_excluded">
+                                                Monto sin IVA
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            <input class="form-check-input"
+                                                   type="radio"
+                                                   name="tax_included"
+                                                   id="tax_included"
+                                                   value="1">
+                                            <label class="form-check-label" for="tax_included">
+                                                Monto con IVA incluido
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <input type="hidden" name="tax_pct" value="13">
+                                </div>
+
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label fw-semibold">Descuento %</label>
+                                    <input type="number"
+                                           step="0.01"
+                                           min="0"
+                                           max="100"
+                                           value="0"
+                                           name="discount_pct"
+                                           id="discount_pct"
+                                           class="form-control rounded-3">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="border rounded-4 p-3 mb-4">
+                            <div class="fw-semibold mb-3">
+                                Resumen de cotización
+                            </div>
+
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="text-muted">Subtotal</span>
+                                <span id="summary_subtotal">₡0.00</span>
+                            </div>
+
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="text-muted">Descuento</span>
+                                <span id="summary_discount">₡0.00</span>
+                            </div>
+
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="text-muted">IVA</span>
+                                <span id="summary_tax">₡0.00</span>
+                            </div>
+
+                            <hr>
+
+                            <div class="d-flex justify-content-between fw-bold">
+                                <span>Total</span>
+                                <span id="summary_total">₡0.00</span>
+                            </div>
+                        </div>
+
                         <div class="row g-3">
                             <div class="col-12 col-md-6">
                                 <label class="form-label fw-semibold">Tipo de pago</label>
@@ -306,7 +381,10 @@
         "origin_type": {{ (item.origin_type or "")|tojson }},
         "lead_time_days": {{ (item.lead_time_days|string if item.lead_time_days is not none else "")|tojson }},
         "brand_model": {{ (item.brand_model or "")|tojson }},
-        "notes": {{ (item.notes or "")|tojson }}
+        "notes": {{ (item.notes or "")|tojson }},
+        "discount_pct": {{ (item.discount_pct|string if item.discount_pct is not none else "0")|tojson }},
+        "tax_pct": {{ (item.tax_pct|string if item.tax_pct is not none else "13")|tojson }},
+        "tax_included": {{ "1" if item.tax_included else "0"|tojson }}
     }{% if not loop.last %},{% endif %}
 {% endfor %}
 }
@@ -331,10 +409,49 @@
     const brandModelInput = document.querySelector('[name="brand_model"]');
     const notesInput = document.querySelector('[name="notes"]');
 
+    const discountInput = document.getElementById("discount_pct");
+    const summarySubtotal = document.getElementById("summary_subtotal");
+    const summaryDiscount = document.getElementById("summary_discount");
+    const summaryTax = document.getElementById("summary_tax");
+    const summaryTotal = document.getElementById("summary_total");
+    const taxIncludedRadio = document.getElementById("tax_included");
+    const taxExcludedRadio = document.getElementById("tax_excluded");
+
     const comparisonDataElement = document.getElementById("comparison-data");
     const comparisonBySupplier = comparisonDataElement
         ? JSON.parse(comparisonDataElement.textContent || "{}")
         : {};
+
+    function formatCurrency(value) {
+        return new Intl.NumberFormat("es-CR", {
+            style: "currency",
+            currency: "CRC",
+        }).format(value || 0);
+    }
+
+    function updateQuotationSummary() {
+        const rawPrice = parseFloat(unitPriceInput.value || 0);
+        const discountPct = parseFloat(discountInput.value || 0);
+        const taxPct = 13;
+
+        let subtotal = 0;
+
+        if (taxIncludedRadio.checked) {
+            subtotal = rawPrice / (1 + (taxPct / 100));
+        } else {
+            subtotal = rawPrice;
+        }
+
+        const discountAmount = subtotal * (discountPct / 100);
+        const taxableBase = subtotal - discountAmount;
+        const taxAmount = taxableBase * (taxPct / 100);
+        const total = taxableBase + taxAmount;
+
+        summarySubtotal.textContent = formatCurrency(subtotal);
+        summaryDiscount.textContent = formatCurrency(discountAmount);
+        summaryTax.textContent = formatCurrency(taxAmount);
+        summaryTotal.textContent = formatCurrency(total);
+    }
 
     function setNewPriceMode() {
         useLastPriceInput.value = "0";
@@ -350,6 +467,9 @@
         leadTimeInput.value = "";
         brandModelInput.value = "";
         notesInput.value = "";
+        discountInput.value = "0";
+        taxExcludedRadio.checked = true;
+        updateQuotationSummary();
     }
 
     function fillCommercialFields(data) {
@@ -359,6 +479,15 @@
         leadTimeInput.value = data.lead_time_days || "";
         brandModelInput.value = data.brand_model || "";
         notesInput.value = data.notes || "";
+        discountInput.value = data.discount_pct || "0";
+
+        if (data.tax_included === "1") {
+            taxIncludedRadio.checked = true;
+        } else {
+            taxExcludedRadio.checked = true;
+        }
+
+        updateQuotationSummary();
     }
 
     function updateLastPrice() {
@@ -407,14 +536,22 @@
             unitPriceGroup.classList.remove("d-none");
             unitPriceInput.setAttribute("required", "required");
         }
+
+        updateQuotationSummary();
     }
 
     supplierSelect.addEventListener("change", updateLastPrice);
     keepRadio.addEventListener("change", updatePriceMode);
     newRadio.addEventListener("change", updatePriceMode);
 
+    unitPriceInput.addEventListener("input", updateQuotationSummary);
+    discountInput.addEventListener("input", updateQuotationSummary);
+    taxIncludedRadio.addEventListener("change", updateQuotationSummary);
+    taxExcludedRadio.addEventListener("change", updateQuotationSummary);
+
     updateLastPrice();
     updatePriceMode();
+    updateQuotationSummary();
 })();
 </script>
 {% endblock %}
