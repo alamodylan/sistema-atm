@@ -58,6 +58,7 @@ from app.services.purchase_order_service import (
     get_purchase_order_or_404,
     list_purchase_orders,
     register_purchase_order_approval,
+    adjust_approved_purchase_order_line,
 )
 from app.services.purchase_request_service import (
     PurchaseRequestLinePayload,
@@ -1654,4 +1655,45 @@ def view_approved_pdf(order_id):
         headers={
             "Content-Disposition": f'inline; filename="{filename}"'
         },
+    )
+
+@purchases_bp.route(
+    "/orders/lines/<int:line_id>/adjust",
+    methods=["POST"],
+)
+@login_required
+def adjust_purchase_order_line(line_id: int):
+
+    quantity = request.form.get("quantity_ordered")
+    unit_cost = request.form.get("unit_cost")
+
+    try:
+
+        adjusted_line = adjust_approved_purchase_order_line(
+            purchase_order_line_id=line_id,
+            new_quantity=quantity,
+            new_unit_cost=unit_cost,
+        )
+
+    except PurchaseOrderServiceError as exc:
+
+        flash(str(exc), "danger")
+
+        return redirect(
+            url_for(
+                "purchases.order_detail",
+                order_id=PurchaseOrderLine.query.get_or_404(line_id).purchase_order_id,
+            )
+        )
+
+    flash(
+        "Línea de orden ajustada correctamente.",
+        "success",
+    )
+
+    return redirect(
+        url_for(
+            "purchases.order_detail",
+            order_id=adjusted_line.purchase_order_id,
+        )
     )

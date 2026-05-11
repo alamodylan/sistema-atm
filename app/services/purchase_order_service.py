@@ -164,7 +164,6 @@ def create_purchase_order(
             article_id = quotation_line.article_id
             pending_article_id = quotation_line.pending_article_id
             purchase_request_line_id = quotation_line.purchase_request_line_id
-            unit_id = unit_id
 
             if not unit_id:
                 if quotation_line.article and quotation_line.article.unit_id:
@@ -174,30 +173,44 @@ def create_purchase_order(
 
             quoted_price = Decimal(str(quotation_line.unit_price or 0))
             discount_pct = Decimal(str(quotation_line.discount_pct or 0))
-            tax_pct = Decimal("13")
+            tax_pct = Decimal(str(quotation_line.tax_pct or 0))
 
             if quoted_price <= 0:
                 raise PurchaseOrderServiceError(
                     f"La cotización de la línea {index} no tiene un precio válido."
                 )
 
+            tax_factor = Decimal("1") + (tax_pct / Decimal("100"))
+
             if quotation_line.tax_included:
-                unit_cost = quoted_price / Decimal("1.13")
-                line_subtotal = quantity * unit_cost
-                line_total = quantity * quoted_price
+                subtotal_unit = (
+                    quoted_price / tax_factor
+                ) if tax_pct > 0 else quoted_price
             else:
-                unit_cost = quoted_price
-                line_subtotal = quantity * unit_cost
-                line_total = line_subtotal * Decimal("1.13")
+                subtotal_unit = quoted_price
+
+            discount_amount_unit = subtotal_unit * (discount_pct / Decimal("100"))
+            taxable_base_unit = subtotal_unit - discount_amount_unit
+            tax_amount_unit = taxable_base_unit * (tax_pct / Decimal("100"))
+            total_unit = taxable_base_unit + tax_amount_unit
+
+            unit_cost = taxable_base_unit
+            line_subtotal = quantity * subtotal_unit
+            line_total = quantity * total_unit
 
         else:
             if not line_subtotal:
                 line_subtotal = quantity * unit_cost
 
+            discount_amount = line_subtotal * (discount_pct / Decimal("100"))
+            taxable_base = line_subtotal - discount_amount
+
             if tax_pct:
-                line_total = line_subtotal * (Decimal("1") + (tax_pct / Decimal("100")))
+                line_total = taxable_base * (
+                    Decimal("1") + (tax_pct / Decimal("100"))
+                )
             else:
-                line_total = line_subtotal
+                line_total = taxable_base
 
         purchase_order_line = PurchaseOrderLine(
             purchase_order_id=purchase_order.id,
@@ -275,3 +288,97 @@ def register_purchase_order_approval(
     db.session.add(approval)
     db.session.commit()
     return approval
+
+def adjust_approved_purchase_order_line(
+    *,
+    purchase_order_line_id: int,
+    new_quantity: Any,
+    new_unit_cost: Any,
+) -> PurchaseOrderLine:
+
+    purchase_order_line = PurchaseOrderLine.query.get(
+        purchase_order_line_id
+    )
+
+    if not purchase_order_line:
+        raise PurchaseOrderServiceError(
+            "La línea de orden de compra no existe."
+        )
+
+    purchase_order = purchase_order_line.purchase_order
+
+    if purchase_order.approval_status != "APROBADA":
+        raise PurchaseOrderServiceError(
+            "Solo se pueden ajustar órdenes aprobadas."
+        )
+
+    original_quantity = Decimal(
+        str(purchase_order_line.quantity_ordered or 0)
+    )
+
+    original_unit_cost = Decimal(
+        str(purchase_order_line.unit_cost or 0)
+    )
+
+    quantity = _normalize_decimal(
+        new_quantity,
+        "cantidad"
+    )
+
+    unit_cost = _normalize_decimal(
+        new_unit_cost,
+        "precio unitario"
+    )
+
+    if quantity <= 0:
+        raise PurchaseOrderServiceError(
+            "La cantidad debe ser mayor que cero."
+        )
+
+    if unit_cost <= 0:
+        raise PurchaseOrderServiceError(
+            "El precio unitario debe ser mayor que cero."
+        )
+
+    if quantity > original_quantity:
+        raise PurchaseOrderServiceError(
+            "No se puede aumentar la cantidad aprobada."
+        )
+
+    if unit_cost > original_unit_cost:
+        raise PurchaseOrderServiceError(
+            "No se puede aumentar el precio unitario aprobado."
+        )
+
+    discount_pct = Decimal(
+        str(purchase_order_line.discount_pct or 0)
+    )
+
+    tax_pct = Decimal(
+        str(purchase_order_line.tax_pct or 0)
+    )
+
+    line_subtotal = quantity * unit_cost
+
+    discount_amount = (
+        line_subtotal * (discount_pct / Decimal("100"))
+    )
+
+    taxable_base = (
+        line_subtotal - discount_amount
+    )
+
+    tax_amount = (
+        taxable_base * (tax_pct / Decimal("100"))
+    )
+
+    line_total = taxable_base + tax_amount
+
+    purchase_order_line.quantity_ordered = quantity
+    purchase_order_line.unit_cost = unit_cost
+    purchase_order_line.line_subtotal = line_subtotal
+    purchase_order_line.line_total = line_total
+
+    db.session.commit()
+
+    return purchase_order_line

@@ -45,17 +45,23 @@
     </div>
 
     <div class="row g-4">
+
         <div class="col-12 col-xl-4">
+
             <div class="card border-0 shadow-sm rounded-4">
                 <div class="card-body p-4">
+
                     <h5 class="fw-bold mb-3">Encabezado</h5>
 
                     <dl class="row mb-0">
+
                         <dt class="col-5 text-muted">Número</dt>
                         <dd class="col-7 fw-semibold">{{ purchase_order.number }}</dd>
 
                         <dt class="col-5 text-muted">Proveedor</dt>
-                        <dd class="col-7">{{ purchase_order.supplier.commercial_name if purchase_order.supplier else '-' }}</dd>
+                        <dd class="col-7">
+                            {{ purchase_order.supplier.commercial_name if purchase_order.supplier else '-' }}
+                        </dd>
 
                         <dt class="col-5 text-muted">Solicitud</dt>
                         <dd class="col-7">
@@ -64,17 +70,31 @@
 
                         <dt class="col-5 text-muted">Estado</dt>
                         <dd class="col-7">
+
                             {% if purchase_order.approval_status == 'APROBADA' %}
                                 <span class="badge text-bg-success">APROBADA</span>
+
                             {% elif purchase_order.approval_status == 'PENDIENTE_APROBACION' %}
-                                <span class="badge text-bg-warning">PENDIENTE APROBACIÓN</span>
+                                <span class="badge text-bg-warning">
+                                    PENDIENTE APROBACIÓN
+                                </span>
+
                             {% elif purchase_order.approval_status in ['RECHAZADA', 'ANULADA'] %}
-                                <span class="badge text-bg-danger">{{ purchase_order.approval_status }}</span>
+                                <span class="badge text-bg-danger">
+                                    {{ purchase_order.approval_status }}
+                                </span>
+
                             {% elif purchase_order.approval_status in ['RECIBIDA_PARCIAL', 'RECIBIDA_TOTAL'] %}
-                                <span class="badge text-bg-info">{{ purchase_order.approval_status }}</span>
+                                <span class="badge text-bg-info">
+                                    {{ purchase_order.approval_status }}
+                                </span>
+
                             {% else %}
-                                <span class="badge text-bg-secondary">{{ purchase_order.approval_status }}</span>
+                                <span class="badge text-bg-secondary">
+                                    {{ purchase_order.approval_status }}
+                                </span>
                             {% endif %}
+
                         </dd>
 
                         <dt class="col-5 text-muted">Moneda</dt>
@@ -84,18 +104,24 @@
                         <dd class="col-7">{{ purchase_order.payment_terms or '-' }}</dd>
 
                         <dt class="col-5 text-muted">Predio sugerido</dt>
-                        <dd class="col-7">{{ purchase_order.site.name if purchase_order.site else 'No definido' }}</dd>
+                        <dd class="col-7">
+                            {{ purchase_order.site.name if purchase_order.site else 'No definido' }}
+                        </dd>
 
                         <dt class="col-5 text-muted">Bodega sugerida</dt>
-                        <dd class="col-7">{{ purchase_order.warehouse.name if purchase_order.warehouse else 'No definida' }}</dd>
+                        <dd class="col-7">
+                            {{ purchase_order.warehouse.name if purchase_order.warehouse else 'No definida' }}
+                        </dd>
 
                         <dt class="col-5 text-muted">Creado por</dt>
                         <dd class="col-7">
+
                             {% if purchase_order.generated_by_user %}
                                 {{ purchase_order.generated_by_user.full_name or purchase_order.generated_by_user.username }}
                             {% else %}
                                 -
                             {% endif %}
+
                         </dd>
 
                         <dt class="col-5 text-muted">Fecha creación</dt>
@@ -106,114 +132,45 @@
 
                         <dt class="col-5 text-muted">Aprobada</dt>
                         <dd class="col-7">{{ purchase_order.approved_at|cr_datetime }}</dd>
+
                     </dl>
 
                     {% if purchase_order.notes %}
                         <hr>
+
                         <h6 class="fw-bold">Notas</h6>
-                        <p class="mb-0 text-muted">{{ purchase_order.notes }}</p>
+
+                        <p class="mb-0 text-muted">
+                            {{ purchase_order.notes }}
+                        </p>
                     {% endif %}
+
                 </div>
             </div>
 
-            {% if purchase_order.approval_status == 'PENDIENTE_APROBACION' %}
-                <div class="card border-0 shadow-sm rounded-4 mt-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-2">Subir OC firmada</h5>
-                        <p class="text-muted small mb-3">
-                            La orden pasará a <strong>APROBADA</strong> al adjuntar el PDF firmado.
-                        </p>
-
-                        <form method="post"
-                              action="{{ url_for('purchases.upload_approved_pdf', order_id=purchase_order.id) }}"
-                              enctype="multipart/form-data">
-                            <div class="mb-3">
-                                <label class="form-label small text-muted">PDF aprobado</label>
-                                <input type="file" name="file" accept=".pdf" class="form-control" required>
-                            </div>
-
-                            <button type="submit" class="btn btn-success w-100 rounded-3">
-                                <i class="bi bi-file-earmark-check me-2"></i>Subir y aprobar OC
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            {% endif %}
-
-            {% if approved_doc %}
-                <div class="card border-0 shadow-sm rounded-4 mt-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-2">Documento aprobado</h5>
-                        <p class="text-muted small mb-3">
-                            {{ approved_doc.approved_pdf_original_name or 'PDF aprobado' }}
-                        </p>
-
-                        <a href="{{ url_for('purchases.view_approved_pdf', order_id=purchase_order.id) }}"
-                           target="_blank"
-                           class="btn btn-outline-success w-100 rounded-3">
-                            <i class="bi bi-file-earmark-pdf me-2"></i>Ver PDF aprobado
-                        </a>
-
-                        <div class="small text-muted mt-3">
-                            Subido por:
-                            {{ approved_doc.approved_by_user.full_name if approved_doc.approved_by_user and approved_doc.approved_by_user.full_name else approved_doc.approved_by_user.username if approved_doc.approved_by_user else 'Sin usuario' }}
-                            <br>
-                            Fecha: {{ approved_doc.approved_pdf_uploaded_at|cr_datetime }}
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
-
-            {% if purchase_order.approvals %}
-                <div class="card border-0 shadow-sm rounded-4 mt-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3">Historial de aprobación</h5>
-
-                        <div class="d-flex flex-column gap-3">
-                            {% for item in purchase_order.approvals %}
-                                <div class="border rounded-3 p-3">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <div class="fw-semibold">{{ item.status }}</div>
-                                        <small class="text-muted">{{ item.created_at|cr_datetime }}</small>
-                                    </div>
-
-                                    <div class="text-muted small mb-1">
-                                        {{ item.approved_by_user.full_name if item.approved_by_user and item.approved_by_user.full_name else item.approved_by_user.username if item.approved_by_user else 'Sin usuario' }}
-                                    </div>
-
-                                    <div class="small text-muted">{{ item.reason or 'Sin observación' }}</div>
-
-                                    {% if item.approved_pdf_data %}
-                                        <div class="mt-2">
-                                            <a href="{{ url_for('purchases.view_approved_pdf', order_id=purchase_order.id) }}"
-                                               target="_blank"
-                                               class="small text-success text-decoration-none">
-                                                <i class="bi bi-file-earmark-pdf me-1"></i>Ver PDF firmado
-                                            </a>
-                                        </div>
-                                    {% endif %}
-                                </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
         </div>
 
         <div class="col-12 col-xl-8">
+
             <div class="card border-0 shadow-sm rounded-4">
                 <div class="card-body p-0">
+
                     <div class="p-4 border-bottom">
                         <h5 class="fw-bold mb-1">Líneas de orden</h5>
+
                         <p class="text-muted mb-0">
                             Artículos, cantidades y costos incluidos en esta orden.
                         </p>
                     </div>
 
                     {% if purchase_order.lines %}
+
                         <div class="table-responsive">
+
                             <table class="table align-middle mb-0">
+
                                 <thead class="table-light">
+
                                     <tr>
                                         <th class="ps-4">Artículo</th>
                                         <th>Código</th>
@@ -221,82 +178,262 @@
                                         <th>Cant. recibida</th>
                                         <th>Unidad</th>
                                         <th>Costo unitario</th>
+                                        <th>Desc %</th>
                                         <th>Subtotal</th>
                                         <th>IVA %</th>
                                         <th>Total</th>
-                                        <th class="pe-4">Notas</th>
+                                        <th class="pe-4">Ajuste</th>
                                     </tr>
+
                                 </thead>
+
                                 <tbody>
+
                                     {% for line in purchase_order.lines %}
+
                                         <tr>
-                                            <td class="ps-4 fw-semibold">{{ line.item_name }}</td>
-                                            <td>{{ line.item_code or '-' }}</td>
-                                            <td>{{ line.quantity_ordered }}</td>
-                                            <td>
-                                                {{ line.quantity_received }}
-                                                {% if line.is_fully_received %}
-                                                    <div><small class="text-success">Completada</small></div>
-                                                {% elif line.pending_quantity > 0 %}
-                                                    <div><small class="text-muted">Pendiente: {{ line.pending_quantity }}</small></div>
-                                                {% endif %}
+
+                                            <td class="ps-4 fw-semibold">
+                                                {{ line.item_name }}
                                             </td>
-                                            <td>{{ line.unit.name if line.unit else '-' }}</td>
-                                            <td>{{ line.unit_cost }}</td>
-                                            <td>{{ line.line_subtotal }}</td>
-                                            <td>{{ line.tax_pct }}</td>
-                                            <td class="fw-semibold">{{ line.line_total }}</td>
-                                            <td class="pe-4">{{ line.line_notes or '-' }}</td>
+
+                                            <td>
+                                                {{ line.item_code or '-' }}
+                                            </td>
+
+                                            <td>
+
+                                                {% if purchase_order.approval_status == 'APROBADA'
+                                                      and line.quantity_received == 0 %}
+
+                                                    <form method="post"
+                                                          action="{{ url_for('purchases.adjust_purchase_order_line', line_id=line.id) }}"
+                                                          class="d-flex flex-column gap-2">
+
+                                                        <input type="number"
+                                                               step="0.0001"
+                                                               min="0.0001"
+                                                               max="{{ line.quantity_ordered }}"
+                                                               name="quantity_ordered"
+                                                               value="{{ line.quantity_ordered }}"
+                                                               class="form-control form-control-sm po-quantity"
+                                                               data-tax="{{ line.tax_pct }}"
+                                                               data-discount="{{ line.discount_pct }}"
+                                                               data-line="{{ line.id }}">
+
+                                                {% else %}
+
+                                                    {{ line.quantity_ordered }}
+
+                                                {% endif %}
+
+                                            </td>
+
+                                            <td>
+
+                                                {{ line.quantity_received }}
+
+                                                {% if line.is_fully_received %}
+                                                    <div>
+                                                        <small class="text-success">
+                                                            Completada
+                                                        </small>
+                                                    </div>
+
+                                                {% elif line.pending_quantity > 0 %}
+                                                    <div>
+                                                        <small class="text-muted">
+                                                            Pendiente: {{ line.pending_quantity }}
+                                                        </small>
+                                                    </div>
+                                                {% endif %}
+
+                                            </td>
+
+                                            <td>
+                                                {{ line.unit.name if line.unit else '-' }}
+                                            </td>
+
+                                            <td>
+
+                                                {% if purchase_order.approval_status == 'APROBADA'
+                                                      and line.quantity_received == 0 %}
+
+                                                    <input type="number"
+                                                           step="0.0001"
+                                                           min="0.0001"
+                                                           max="{{ line.unit_cost }}"
+                                                           name="unit_cost"
+                                                           value="{{ line.unit_cost }}"
+                                                           class="form-control form-control-sm po-unit-cost"
+                                                           data-tax="{{ line.tax_pct }}"
+                                                           data-discount="{{ line.discount_pct }}"
+                                                           data-line="{{ line.id }}">
+
+                                                {% else %}
+
+                                                    {{ line.unit_cost }}
+
+                                                {% endif %}
+
+                                            </td>
+
+                                            <td>
+                                                {{ line.discount_pct }}%
+                                            </td>
+
+                                            <td class="po-subtotal-{{ line.id }}">
+                                                {{ line.line_subtotal }}
+                                            </td>
+
+                                            <td>
+                                                {{ line.tax_pct }}%
+                                            </td>
+
+                                            <td class="fw-semibold po-total-{{ line.id }}">
+                                                {{ line.line_total }}
+                                            </td>
+
+                                            <td class="pe-4">
+
+                                                {% if purchase_order.approval_status == 'APROBADA'
+                                                      and line.quantity_received == 0 %}
+
+                                                    <button type="submit"
+                                                            class="btn btn-sm btn-outline-dark">
+                                                        Ajustar
+                                                    </button>
+
+                                                    </form>
+
+                                                {% else %}
+
+                                                    {{ line.line_notes or '-' }}
+
+                                                {% endif %}
+
+                                            </td>
+
                                         </tr>
+
                                     {% endfor %}
+
                                 </tbody>
+
                             </table>
+
                         </div>
+
                     {% else %}
+
                         <div class="p-5 text-center">
                             <i class="bi bi-list-ul fs-1 text-muted"></i>
-                            <h6 class="fw-bold mt-3">No hay líneas registradas</h6>
+
+                            <h6 class="fw-bold mt-3">
+                                No hay líneas registradas
+                            </h6>
                         </div>
+
                     {% endif %}
+
                 </div>
             </div>
 
-            {% if approved_doc %}
-                <div class="card border-0 shadow-sm rounded-4 mt-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3">Vista previa del PDF aprobado</h5>
-
-                        <iframe src="{{ url_for('purchases.view_approved_pdf', order_id=purchase_order.id) }}"
-                                style="width: 100%; height: 720px; border: 1px solid #dee2e6; border-radius: 12px;"
-                                title="PDF aprobado">
-                        </iframe>
-                    </div>
-                </div>
-            {% endif %}
-
-            {% if purchase_order.inventory_entries %}
-                <div class="card border-0 shadow-sm rounded-4 mt-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3">Entradas relacionadas</h5>
-                        <div class="d-flex flex-column gap-2">
-                            {% for item in purchase_order.inventory_entries %}
-                                <a href="{{ url_for('purchases.entry_detail', entry_id=item.id) }}"
-                                   class="text-decoration-none border rounded-3 p-3 d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <div class="fw-semibold text-dark">{{ item.number }}</div>
-                                        <small class="text-muted">
-                                            Factura: {{ item.invoice_number }} |
-                                            {{ item.created_at|cr_datetime }}
-                                        </small>
-                                    </div>
-                                    <i class="bi bi-arrow-right text-dark"></i>
-                                </a>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
         </div>
+
     </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+    function calculateLine(lineId) {
+
+        const qtyInput = document.querySelector(
+            `.po-quantity[data-line="${lineId}"]`
+        );
+
+        const unitInput = document.querySelector(
+            `.po-unit-cost[data-line="${lineId}"]`
+        );
+
+        if (!qtyInput || !unitInput) {
+            return;
+        }
+
+        const qty = parseFloat(qtyInput.value || 0);
+
+        const unit = parseFloat(unitInput.value || 0);
+
+        const taxPct = parseFloat(
+            qtyInput.dataset.tax || 0
+        );
+
+        const discountPct = parseFloat(
+            qtyInput.dataset.discount || 0
+        );
+
+        const subtotal = qty * unit;
+
+        const discountAmount = (
+            subtotal * (discountPct / 100)
+        );
+
+        const taxableBase = subtotal - discountAmount;
+
+        const taxAmount = (
+            taxableBase * (taxPct / 100)
+        );
+
+        const total = taxableBase + taxAmount;
+
+        const subtotalCell = document.querySelector(
+            `.po-subtotal-${lineId}`
+        );
+
+        const totalCell = document.querySelector(
+            `.po-total-${lineId}`
+        );
+
+        if (subtotalCell) {
+
+            subtotalCell.textContent =
+                subtotal.toLocaleString("es-CR", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                });
+
+        }
+
+        if (totalCell) {
+
+            totalCell.textContent =
+                total.toLocaleString("es-CR", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                });
+
+        }
+
+    }
+
+    document.querySelectorAll(".po-quantity").forEach(input => {
+
+        input.addEventListener("input", () => {
+            calculateLine(input.dataset.line);
+        });
+
+    });
+
+    document.querySelectorAll(".po-unit-cost").forEach(input => {
+
+        input.addEventListener("input", () => {
+            calculateLine(input.dataset.line);
+        });
+
+    });
+
+});
+</script>
+
 {% endblock %}
