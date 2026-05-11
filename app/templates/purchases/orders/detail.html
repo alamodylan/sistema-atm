@@ -191,130 +191,173 @@
 
                                     {% for line in purchase_order.lines %}
 
-                                        <tr>
+                                    <tr>
 
-                                            <td class="ps-4 fw-semibold">
-                                                {{ line.item_name }}
-                                            </td>
+                                        <td class="ps-4 fw-semibold">
+                                            {{ line.item_name }}
+                                        </td>
 
-                                            <td>
-                                                {{ line.item_code or '-' }}
-                                            </td>
+                                        <td>
+                                            {{ line.item_code or '-' }}
+                                        </td>
 
-                                            <td>
+                                        <td colspan="9">
 
-                                                {% if purchase_order.approval_status == 'APROBADA'
-                                                      and line.quantity_received == 0 %}
+                                            {% if purchase_order.approval_status == 'APROBADA'
+                                                and line.quantity_received == 0 %}
 
-                                                    <form method="post"
-                                                          action="{{ url_for('purchases.adjust_purchase_order_line', line_id=line.id) }}"
-                                                          class="d-flex flex-column gap-2">
+                                                <form method="post"
+                                                    action="{{ url_for('purchases.adjust_purchase_order_line', line_id=line.id) }}">
+
+                                            {% endif %}
+
+                                            <div class="row g-2 align-items-center">
+
+                                                <div class="col-md-2">
+
+                                                    {% if purchase_order.approval_status == 'APROBADA'
+                                                        and line.quantity_received == 0 %}
 
                                                         <input type="number"
-                                                               step="0.0001"
-                                                               min="0.0001"
-                                                               max="{{ line.quantity_ordered }}"
-                                                               name="quantity_ordered"
-                                                               value="{{ line.quantity_ordered }}"
-                                                               class="form-control form-control-sm po-quantity"
-                                                               data-tax="{{ line.tax_pct }}"
-                                                               data-discount="{{ line.discount_pct }}"
-                                                               data-line="{{ line.id }}">
+                                                            step="0.0001"
+                                                            min="0.0001"
+                                                            max="{{ line.quantity_ordered }}"
+                                                            name="quantity_ordered"
+                                                            value="{{ line.quantity_ordered }}"
+                                                            class="form-control form-control-sm po-quantity"
+                                                            data-tax="{{ line.tax_pct }}"
+                                                            data-discount="{{ line.discount_pct }}"
+                                                            data-line="{{ line.id }}">
 
-                                                {% else %}
+                                                    {% else %}
 
-                                                    {{ line.quantity_ordered }}
+                                                        <div class="small text-muted">Cantidad</div>
+                                                        <div>{{ line.quantity_ordered }}</div>
 
-                                                {% endif %}
+                                                    {% endif %}
 
-                                            </td>
+                                                </div>
 
-                                            <td>
+                                                <div class="col-md-1">
 
-                                                {{ line.quantity_received }}
+                                                    <div class="small text-muted">Recibido</div>
 
-                                                {% if line.is_fully_received %}
                                                     <div>
-                                                        <small class="text-success">
-                                                            Completada
-                                                        </small>
+                                                        {{ line.quantity_received }}
                                                     </div>
 
-                                                {% elif line.pending_quantity > 0 %}
+                                                </div>
+
+                                                <div class="col-md-1">
+
+                                                    <div class="small text-muted">Unidad</div>
+
                                                     <div>
-                                                        <small class="text-muted">
-                                                            Pendiente: {{ line.pending_quantity }}
-                                                        </small>
+                                                        {{ line.unit.name if line.unit else '-' }}
                                                     </div>
-                                                {% endif %}
 
-                                            </td>
+                                                </div>
 
-                                            <td>
-                                                {{ line.unit.name if line.unit else '-' }}
-                                            </td>
+                                                <div class="col-md-2">
 
-                                            <td>
+                                                    {% if purchase_order.approval_status == 'APROBADA'
+                                                        and line.quantity_received == 0 %}
 
-                                                {% if purchase_order.approval_status == 'APROBADA'
-                                                      and line.quantity_received == 0 %}
+                                                        <input type="number"
+                                                            step="0.0001"
+                                                            min="0.0001"
+                                                            max="{{ line.unit_cost }}"
+                                                            name="unit_cost"
+                                                            value="{{ line.unit_cost }}"
+                                                            class="form-control form-control-sm po-unit-cost"
+                                                            data-tax="{{ line.tax_pct }}"
+                                                            data-discount="{{ line.discount_pct }}"
+                                                            data-line="{{ line.id }}">
 
-                                                    <input type="number"
-                                                           step="0.0001"
-                                                           min="0.0001"
-                                                           max="{{ line.unit_cost }}"
-                                                           name="unit_cost"
-                                                           value="{{ line.unit_cost }}"
-                                                           class="form-control form-control-sm po-unit-cost"
-                                                           data-tax="{{ line.tax_pct }}"
-                                                           data-discount="{{ line.discount_pct }}"
-                                                           data-line="{{ line.id }}">
+                                                    {% else %}
 
-                                                {% else %}
+                                                        <div class="small text-muted">Costo unitario</div>
 
-                                                    {{ line.unit_cost }}
+                                                        <div>
+                                                            {{ "{:,.2f}".format(line.unit_cost or 0) }}
+                                                        </div>
 
-                                                {% endif %}
+                                                    {% endif %}
 
-                                            </td>
+                                                </div>
 
-                                            <td>
-                                                {{ line.discount_pct }}%
-                                            </td>
+                                                <div class="col-md-1">
 
-                                            <td class="po-subtotal-{{ line.id }}">
-                                                {{ line.line_subtotal }}
-                                            </td>
+                                                    <div class="small text-muted">Desc.</div>
 
-                                            <td>
-                                                {{ line.tax_pct }}%
-                                            </td>
+                                                    <div>
+                                                        {{ "{:,.2f}".format(line.discount_pct or 0) }}%
+                                                    </div>
 
-                                            <td class="fw-semibold po-total-{{ line.id }}">
-                                                {{ line.line_total }}
-                                            </td>
+                                                </div>
 
-                                            <td class="pe-4">
+                                                <div class="col-md-1 po-subtotal-{{ line.id }}">
 
-                                                {% if purchase_order.approval_status == 'APROBADA'
-                                                      and line.quantity_received == 0 %}
+                                                    <div class="small text-muted">Subtotal</div>
 
-                                                    <button type="submit"
-                                                            class="btn btn-sm btn-outline-dark">
-                                                        Ajustar
-                                                    </button>
+                                                    <div>
+                                                        {{ "{:,.2f}".format(line.line_subtotal or 0) }}
+                                                    </div>
 
-                                                    </form>
+                                                </div>
 
-                                                {% else %}
+                                                <div class="col-md-1">
 
-                                                    {{ line.line_notes or '-' }}
+                                                    <div class="small text-muted">IVA</div>
 
-                                                {% endif %}
+                                                    <div>
+                                                        {{ "{:,.2f}".format(line.tax_pct or 0) }}%
+                                                    </div>
 
-                                            </td>
+                                                </div>
 
-                                        </tr>
+                                                <div class="col-md-2 po-total-{{ line.id }}">
+
+                                                    <div class="small text-muted">Total</div>
+
+                                                    <div class="fw-semibold">
+                                                        {{ "{:,.2f}".format(line.line_total or 0) }}
+                                                    </div>
+
+                                                </div>
+
+                                                <div class="col-md-1">
+
+                                                    {% if purchase_order.approval_status == 'APROBADA'
+                                                        and line.quantity_received == 0 %}
+
+                                                        <button type="submit"
+                                                                class="btn btn-sm btn-outline-dark w-100">
+                                                            Ajustar
+                                                        </button>
+
+                                                    {% else %}
+
+                                                        <span class="text-muted small">
+                                                            {{ line.line_notes or '-' }}
+                                                        </span>
+
+                                                    {% endif %}
+
+                                                </div>
+
+                                            </div>
+
+                                            {% if purchase_order.approval_status == 'APROBADA'
+                                                and line.quantity_received == 0 %}
+
+                                                </form>
+
+                                            {% endif %}
+
+                                        </td>
+
+                                    </tr>
 
                                     {% endfor %}
 

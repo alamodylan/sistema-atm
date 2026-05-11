@@ -355,8 +355,9 @@
                     <th style="width: 30%;">Descripción</th>
                     <th style="width: 9%;">Cantidad</th>
                     <th style="width: 8%;">Unidad</th>
-                    <th style="width: 11%;">Precio unit.</th>
-                    <th style="width: 8%;">IVA %</th>
+                    <th style="width: 10%;">Precio unit.</th>
+                    <th style="width: 7%;">Desc %</th>
+                    <th style="width: 7%;">IVA %</th>
                     <th style="width: 12%;">Subtotal</th>
                     <th style="width: 12%;">Total</th>
                 </tr>
@@ -378,16 +379,31 @@
                         </td>
                         <td class="text-center">{{ line.quantity_ordered }}</td>
                         <td class="text-center">{{ line.unit.name if line.unit else '-' }}</td>
-                        <td class="text-right">{{ line.unit_cost }}</td>
-                        <td class="text-center">{{ line.tax_pct }}</td>
-                        <td class="text-right">{{ line.line_subtotal }}</td>
-                        <td class="text-right fw-bold">{{ line.line_total }}</td>
+                        <td class="text-right">
+                            {{ "{:,.2f}".format(line.unit_cost or 0) }}
+                        </td>
+
+                        <td class="text-center">
+                            {{ "{:,.2f}".format(line.discount_pct or 0) }}%
+                        </td>
+
+                        <td class="text-center">
+                            {{ "{:,.2f}".format(line.tax_pct or 0) }}%
+                        </td>
+
+                        <td class="text-right">
+                            {{ "{:,.2f}".format(line.line_subtotal or 0) }}
+                        </td>
+
+                        <td class="text-right fw-bold">
+                            {{ "{:,.2f}".format(line.line_total or 0) }}
+                        </td>
                     </tr>
                 {% endfor %}
 
                 {% if not purchase_order.lines %}
                     <tr>
-                        <td colspan="9" class="text-center">No hay líneas registradas.</td>
+                        <td colspan="10" class="text-center">No hay líneas registradas.</td>
                     </tr>
                 {% endif %}
             </tbody>
@@ -402,15 +418,21 @@
             <table class="totals-table">
                 <tr>
                     <td class="label">Subtotal</td>
-                    <td class="text-right">{{ ns.subtotal }}</td>
+                    <td class="text-right">
+                        {{ "{:,.2f}".format(ns.subtotal or 0) }}
+                    </td>
                 </tr>
                 <tr>
                     <td class="label">IVA</td>
-                    <td class="text-right">{{ ns.iva }}</td>
-                </tr>
+                    <td class="text-right">
+                        {{ "{:,.2f}".format(ns.iva or 0) }}
+                    </td>
+                                    </tr>
                 <tr>
                     <td class="label total-final">Total</td>
-                    <td class="text-right total-final">{{ ns.total }}</td>
+                    <td class="text-right">
+                        {{ "{:,.2f}".format(ns.total or 0) }}
+                    </td>
                 </tr>
             </table>
         </div>
