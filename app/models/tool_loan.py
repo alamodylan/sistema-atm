@@ -12,7 +12,7 @@ class ToolLoan(db.Model):
     work_order_id = db.Column(
         db.BigInteger,
         db.ForeignKey("atm.work_orders.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
 
@@ -33,6 +33,13 @@ class ToolLoan(db.Model):
     warehouse_id = db.Column(
         db.BigInteger,
         db.ForeignKey("atm.warehouses.id"),
+        nullable=False,
+        index=True,
+    )
+
+    mechanic_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("atm.mechanics.id"),
         nullable=False,
         index=True,
     )
@@ -67,7 +74,7 @@ class ToolLoan(db.Model):
     loan_status = db.Column(
         db.String(30),
         nullable=False,
-        default="PRESTADA",
+        default="SOLICITADA",
         index=True,
     )
 
@@ -102,6 +109,10 @@ class ToolLoan(db.Model):
         back_populates="tool_loans",
     )
 
+    mechanic = db.relationship(
+        "Mechanic",
+    )
+
     requested_by_user = db.relationship(
         "User",
         foreign_keys=[requested_by_user_id],
@@ -123,4 +134,9 @@ class ToolLoan(db.Model):
     )
 
     def __repr__(self) -> str:
-        return f"<ToolLoan id={self.id} article={self.article_id} status={self.loan_status}>"
+        return (
+            f"<ToolLoan id={self.id} "
+            f"mechanic={self.mechanic_id} "
+            f"article={self.article_id} "
+            f"status={self.loan_status}>"
+        )

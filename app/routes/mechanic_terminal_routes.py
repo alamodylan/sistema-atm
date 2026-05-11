@@ -22,7 +22,13 @@ from app.services.work_order_request_service import (
     add_request_line,
     send_request,
 )
-
+from app.services.tool_loan_service import (
+    ToolLoanServiceError,
+    request_tool_loan_by_mechanic,
+    request_tool_return as request_tool_return_service,
+    request_all_tool_returns,
+    list_mechanic_tool_loans,
+)
 terminal_bp = Blueprint("mechanic_terminal", __name__, url_prefix="/terminal")
 
 def _is_tool_article_code(code: str) -> bool:
@@ -149,6 +155,57 @@ def get_tools(warehouse_id):
     except InventoryServiceError as exc:
         return jsonify({"error": str(exc)}), 400
 
+@terminal_bp.route("/tools/request", methods=["POST"])
+@login_required
+def request_tool():
+
+    data = request.get_json(silent=True) or {}
+
+    active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return jsonify({
+            "error": "No hay predio activo seleccionado"
+        }), 400
+
+    try:
+
+        mechanic_id = int(data.get("mechanic_id"))
+        article_id = int(data.get("article_id"))
+        warehouse_id = int(data.get("warehouse_id"))
+
+        quantity = data.get("quantity") or 1
+        notes = data.get("notes")
+
+        loan = request_tool_loan_by_mechanic(
+            mechanic_id=mechanic_id,
+            article_id=article_id,
+            warehouse_id=warehouse_id,
+            quantity=quantity,
+            requested_by_user_id=current_user.id,
+            notes=notes,
+            site_id=active_site_id,
+        )
+
+        return jsonify({
+            "ok": True,
+            "tool_loan_id": loan.id,
+            "message": "Herramienta solicitada correctamente.",
+        })
+
+    except ToolLoanServiceError as exc:
+
+        return jsonify({
+            "error": str(exc)
+        }), 400
+
+    except Exception as exc:
+
+        return jsonify({
+            "error": str(exc)
+        }), 500
+    
+
 
 @terminal_bp.route("/borrowed-tools/<int:work_order_id>")
 @login_required
@@ -195,62 +252,143 @@ def get_borrowed_tools(work_order_id):
 
     return jsonify({"items": items})
 
-@terminal_bp.route("/tools/<int:tool_loan_id>/request-return", methods=["POST"])
+@terminal_bp.route("/mechanics/<int:mechanic_id>/borrowed-tools")
 @login_required
-def request_tool_return(tool_loan_id):
+def get_mechanic_borrowed_tools(mechanic_id):
+
     active_site_id = session.get("active_site_id")
 
     if not active_site_id:
-        return jsonify({"error": "No hay predio activo seleccionado"}), 400
-
-    data = request.get_json(silent=True) or {}
-    mechanic_id = data.get("mechanic_id")
-
-    if not mechanic_id:
-        return jsonify({"error": "Falta el mecánico"}), 400
-
-    mechanic = Mechanic.query.filter_by(
-        id=int(mechanic_id),
-        site_id=active_site_id,
-        is_active=True,
-    ).first()
-
-    if not mechanic:
-        return jsonify({"error": "Mecánico no encontrado"}), 404
-
-    loan = (
-        ToolLoan.query
-        .join(WorkOrder, WorkOrder.id == ToolLoan.work_order_id)
-        .filter(
-            ToolLoan.id == tool_loan_id,
-            WorkOrder.site_id == active_site_id,
-        )
-        .first()
-    )
-
-    if not loan:
-        return jsonify({"error": "Préstamo no encontrado"}), 404
-
-    if loan.loan_status != "PRESTADA":
         return jsonify({
-            "error": "La herramienta ya fue procesada para devolución."
+            "error": "No hay predio activo seleccionado"
         }), 400
 
     try:
-        loan.loan_status = "DEVOLUCION_SOLICITADA"
-        loan.returned_by_user_id = current_user.id
-        loan.returned_at = datetime.now(UTC)
 
-        db.session.commit()
+        loans = list_mechanic_tool_loans(
+            mechanic_id=mechanic_id,
+            site_id=active_site_id,
+        )
+
+        items = []
+
+        for loan in loans:
+
+            items.append({
+                "tool_loan_id": loan.id,
+                "article_id": loan.article_id,
+                "code": loan.article.code if loan.article else "",
+                "name": loan.article.name if loan.article else "",
+                "quantity": str(loan.quantity),
+                "loan_status": loan.loan_status,
+                "loaned_at": (
+                    loan.loaned_at.isoformat()
+                    if loan.loaned_at else None
+                ),
+            })
+
+        return jsonify({
+            "items": items
+        })
+
+    except ToolLoanServiceError as exc:
+
+        return jsonify({
+            "error": str(exc)
+        }), 400
+
+@terminal_bp.route("/tools/<int:tool_loan_id>/request-return", methods=["POST"])
+@login_required
+def request_tool_return(tool_loan_id):
+
+    data = request.get_json(silent=True) or {}
+
+    active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return jsonify({
+            "error": "No hay predio activo seleccionado"
+        }), 400
+
+    mechanic_id = data.get("mechanic_id")
+
+    if not mechanic_id:
+        return jsonify({
+            "error": "Falta el mecánico"
+        }), 400
+
+    try:
+
+        loan = request_tool_return_service(
+            tool_loan_id=tool_loan_id,
+            mechanic_id=int(mechanic_id),
+            returned_by_user_id=current_user.id,
+            site_id=active_site_id,
+        )
 
         return jsonify({
             "ok": True,
-            "message": "Devolución solicitada correctamente."
+            "tool_loan_id": loan.id,
+            "message": "Devolución solicitada correctamente.",
         })
 
+    except ToolLoanServiceError as exc:
+
+        return jsonify({
+            "error": str(exc)
+        }), 400
+
     except Exception as exc:
-        db.session.rollback()
-        return jsonify({"error": str(exc)}), 500
+
+        return jsonify({
+            "error": str(exc)
+        }), 500
+    
+@terminal_bp.route("/tools/request-return-all", methods=["POST"])
+@login_required
+def request_return_all_tools():
+
+    data = request.get_json(silent=True) or {}
+
+    active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return jsonify({
+            "error": "No hay predio activo seleccionado"
+        }), 400
+
+    mechanic_id = data.get("mechanic_id")
+
+    if not mechanic_id:
+        return jsonify({
+            "error": "Falta el mecánico"
+        }), 400
+
+    try:
+
+        loans = request_all_tool_returns(
+            mechanic_id=int(mechanic_id),
+            returned_by_user_id=current_user.id,
+            site_id=active_site_id,
+        )
+
+        return jsonify({
+            "ok": True,
+            "count": len(loans),
+            "message": "Todas las devoluciones fueron solicitadas.",
+        })
+
+    except ToolLoanServiceError as exc:
+
+        return jsonify({
+            "error": str(exc)
+        }), 400
+
+    except Exception as exc:
+
+        return jsonify({
+            "error": str(exc)
+        }), 500
 
 @terminal_bp.route("/work-order/<int:work_order_id>/tasks/<int:mechanic_id>")
 @login_required
@@ -455,7 +593,6 @@ def submit_request(work_order_id):
             for article in articles
         }
 
-        tool_lines = []
         normal_lines = []
 
         for line in lines:
@@ -468,56 +605,14 @@ def submit_request(work_order_id):
                 )
 
             if _is_tool_article_code(article.code):
-                tool_lines.append(line)
-            else:
-                normal_lines.append(line)
+                raise WorkOrderRequestServiceError(
+                    "Las herramientas ya no se solicitan desde una OT."
+                )
+
+            normal_lines.append(line)
 
         created_request_ids = []
 
-        # =====================================================
-        # HERRAMIENTAS: VAN DIRECTO A BODEGA
-        # =====================================================
-        if tool_lines:
-            tool_request = create_request(
-                work_order_id=work_order.id,
-                requested_by_user_id=current_user.id,
-                mechanic_id=int(mechanic_id),
-                commit=False,
-            )
-
-            db.session.flush()
-
-            for line in tool_lines:
-                request_line = add_request_line(
-                    request_id=tool_request.id,
-                    article_id=int(line.get("article_id")),
-                    quantity_requested=line.get("quantity"),
-                    notes=line.get("notes"),
-                    commit=False,
-                )
-
-                request_line.manager_review_status = "APROBADA"
-                request_line.manager_reviewed_by_user_id = current_user.id
-                request_line.manager_reviewed_at = db.func.now()
-
-            db.session.flush()
-
-            send_request(
-                request_id=tool_request.id,
-                performed_by_user_id=current_user.id,
-                commit=False,
-            )
-
-            tool_request.approved_by_user_id = current_user.id
-            tool_request.approved_at = db.func.now()
-            tool_request.sent_to_warehouse_by_user_id = current_user.id
-            tool_request.sent_to_warehouse_at = db.func.now()
-
-            created_request_ids.append(tool_request.id)
-
-        # =====================================================
-        # ARTÍCULOS NORMALES: VAN A JEFATURA
-        # =====================================================
         if normal_lines:
             normal_request = create_request(
                 work_order_id=work_order.id,
