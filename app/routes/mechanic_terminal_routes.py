@@ -205,7 +205,82 @@ def request_tool():
             "error": str(exc)
         }), 500
     
+@terminal_bp.route("/tools/request-batch", methods=["POST"])
+@login_required
+def request_tools_batch():
+    data = request.get_json(silent=True) or {}
+    active_site_id = session.get("active_site_id")
 
+    if not active_site_id:
+        return jsonify({
+            "error": "No hay predio activo seleccionado"
+        }), 400
+
+    mechanic_id = data.get("mechanic_id")
+    warehouse_id = data.get("warehouse_id")
+    lines = data.get("lines") or []
+
+    if not mechanic_id:
+        return jsonify({
+            "error": "Falta el mecánico"
+        }), 400
+
+    if not warehouse_id:
+        return jsonify({
+            "error": "Falta la bodega"
+        }), 400
+
+    if not lines:
+        return jsonify({
+            "error": "No hay herramientas para solicitar"
+        }), 400
+
+    created_ids = []
+
+    try:
+        for line in lines:
+            article_id = line.get("article_id")
+            quantity = line.get("quantity") or 1
+            notes = line.get("notes")
+
+            if not article_id:
+                raise ToolLoanServiceError(
+                    "Falta la herramienta en una de las líneas."
+                )
+
+            loan = request_tool_loan_by_mechanic(
+                mechanic_id=int(mechanic_id),
+                article_id=int(article_id),
+                warehouse_id=int(warehouse_id),
+                quantity=quantity,
+                requested_by_user_id=current_user.id,
+                notes=notes,
+                site_id=active_site_id,
+                commit=False,
+            )
+
+            db.session.flush()
+            created_ids.append(loan.id)
+
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "tool_loan_ids": created_ids,
+            "message": "Solicitud de herramientas enviada correctamente.",
+        })
+
+    except ToolLoanServiceError as exc:
+        db.session.rollback()
+        return jsonify({
+            "error": str(exc)
+        }), 400
+
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({
+            "error": f"Error al solicitar herramientas: {str(exc)}"
+        }), 500
 
 @terminal_bp.route("/borrowed-tools/<int:work_order_id>")
 @login_required

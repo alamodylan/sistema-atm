@@ -46,6 +46,13 @@
             </a>
             {% endif %}
 
+            {% if can_use_permissions and current_user.has_permission("terminal_taller") %}
+            <a href="{{ url_for('tool_loans.index') }}"
+               class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('tool_loans.') %}active{% endif %}">
+                <i class="bi bi-tools me-2"></i>Herramientas prestadas
+            </a>
+            {% endif %}
+
             {% if can_use_permissions and current_user.has_permission("articulos") %}
             <a href="{{ url_for('articles.inventory_home') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('articles.') %}active{% endif %}">

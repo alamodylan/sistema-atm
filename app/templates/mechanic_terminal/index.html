@@ -179,6 +179,7 @@ let currentSubcategory = null;
 let navigationLevel = "categories";
 let currentTasks = [];
 let cart = [];
+let cartMode = "articles";
 let pendingReceptionRequestId = null;
 let receptionMode = false;
 let scannerFocusPausedUntil = 0;
@@ -288,6 +289,7 @@ function resetTerminal() {
     navigationLevel = "categories";
     currentTasks = [];
     cart = [];
+    cartMode = "articles";
     pendingReceptionRequestId = null;
     receptionMode = false;
 
@@ -437,6 +439,7 @@ function renderWorkOrders() {
 
             selectedWorkOrder = ot;
             cart = [];
+            cartMode = "articles";
             currentTasks = [];
             renderCart();
 
@@ -668,6 +671,8 @@ async function loadItemsTree(warehouse_id) {
 
     pauseScannerFocus(1500);
 
+    cartMode = "articles";
+
     const res = await fetch("/terminal/articles-tree/" + warehouse_id);
     const data = await res.json();
 
@@ -844,9 +849,6 @@ function renderItemRows(items) {
     const isBorrowedToolsScreen =
         screenTitle === "Herramientas prestadas";
 
-    const isToolRequestScreen =
-        screenTitle === "Solicitar herramienta";
-
     items.forEach(function (item) {
         const row = document.createElement("div");
         row.className = "border rounded-3 p-2 mb-2 d-flex justify-content-between align-items-center bg-white";
@@ -924,53 +926,10 @@ function renderItemRows(items) {
                 '<div>' + item.code + ' - ' + item.name + '</div>' +
                 '<button type="button" class="btn btn-sm btn-success rounded-3">Agregar</button>';
 
-            row.querySelector("button").onclick = async function (e) {
+            row.querySelector("button").onclick = function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-
-                if (!isToolRequestScreen) {
-                    openQuantityForItem(item);
-                    return;
-                }
-
-                if (!currentMechanic || !currentMechanic.mechanic_id) {
-                    alert("No hay mecánico escaneado.");
-                    return;
-                }
-
-                const warehouseId = getToolWarehouseId();
-
-                if (!warehouseId) {
-                    alert("No se pudo determinar la bodega para solicitar herramientas.");
-                    return;
-                }
-
-                const res = await fetch("/terminal/tools/request", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        mechanic_id: currentMechanic.mechanic_id,
-                        article_id: item.article_id,
-                        warehouse_id: warehouseId,
-                        quantity: 1
-                    })
-                });
-
-                const data = await res.json();
-
-                if (data.ok) {
-                    scanStatus.innerText =
-                        data.message || "Herramienta solicitada correctamente.";
-
-                    loadItems(
-                        "/terminal/tools/" + warehouseId,
-                        "Solicitar herramienta"
-                    );
-                } else {
-                    alert(data.error || "Error al solicitar herramienta.");
-                }
+                openQuantityForItem(item);
             };
         }
 
@@ -1009,6 +968,16 @@ function renderCart() {
         container.appendChild(row);
     });
 
+    const title = cartMode === "tools"
+        ? "Solicitud de herramientas"
+        : "Solicitud";
+
+    document.querySelector("#cartSection h5").innerText = title;
+
+    document.getElementById("submitRequestBtn").innerText = cartMode === "tools"
+        ? "Enviar solicitud de herramientas"
+        : "Enviar solicitud";
+
     document.getElementById("cartSection").classList.remove("d-none");
 }
 
@@ -1033,7 +1002,8 @@ document.getElementById("confirmQuantityBtn").onclick = function (e) {
     cart.push({
         article_id: quantityArticleId.value,
         name: quantityArticleName.value,
-        quantity: quantityValue
+        quantity: quantityValue,
+        mode: cartMode
     });
 
     quantitySection.classList.add("d-none");
@@ -1061,11 +1031,6 @@ document.getElementById("submitRequestBtn").onclick = async function (e) {
 
     pauseScannerFocus(2000);
 
-    if (!selectedWorkOrder) {
-        alert("Debe seleccionar una OT.");
-        return;
-    }
-
     if (!currentMechanic || !currentMechanic.mechanic_id) {
         alert("No hay mecánico escaneado.");
         return;
@@ -1080,13 +1045,46 @@ document.getElementById("submitRequestBtn").onclick = async function (e) {
     button.disabled = true;
     button.innerText = "Enviando...";
 
-    const res = await fetch("/terminal/work-orders/" + selectedWorkOrder.id + "/requests/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+    let url = "";
+    let payload = {};
+
+    if (cartMode === "tools") {
+        const warehouseId = getToolWarehouseId();
+
+        if (!warehouseId) {
+            button.disabled = false;
+            button.innerText = "Enviar solicitud de herramientas";
+            alert("No se pudo determinar la bodega para solicitar herramientas.");
+            return;
+        }
+
+        url = "/terminal/tools/request-batch";
+
+        payload = {
+            mechanic_id: currentMechanic.mechanic_id,
+            warehouse_id: warehouseId,
+            lines: cart
+        };
+    } else {
+        if (!selectedWorkOrder) {
+            button.disabled = false;
+            button.innerText = "Enviar solicitud";
+            alert("Debe seleccionar una OT.");
+            return;
+        }
+
+        url = "/terminal/work-orders/" + selectedWorkOrder.id + "/requests/submit";
+
+        payload = {
             lines: cart,
             mechanic_id: currentMechanic.mechanic_id
-        })
+        };
+    }
+
+    const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
     });
 
     const data = await res.json();
@@ -1095,12 +1093,21 @@ document.getElementById("submitRequestBtn").onclick = async function (e) {
         scanStatus.innerText = data.message || "Solicitud enviada correctamente.";
         cart = [];
         renderCart();
-        await loadPendingReceptions();
+
+        if (cartMode === "articles") {
+            await loadPendingReceptions();
+        }
+
         button.disabled = false;
-        button.innerText = "Enviar solicitud";
+        button.innerText = cartMode === "tools"
+            ? "Enviar solicitud de herramientas"
+            : "Enviar solicitud";
     } else {
         button.disabled = false;
-        button.innerText = "Enviar solicitud";
+        button.innerText = cartMode === "tools"
+            ? "Enviar solicitud de herramientas"
+            : "Enviar solicitud";
+
         alert(data.error || "Error al enviar solicitud.");
     }
 };
@@ -1108,6 +1115,11 @@ document.getElementById("submitRequestBtn").onclick = async function (e) {
 document.getElementById("loadArticlesBtn").onclick = function (e) {
     e.preventDefault();
     e.stopPropagation();
+
+    cartMode = "articles";
+    cart = [];
+    renderCart();
+
     loadItemsTree(selectedWorkOrder.warehouse_id);
 };
 
@@ -1121,6 +1133,10 @@ document.getElementById("loadToolsBtn").onclick = function (e) {
         alert("No se pudo determinar la bodega para solicitar herramientas.");
         return;
     }
+
+    cartMode = "tools";
+    cart = [];
+    renderCart();
 
     loadItems("/terminal/tools/" + warehouseId, "Solicitar herramienta");
 };

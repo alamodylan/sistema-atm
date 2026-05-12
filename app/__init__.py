@@ -50,7 +50,7 @@ def create_app():
     from app.routes.suppliers import suppliers_bp
     from app.routes.users import users_bp
     from app.routes.home import home_bp
-
+    from app.routes.tool_loans_routes import tool_loans_bp
 
 
 
@@ -85,6 +85,7 @@ def create_app():
     app.register_blueprint(suppliers_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(home_bp)
+    app.register_blueprint(tool_loans_bp)
 
 
 

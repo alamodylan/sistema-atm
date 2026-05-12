@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">Herramientas prestadas</h2>
+
+            <p class="text-muted mb-0">
+                Control de préstamos y devoluciones de herramientas.
+            </p>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+
+            <div class="badge text-bg-warning px-3 py-2 rounded-pill">
+                Solicitadas:
+                {{ requested_loans|length }}
+            </div>
+
+            <div class="badge text-bg-primary px-3 py-2 rounded-pill">
+                Prestadas:
+                {{
+                    active_loans
+                    | selectattr("loan_status", "equalto", "PRESTADA")
+                    | list
+                    | length
+                }}
+            </div>
+
+            <div class="badge text-bg-dark px-3 py-2 rounded-pill">
+                Devolución solicitada:
+                {{
+                    active_loans
+                    | selectattr("loan_status", "equalto", "DEVOLUCION_SOLICITADA")
+                    | list
+                    | length
+                }}
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- SOLICITADAS -->
+    <!-- ===================================================== -->
+
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-0">
+
+            <div class="p-4 border-bottom">
+                <h5 class="fw-bold mb-1">
+                    Solicitudes pendientes de préstamo
+                </h5>
+
+                <div class="text-muted small">
+                    Herramientas solicitadas por mecánicos pendientes de entregar.
+                </div>
+            </div>
+
+            {% if requested_loans %}
+
+                <div class="table-responsive">
+
+                    <table class="table align-middle mb-0">
+
+                        <thead class="table-light">
+
+                            <tr>
+                                <th class="ps-4">Herramienta</th>
+                                <th>Mecánico</th>
+                                <th>Bodega</th>
+                                <th>Cantidad</th>
+                                <th>Solicitada</th>
+                                <th>Estado</th>
+                                <th class="text-end pe-4">Acción</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            {% for loan in requested_loans %}
+
+                                <tr>
+
+                                    <td class="ps-4">
+
+                                        <div class="fw-semibold">
+                                            {{ loan.article.code if loan.article else "-" }}
+                                        </div>
+
+                                        <div class="small text-muted">
+                                            {{ loan.article.name if loan.article else "-" }}
+                                        </div>
+
+                                    </td>
+
+                                    <td>
+
+                                        {% if loan.mechanic %}
+                                            <div class="fw-semibold">
+                                                {{ loan.mechanic.name }}
+                                            </div>
+
+                                            <div class="small text-muted">
+                                                {{ loan.mechanic.code }}
+                                            </div>
+                                        {% else %}
+                                            -
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td>
+
+                                        {% if loan.warehouse %}
+                                            {{ loan.warehouse.name }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td>
+                                        {{ "{:,.2f}".format(loan.quantity or 0) }}
+                                    </td>
+
+                                    <td>
+
+                                        {% if loan.loaned_at %}
+                                            {{ loan.loaned_at|cr_datetime }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td>
+                                        <span class="badge text-bg-warning">
+                                            SOLICITADA
+                                        </span>
+                                    </td>
+
+                                    <td class="text-end pe-4">
+
+                                        <form method="post"
+                                              action="{{ url_for('tool_loans.deliver', tool_loan_id=loan.id) }}">
+
+                                            <button type="submit"
+                                                    class="btn btn-sm btn-warning rounded-3">
+                                                <i class="bi bi-box-arrow-right me-1"></i>
+                                                Prestar
+                                            </button>
+
+                                        </form>
+
+                                    </td>
+
+                                </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            {% else %}
+
+                <div class="p-5 text-center">
+
+                    <i class="bi bi-tools fs-1 text-muted"></i>
+
+                    <h6 class="fw-bold mt-3">
+                        No hay solicitudes pendientes
+                    </h6>
+
+                    <div class="text-muted">
+                        Actualmente no existen herramientas pendientes de prestar.
+                    </div>
+
+                </div>
+
+            {% endif %}
+
+        </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- PRESTADAS / DEVOLUCIÓN -->
+    <!-- ===================================================== -->
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+
+            <div class="p-4 border-bottom">
+                <h5 class="fw-bold mb-1">
+                    Herramientas activas
+                </h5>
+
+                <div class="text-muted small">
+                    Herramientas actualmente prestadas o pendientes de recepción.
+                </div>
+            </div>
+
+            {% if active_loans %}
+
+                <div class="table-responsive">
+
+                    <table class="table align-middle mb-0">
+
+                        <thead class="table-light">
+
+                            <tr>
+                                <th class="ps-4">Herramienta</th>
+                                <th>Mecánico</th>
+                                <th>Bodega</th>
+                                <th>Cantidad</th>
+                                <th>Prestada</th>
+                                <th>Estado</th>
+                                <th class="text-end pe-4">Acción</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            {% for loan in active_loans %}
+
+                                <tr>
+
+                                    <td class="ps-4">
+
+                                        <div class="fw-semibold">
+                                            {{ loan.article.code if loan.article else "-" }}
+                                        </div>
+
+                                        <div class="small text-muted">
+                                            {{ loan.article.name if loan.article else "-" }}
+                                        </div>
+
+                                    </td>
+
+                                    <td>
+
+                                        {% if loan.mechanic %}
+                                            <div class="fw-semibold">
+                                                {{ loan.mechanic.name }}
+                                            </div>
+
+                                            <div class="small text-muted">
+                                                {{ loan.mechanic.code }}
+                                            </div>
+                                        {% else %}
+                                            -
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td>
+
+                                        {% if loan.warehouse %}
+                                            {{ loan.warehouse.name }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td>
+                                        {{ "{:,.2f}".format(loan.quantity or 0) }}
+                                    </td>
+
+                                    <td>
+
+                                        {% if loan.loaned_at %}
+                                            {{ loan.loaned_at|cr_datetime }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td>
+
+                                        {% if loan.loan_status == 'PRESTADA' %}
+
+                                            <span class="badge text-bg-primary">
+                                                PRESTADA
+                                            </span>
+
+                                        {% elif loan.loan_status == 'DEVOLUCION_SOLICITADA' %}
+
+                                            <span class="badge text-bg-dark">
+                                                DEVOLUCIÓN SOLICITADA
+                                            </span>
+
+                                        {% else %}
+
+                                            <span class="badge text-bg-secondary">
+                                                {{ loan.loan_status }}
+                                            </span>
+
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td class="text-end pe-4">
+
+                                        {% if loan.loan_status == 'DEVOLUCION_SOLICITADA' %}
+
+                                            <form method="post"
+                                                  action="{{ url_for('tool_loans.receive_return', tool_loan_id=loan.id) }}">
+
+                                                <button type="submit"
+                                                        class="btn btn-sm btn-success rounded-3">
+
+                                                    <i class="bi bi-box-arrow-in-left me-1"></i>
+
+                                                    Recibir
+
+                                                </button>
+
+                                            </form>
+
+                                        {% else %}
+
+                                            <span class="text-muted small">
+                                                Sin acciones
+                                            </span>
+
+                                        {% endif %}
+
+                                    </td>
+
+                                </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            {% else %}
+
+                <div class="p-5 text-center">
+
+                    <i class="bi bi-check2-circle fs-1 text-muted"></i>
+
+                    <h6 class="fw-bold mt-3">
+                        No hay herramientas activas
+                    </h6>
+
+                    <div class="text-muted">
+                        No existen herramientas prestadas actualmente.
+                    </div>
+
+                </div>
+
+            {% endif %}
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}
