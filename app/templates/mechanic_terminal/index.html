@@ -109,18 +109,44 @@
 
         <div id="itemsSection" class="card border-0 shadow-sm rounded-4 d-none">
             <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+
                     <h5 id="itemsTitle" class="fw-bold mb-0"></h5>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="goBack()">Volver</button>
+
+                    <div class="d-flex gap-2">
+
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-danger d-none"
+                            id="returnAllToolsBtn"
+                        >
+                            Devolver todas
+                        </button>
+
+                        <button
+                            class="btn btn-sm btn-outline-secondary"
+                            onclick="goBack()"
+                        >
+                            Volver
+                        </button>
+
+                    </div>
+
                 </div>
 
-                <input id="itemsSearch" class="form-control mb-3 rounded-3" placeholder="Buscar...">
+                <input
+                    id="itemsSearch"
+                    class="form-control mb-3 rounded-3"
+                    placeholder="Buscar..."
+                >
 
                 <div id="itemsList"></div>
 
                 <div id="noItemsMessage" class="text-muted d-none">
                     No hay elementos disponibles.
                 </div>
+
             </div>
         </div>
 
@@ -193,6 +219,7 @@ const quantityInput = document.getElementById("quantityInput");
 const receptionScanHint = document.getElementById("receptionScanHint");
 const scanStatus = document.getElementById("scanStatus");
 const itemsSearch = document.getElementById("itemsSearch");
+const returnAllToolsBtn = document.getElementById("returnAllToolsBtn");
 
 function pauseScannerFocus(ms) {
     scannerFocusPausedUntil = Date.now() + ms;
@@ -304,6 +331,10 @@ function resetTerminal() {
     document.getElementById("noReception").classList.add("d-none");
     document.getElementById("noItemsMessage").classList.add("d-none");
     document.getElementById("noTasks").classList.add("d-none");
+
+    if (returnAllToolsBtn) {
+        returnAllToolsBtn.classList.add("d-none");
+    }
 
     quantitySection.classList.add("d-none");
     receptionScanHint.classList.add("d-none");
@@ -449,6 +480,10 @@ function renderWorkOrders() {
             document.getElementById("itemsSection").classList.add("d-none");
             document.getElementById("cartSection").classList.add("d-none");
             document.getElementById("quantitySection").classList.add("d-none");
+
+            if (returnAllToolsBtn) {
+                returnAllToolsBtn.classList.add("d-none");
+            }
 
             await loadMyTasks();
 
@@ -638,6 +673,14 @@ async function loadItems(url, title) {
 
     document.getElementById("itemsTitle").innerText = title;
 
+    if (returnAllToolsBtn) {
+        if (title === "Herramientas prestadas") {
+            returnAllToolsBtn.classList.remove("d-none");
+        } else {
+            returnAllToolsBtn.classList.add("d-none");
+        }
+    }
+
     const res = await fetch(url);
     const data = await res.json();
 
@@ -672,6 +715,10 @@ async function loadItemsTree(warehouse_id) {
     pauseScannerFocus(1500);
 
     cartMode = "articles";
+
+    if (returnAllToolsBtn) {
+        returnAllToolsBtn.classList.add("d-none");
+    }
 
     const res = await fetch("/terminal/articles-tree/" + warehouse_id);
     const data = await res.json();
@@ -727,6 +774,10 @@ function goBack() {
         renderCategories();
     } else {
         document.getElementById("itemsSection").classList.add("d-none");
+
+        if (returnAllToolsBtn) {
+            returnAllToolsBtn.classList.add("d-none");
+        }
     }
 }
 
@@ -1120,6 +1171,10 @@ document.getElementById("loadArticlesBtn").onclick = function (e) {
     cart = [];
     renderCart();
 
+    if (returnAllToolsBtn) {
+        returnAllToolsBtn.classList.add("d-none");
+    }
+
     loadItemsTree(selectedWorkOrder.warehouse_id);
 };
 
@@ -1138,6 +1193,10 @@ document.getElementById("loadToolsBtn").onclick = function (e) {
     cart = [];
     renderCart();
 
+    if (returnAllToolsBtn) {
+        returnAllToolsBtn.classList.add("d-none");
+    }
+
     loadItems("/terminal/tools/" + warehouseId, "Solicitar herramienta");
 };
 
@@ -1150,6 +1209,9 @@ document.getElementById("loadBorrowedToolsBtn").onclick = function (e) {
         return;
     }
 
+    cart = [];
+    renderCart();
+
     loadItems(
         "/terminal/mechanics/" + currentMechanic.mechanic_id + "/borrowed-tools",
         "Herramientas prestadas"
@@ -1161,6 +1223,50 @@ document.getElementById("resetTerminalBtn").onclick = function (e) {
     e.stopPropagation();
     resetTerminal();
 };
+
+if (returnAllToolsBtn) {
+    returnAllToolsBtn.onclick = async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!currentMechanic || !currentMechanic.mechanic_id) {
+            alert("No hay mecánico escaneado.");
+            return;
+        }
+
+        const confirmReturn = confirm(
+            "¿Está seguro que desea solicitar la devolución de todas las herramientas?"
+        );
+
+        if (!confirmReturn) {
+            return;
+        }
+
+        const res = await fetch("/terminal/tools/request-return-all", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                mechanic_id: currentMechanic.mechanic_id
+            })
+        });
+
+        const data = await res.json();
+
+        if (data.ok) {
+            scanStatus.innerText =
+                data.message || "Todas las devoluciones fueron solicitadas.";
+
+            loadItems(
+                "/terminal/mechanics/" + currentMechanic.mechanic_id + "/borrowed-tools",
+                "Herramientas prestadas"
+            );
+        } else {
+            alert(data.error || "Error al solicitar devoluciones.");
+        }
+    };
+}
 
 itemsSearch.addEventListener("input", function () {
     const term = this.value.toLowerCase().trim();
