@@ -147,6 +147,13 @@
             </a>
             {% endif %}
 
+            {% if can_use_permissions and current_user.has_permission("configuracion_solicitudes") %}
+            <a href="{{ url_for('request_routing.index') }}"
+            class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('request_routing.') %}active{% endif %}">
+                <i class="bi bi-diagram-3 me-2"></i>Configuración solicitudes
+            </a>
+            {% endif %}
+
             {% if can_use_permissions and (
                 current_user.has_permission("mecanicos") or
                 current_user.has_permission("tipos_reparacion") or

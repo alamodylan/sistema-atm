@@ -56,6 +56,8 @@ from .inventory_adjustment_line import InventoryAdjustmentLine
 from .equipment_type import EquipmentType   
 from .permission import Permission
 from .role_permission import RolePermission
+from .request_routing_rule import RequestRoutingRule
+from .request_routing_rule import RequestRoutingRule
 
 __all__ = [
     "Role",
@@ -120,4 +122,5 @@ __all__ = [
     "Equipment",
     "Permission",
     "RolePermission",
+    "RequestRoutingRule",
 ]

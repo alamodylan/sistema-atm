@@ -1,0 +1,471 @@
+{% extends "base.html" %}
+
+{% block title %}
+Configuración de solicitudes
+{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid py-4">
+
+    <!-- ================================================== -->
+    <!-- HEADER -->
+    <!-- ================================================== -->
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">
+                Configuración de solicitudes
+            </h2>
+
+            <p class="text-muted mb-0">
+                Configure hacia dónde se enrutan las solicitudes por predio.
+            </p>
+        </div>
+    </div>
+
+    <!-- ================================================== -->
+    <!-- FORM -->
+    <!-- ================================================== -->
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-body p-4">
+
+            <h5 class="fw-semibold mb-4">
+                Nueva configuración
+            </h5>
+
+            <form
+                method="POST"
+                action="{{ url_for('request_routing.save') }}"
+            >
+
+                <input type="hidden" name="rule_id" id="rule_id">
+
+                <div class="row g-3">
+
+                    <!-- =============================== -->
+                    <!-- PREDIO ORIGEN -->
+                    <!-- =============================== -->
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">
+                            Predio origen
+                        </label>
+
+                        <select
+                            name="origin_site_id"
+                            id="origin_site_id"
+                            class="form-select"
+                            required
+                        >
+                            <option value="">
+                                Seleccione...
+                            </option>
+
+                            {% for site in sites %}
+                            <option value="{{ site.id }}">
+                                {{ site.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- =============================== -->
+                    <!-- TIPO -->
+                    <!-- =============================== -->
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">
+                            Tipo solicitud
+                        </label>
+
+                        <select
+                            name="request_type"
+                            id="request_type"
+                            class="form-select"
+                            required
+                        >
+                            <option value="">
+                                Seleccione...
+                            </option>
+
+                            {% for request_type in request_types %}
+                            <option value="{{ request_type }}">
+                                {{ request_type }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- =============================== -->
+                    <!-- MODO -->
+                    <!-- =============================== -->
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">
+                            Modo
+                        </label>
+
+                        <select
+                            name="routing_mode"
+                            id="routing_mode"
+                            class="form-select"
+                            required
+                        >
+                            <option value="">
+                                Seleccione...
+                            </option>
+
+                            {% for mode in routing_modes %}
+                            <option value="{{ mode }}">
+                                {{ mode }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- =============================== -->
+                    <!-- DESTINO -->
+                    <!-- =============================== -->
+
+                    <div
+                        class="col-md-3"
+                        id="target_site_wrapper"
+                        style="display: none;"
+                    >
+                        <label class="form-label fw-semibold">
+                            Predio destino
+                        </label>
+
+                        <select
+                            name="target_site_id"
+                            id="target_site_id"
+                            class="form-select"
+                        >
+                            <option value="">
+                                Seleccione...
+                            </option>
+
+                            {% for site in sites %}
+                            <option value="{{ site.id }}">
+                                {{ site.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                </div>
+
+                <!-- =============================== -->
+                <!-- ACTIVO -->
+                <!-- =============================== -->
+
+                <div class="form-check mt-4">
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        name="is_active"
+                        id="is_active"
+                        checked
+                    >
+
+                    <label class="form-check-label fw-semibold">
+                        Configuración activa
+                    </label>
+                </div>
+
+                <!-- =============================== -->
+                <!-- BOTONES -->
+                <!-- =============================== -->
+
+                <div class="d-flex gap-2 mt-4">
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary rounded-3 px-4"
+                    >
+                        Guardar configuración
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn btn-outline-secondary rounded-3"
+                        onclick="resetRoutingForm()"
+                    >
+                        Limpiar
+                    </button>
+
+                </div>
+
+            </form>
+
+        </div>
+    </div>
+
+    <!-- ================================================== -->
+    <!-- TABLA -->
+    <!-- ================================================== -->
+
+    <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-body p-0">
+
+            <div class="table-responsive">
+
+                <table class="table align-middle mb-0">
+
+                    <thead class="table-light">
+                        <tr>
+
+                            <th class="px-4 py-3">
+                                Predio origen
+                            </th>
+
+                            <th class="py-3">
+                                Tipo solicitud
+                            </th>
+
+                            <th class="py-3">
+                                Modo
+                            </th>
+
+                            <th class="py-3">
+                                Predio destino
+                            </th>
+
+                            <th class="py-3">
+                                Estado
+                            </th>
+
+                            <th class="text-end px-4 py-3">
+                                Acciones
+                            </th>
+
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for rule in rules %}
+
+                        <tr>
+
+                            <!-- ======================= -->
+                            <!-- ORIGEN -->
+                            <!-- ======================= -->
+
+                            <td class="px-4">
+                                <div class="fw-semibold">
+                                    {{ rule.origin_site.name }}
+                                </div>
+                            </td>
+
+                            <!-- ======================= -->
+                            <!-- TIPO -->
+                            <!-- ======================= -->
+
+                            <td>
+                                {{ rule.request_type }}
+                            </td>
+
+                            <!-- ======================= -->
+                            <!-- MODO -->
+                            <!-- ======================= -->
+
+                            <td>
+                                {{ rule.routing_mode }}
+                            </td>
+
+                            <!-- ======================= -->
+                            <!-- DESTINO -->
+                            <!-- ======================= -->
+
+                            <td>
+
+                                {% if rule.target_site %}
+                                    {{ rule.target_site.name }}
+                                {% else %}
+                                    —
+                                {% endif %}
+
+                            </td>
+
+                            <!-- ======================= -->
+                            <!-- ESTADO -->
+                            <!-- ======================= -->
+
+                            <td>
+
+                                {% if rule.is_active %}
+                                    <span class="badge bg-success">
+                                        Activa
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary">
+                                        Inactiva
+                                    </span>
+                                {% endif %}
+
+                            </td>
+
+                            <!-- ======================= -->
+                            <!-- ACCIONES -->
+                            <!-- ======================= -->
+
+                            <td class="text-end px-4">
+
+                                <div class="d-flex justify-content-end gap-2">
+
+                                    <!-- EDITAR -->
+
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-outline-primary"
+                                        onclick='editRoutingRule(
+                                            {{ rule.id }},
+                                            {{ rule.origin_site_id }},
+                                            "{{ rule.request_type }}",
+                                            "{{ rule.routing_mode }}",
+                                            {% if rule.target_site_id %}
+                                                {{ rule.target_site_id }}
+                                            {% else %}
+                                                null
+                                            {% endif %},
+                                            {{ "true" if rule.is_active else "false" }}
+                                        )'
+                                    >
+                                        Editar
+                                    </button>
+
+                                    <!-- ACTIVAR/DESACTIVAR -->
+
+                                    <form
+                                        method="POST"
+                                        action="{{ url_for('request_routing.toggle', rule_id=rule.id) }}"
+                                    >
+                                        <button
+                                            type="submit"
+                                            class="btn btn-sm btn-outline-warning"
+                                        >
+                                            {% if rule.is_active %}
+                                                Desactivar
+                                            {% else %}
+                                                Activar
+                                            {% endif %}
+                                        </button>
+                                    </form>
+
+                                    <!-- ELIMINAR -->
+
+                                    <form
+                                        method="POST"
+                                        action="{{ url_for('request_routing.delete', rule_id=rule.id) }}"
+                                        onsubmit="return confirm('¿Está seguro de eliminar esta configuración?');"
+                                    >
+                                        <button
+                                            type="submit"
+                                            class="btn btn-sm btn-outline-danger"
+                                        >
+                                            Eliminar
+                                        </button>
+                                    </form>
+
+                                </div>
+
+                            </td>
+
+                        </tr>
+
+                        {% else %}
+
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                No existen configuraciones registradas.
+                            </td>
+                        </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<!-- ====================================================== -->
+<!-- JS -->
+<!-- ====================================================== -->
+
+<script>
+
+function toggleTargetSite() {
+
+    const routingMode = document.getElementById("routing_mode").value;
+
+    const wrapper = document.getElementById("target_site_wrapper");
+
+    if (routingMode === "OTHER_SITE_MANAGER_DASHBOARD") {
+        wrapper.style.display = "block";
+    } else {
+        wrapper.style.display = "none";
+        document.getElementById("target_site_id").value = "";
+    }
+}
+
+document
+    .getElementById("routing_mode")
+    .addEventListener("change", toggleTargetSite);
+
+
+function resetRoutingForm() {
+
+    document.getElementById("rule_id").value = "";
+
+    document.getElementById("origin_site_id").value = "";
+
+    document.getElementById("request_type").value = "";
+
+    document.getElementById("routing_mode").value = "";
+
+    document.getElementById("target_site_id").value = "";
+
+    document.getElementById("is_active").checked = true;
+
+    toggleTargetSite();
+}
+
+
+function editRoutingRule(
+    id,
+    originSiteId,
+    requestType,
+    routingMode,
+    targetSiteId,
+    isActive
+) {
+
+    document.getElementById("rule_id").value = id;
+
+    document.getElementById("origin_site_id").value = originSiteId;
+
+    document.getElementById("request_type").value = requestType;
+
+    document.getElementById("routing_mode").value = routingMode;
+
+    toggleTargetSite();
+
+    if (targetSiteId) {
+        document.getElementById("target_site_id").value = targetSiteId;
+    }
+
+    document.getElementById("is_active").checked = isActive;
+}
+
+</script>
+
+{% endblock %}
