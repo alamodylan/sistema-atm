@@ -597,7 +597,57 @@ async function loadMyTasks() {
 
         if (task.status === "EN_PROCESO") {
             statusBadge = '<span class="badge text-bg-warning text-dark rounded-pill">EN PROCESO</span>';
-            actionHtml = '<button type="button" class="btn btn-sm btn-success rounded-3">Solicitar finalizar</button>';
+            actionHtml =
+                '<div class="border rounded-4 p-3 bg-light-subtle w-100" style="min-width:280px;">' +
+
+                    '<div class="fw-semibold small mb-2">' +
+                        '¿Se realizó un trabajo adicional?' +
+                    '</div>' +
+
+                    '<div class="d-flex gap-3 mb-3">' +
+
+                        '<div class="form-check">' +
+                            '<input ' +
+                                'class="form-check-input additional-work-radio" ' +
+                                'type="radio" ' +
+                                'name="additional_work_' + task.task_id + '" ' +
+                                'id="additional_work_no_' + task.task_id + '" ' +
+                                'value="no" checked>' +
+                            '<label class="form-check-label small" for="additional_work_no_' + task.task_id + '">' +
+                                'No' +
+                            '</label>' +
+                        '</div>' +
+
+                        '<div class="form-check">' +
+                            '<input ' +
+                                'class="form-check-input additional-work-radio" ' +
+                                'type="radio" ' +
+                                'name="additional_work_' + task.task_id + '" ' +
+                                'id="additional_work_yes_' + task.task_id + '" ' +
+                                'value="yes">' +
+
+                            '<label class="form-check-label small" for="additional_work_yes_' + task.task_id + '">' +
+                                'Sí' +
+                            '</label>' +
+                        '</div>' +
+
+                    '</div>' +
+
+                    '<textarea ' +
+                        'class="form-control form-control-sm rounded-3 d-none additional-work-textarea mb-3" ' +
+                        'id="additional_work_notes_' + task.task_id + '" ' +
+                        'placeholder="Indique el trabajo adicional realizado..."' +
+                    '></textarea>' +
+
+                    '<button ' +
+                        'type="button" ' +
+                        'class="btn btn-sm btn-success rounded-3 w-100 finish-task-btn" ' +
+                        'data-task-id="' + task.task_id + '"' +
+                    '>' +
+                        'Solicitar finalizar' +
+                    '</button>' +
+
+                '</div>';
         } else if (task.status === "FINALIZACION_SOLICITADA") {
             statusBadge = '<span class="badge text-bg-primary rounded-pill">PENDIENTE JEFATURA</span>';
         } else if (task.status === "FINALIZADA") {
@@ -621,13 +671,48 @@ async function loadMyTasks() {
                 actionHtml +
             '</div>';
 
-        const finishBtn = row.querySelector("button");
+        const finishBtn = row.querySelector(".finish-task-btn");
+
+        const yesRadio = row.querySelector(
+            '#additional_work_yes_' + task.task_id
+        );
+
+        const noRadio = row.querySelector(
+            '#additional_work_no_' + task.task_id
+        );
+
+        const textarea = row.querySelector(
+            '#additional_work_notes_' + task.task_id
+        );
+
+        if (yesRadio && textarea) {
+
+            yesRadio.addEventListener("change", function () {
+                textarea.classList.remove("d-none");
+            });
+
+            noRadio.addEventListener("change", function () {
+                textarea.classList.add("d-none");
+                textarea.value = "";
+            });
+        }
 
         if (finishBtn) {
             finishBtn.onclick = async function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                await requestFinishTask(task.task_id);
+
+                const additionalWorkDone = yesRadio.checked;
+
+                const additionalWorkNotes = textarea
+                    ? textarea.value.trim()
+                    : "";
+
+                await requestFinishTask(
+                    task.task_id,
+                    additionalWorkDone,
+                    additionalWorkNotes
+                );
             };
         }
 
@@ -635,29 +720,14 @@ async function loadMyTasks() {
     });
 }
 
-async function requestFinishTask(taskId) {
+async function requestFinishTask(
+    taskId,
+    additionalWorkDone = false,
+    additionalWorkNotes = ""
+) {
     if (!currentMechanic || !currentMechanic.mechanic_id) {
         alert("No hay mecánico escaneado.");
         return;
-    }
-
-    const additionalWorkDone = confirm(
-        "¿Se realizó un trabajo adicional en esta reparación?"
-    );
-
-    let additionalWorkNotes = "";
-
-    if (additionalWorkDone) {
-        additionalWorkNotes = prompt(
-            "Indique el trabajo adicional realizado:"
-        ) || "";
-
-        additionalWorkNotes = additionalWorkNotes.trim();
-
-        if (!additionalWorkNotes) {
-            alert("Debe indicar el trabajo adicional realizado.");
-            return;
-        }
     }
 
     const res = await fetch("/terminal/tasks/" + taskId + "/request-finish", {
