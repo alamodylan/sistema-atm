@@ -12,6 +12,7 @@ from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.site import Site
 from app.models.request_routing_rule import RequestRoutingRule
+from sqlalchemy import text
 
 
 request_routing_bp = Blueprint(
@@ -27,14 +28,40 @@ request_routing_bp = Blueprint(
 
 def _require_superuser():
     """
-    Ajustar si tu sistema usa otro permiso/nombre de rol.
-    No inventa permisos nuevos; valida con lo existente.
+    Valida acceso usando:
+    1. Permiso configuracion_solicitudes por role_permissions.
+    2. Código de rol ADMIN o SUPER_USUARIO.
     """
-    role_name = getattr(getattr(current_user, "role", None), "name", None)
 
-    if role_name not in ("SUPERADMIN", "SUPER_USUARIO", "ADMIN"):
+    if not current_user.is_authenticated:
         abort(403)
 
+    role_id = getattr(current_user, "role_id", None)
+
+    if not role_id:
+        abort(403)
+
+    sql = text("""
+        SELECT 1
+        FROM atm.roles r
+        LEFT JOIN atm.role_permissions rp
+            ON rp.role_id = r.id
+        LEFT JOIN atm.permissions p
+            ON p.id = rp.permission_id
+        WHERE r.id = :role_id
+        AND (
+            r.code IN ('ADMIN', 'SUPER_USUARIO')
+            OR p.code = 'configuracion_solicitudes'
+        )
+        LIMIT 1
+    """)
+
+    result = db.session.execute(sql, {"role_id": role_id}).first()
+
+    if result:
+        return
+
+    abort(403)
 
 def _get_sites():
     return (
