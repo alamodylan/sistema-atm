@@ -751,16 +751,16 @@
                                             type="number"
                                             step="{{ '1' if line.article.unit.code == 'UND' else '0.01' }}"
                                             min="{{ '1' if line.article.unit.code == 'UND' else '0.01' }}"
-                                            max="{{ line.stock_available }}"
+                                            max="{{ supplying_stock }}"
                                             name="quantity"
-                                            value="{% if line.quantity_requested > line.stock_available %}{{ line.stock_available }}{% else %}{{ line.quantity_requested }}{% endif %}"
+                                            value="{% if line.quantity_requested > supplying_stock %}{{ supplying_stock }}{% else %}{{ line.quantity_requested }}{% endif %}"
                                             class="form-control form-control-sm"
                                             style="width: 120px;"
-                                            {% if line.stock_available <= 0 %}disabled{% endif %}
+                                            {% if supplying_stock <= 0 %}disabled{% endif %}
                                         >
                                         <button
                                             class="btn btn-sm btn-outline-success rounded-3"
-                                            {% if line.stock_available <= 0 %}disabled{% endif %}
+                                            {% if supplying_stock <= 0 %}disabled{% endif %}
                                         >
                                             Aprobar / Ajustar
                                         </button>
