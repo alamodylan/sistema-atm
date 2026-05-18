@@ -32,7 +32,7 @@ def _require_superuser():
     """
     role_name = getattr(getattr(current_user, "role", None), "name", None)
 
-    if role_name not in ("SUPERADMIN", "SUPERUSUARIO", "ADMIN"):
+    if role_name not in ("SUPERADMIN", "SUPER_USUARIO", "ADMIN"):
         abort(403)
 
 
