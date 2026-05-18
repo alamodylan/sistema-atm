@@ -523,6 +523,8 @@ def get_my_tasks(work_order_id, mechanic_id):
 def request_finish_task(task_id):
     data = request.get_json(silent=True) or {}
     mechanic_id = data.get("mechanic_id")
+    additional_work_done = data.get("additional_work_done")
+    additional_work_notes = (data.get("additional_work_notes") or "").strip()
     active_site_id = session.get("active_site_id")
 
     if not active_site_id:
@@ -568,7 +570,15 @@ def request_finish_task(task_id):
     )
 
     if existing_pending_request:
-        return jsonify({"error": "Este trabajo ya tiene una solicitud de finalización pendiente"}), 400
+        return jsonify({
+            "error": "Este trabajo ya tiene una solicitud de finalización pendiente"
+        }), 400
+
+    if str(additional_work_done).lower() in ["true", "1", "si", "sí", "yes"]:
+        if not additional_work_notes:
+            return jsonify({
+                "error": "Debe indicar qué trabajo adicional se realizó."
+            }), 400
 
     now = datetime.now(UTC)
 
@@ -591,7 +601,9 @@ def request_finish_task(task_id):
                 seconds_worked = int((now - assignment.started_at).total_seconds())
                 seconds_worked = max(seconds_worked, 0)
                 assignment.seconds_worked = seconds_worked
-                task_line.effective_seconds = (task_line.effective_seconds or 0) + seconds_worked
+                task_line.effective_seconds = (
+                    task_line.effective_seconds or 0
+                ) + seconds_worked
 
         task_line.status = "FINALIZACION_SOLICITADA"
         task_line.finish_requested_at = now
@@ -600,6 +612,7 @@ def request_finish_task(task_id):
             task_line_id=task_line.id,
             requested_by_mechanic_id=mechanic.id,
             status="PENDIENTE",
+            request_notes=additional_work_notes or None,
             requested_at=now,
         )
 

@@ -641,11 +641,34 @@ async function requestFinishTask(taskId) {
         return;
     }
 
+    const additionalWorkDone = confirm(
+        "¿Se realizó un trabajo adicional en esta reparación?"
+    );
+
+    let additionalWorkNotes = "";
+
+    if (additionalWorkDone) {
+        additionalWorkNotes = prompt(
+            "Indique el trabajo adicional realizado:"
+        ) || "";
+
+        additionalWorkNotes = additionalWorkNotes.trim();
+
+        if (!additionalWorkNotes) {
+            alert("Debe indicar el trabajo adicional realizado.");
+            return;
+        }
+    }
+
     const res = await fetch("/terminal/tasks/" + taskId + "/request-finish", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json"
+        },
         body: JSON.stringify({
-            mechanic_id: currentMechanic.mechanic_id
+            mechanic_id: currentMechanic.mechanic_id,
+            additional_work_done: additionalWorkDone,
+            additional_work_notes: additionalWorkNotes
         })
     });
 
