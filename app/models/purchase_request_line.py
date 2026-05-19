@@ -74,18 +74,6 @@ class PurchaseRequestLine(db.Model):
         server_default=db.func.now(),
     )
 
-    review_site_id = db.Column(
-        db.BigInteger,
-        db.ForeignKey("atm.sites.id"),
-        nullable=True,
-    )
-
-    sent_direct_to_procurement = db.Column(
-        db.Boolean,
-        nullable=False,
-        default=False,
-    )
-
     purchase_request = db.relationship(
         "PurchaseRequest",
         back_populates="lines",
@@ -110,11 +98,6 @@ class PurchaseRequestLine(db.Model):
         "PurchaseOrderLine",
         back_populates="purchase_request_line",
         lazy="selectin",
-    )
-
-    review_site = db.relationship(
-        "Site",
-        foreign_keys=[review_site_id],
     )
 
     @property
