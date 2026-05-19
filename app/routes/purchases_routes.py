@@ -374,20 +374,49 @@ def request_detail(request_id: int):
 def send_request(request_id: int):
     try:
         purchase_request = submit_purchase_request(request_id=request_id)
+
     except PurchaseRequestServiceError as exc:
         flash(str(exc), "danger")
         return redirect(url_for("purchases.request_detail", request_id=request_id))
 
-    flash("Solicitud enviada a jefatura correctamente.", "success")
-    return redirect(url_for("purchases.request_detail", request_id=purchase_request.id))
+    if purchase_request.status == "EN_REVISION_PROVEEDURIA":
+        flash("Solicitud enviada directamente a proveeduría correctamente.", "success")
+    else:
+        flash("Solicitud enviada a jefatura correctamente.", "success")
+
+    return redirect(
+        url_for("purchases.request_detail", request_id=purchase_request.id)
+    )
 
 @purchases_bp.route("/manager/purchase-requests")
 @login_required
 def manager_purchase_requests():
+    active_site_id = session.get("active_site_id")
 
-    purchase_requests = (
-        list_purchase_requests_for_manager_review()
-    )
+    if not active_site_id:
+        purchase_requests = []
+    else:
+        active_site_id = int(active_site_id)
+
+        purchase_requests = (
+            PurchaseRequest.query
+            .filter(
+                db.or_(
+                    PurchaseRequest.review_site_id == active_site_id,
+                    db.and_(
+                        PurchaseRequest.review_site_id.is_(None),
+                        PurchaseRequest.site_id == active_site_id,
+                        PurchaseRequest.sent_direct_to_procurement.is_(False),
+                    ),
+                ),
+                PurchaseRequest.status == "ENVIADA",
+            )
+            .order_by(
+                PurchaseRequest.created_at.desc(),
+                PurchaseRequest.id.desc(),
+            )
+            .all()
+        )
 
     return render_template(
         "dashboard/manager.html",

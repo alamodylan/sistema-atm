@@ -11,8 +11,11 @@ from app.models.work_order_request import WorkOrderRequest
 from app.models.transfer_request import TransferRequest
 from app.models.work_order_task_line import WorkOrderTaskLine
 from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
+from app.extensions import db
 from app.services.transfer_service import get_request_line_stock_context
 from flask import abort
+from app.extensions import db
+from app.models.purchase_request import PurchaseRequest
 from app.services.purchase_request_service import (
     list_purchase_requests_for_manager_review,
 )
@@ -345,7 +348,26 @@ def manager_dashboard():
 
             req.send_to_warehouse_enabled = all_lines_decided and has_approved_lines
 
-        purchase_requests = list_purchase_requests_for_manager_review()
+        purchase_requests = (
+            PurchaseRequest.query
+            .filter(
+                db.or_(
+                    PurchaseRequest.review_site_id == active_site_id,
+                    db.and_(
+                        PurchaseRequest.review_site_id.is_(None),
+                        PurchaseRequest.site_id == active_site_id,
+                        PurchaseRequest.sent_direct_to_procurement.is_(False),
+                    ),
+                ),
+                PurchaseRequest.status == "ENVIADA",
+            )
+            .order_by(
+                PurchaseRequest.created_at.desc(),
+                PurchaseRequest.id.desc(),
+            )
+            .all()
+        )
+
         purchase_requests_count = len(purchase_requests)
         purchase_request_lines_count = 0
 
@@ -379,7 +401,13 @@ def manager_dashboard():
         transfer_pending_requests = (
             TransferRequest.query
             .filter(
-                TransferRequest.destination_site_id == active_site_id,
+                db.or_(
+                    TransferRequest.review_site_id == active_site_id,
+                    db.and_(
+                        TransferRequest.review_site_id.is_(None),
+                        TransferRequest.destination_site_id == active_site_id,
+                    ),
+                ),
                 TransferRequest.status.in_(["ENVIADA", "APROBADA"]),
                 TransferRequest.sent_to_warehouse_at.is_(None),
             )

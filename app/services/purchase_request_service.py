@@ -12,6 +12,7 @@ from app.models.article import Article
 from app.models.pending_article import PendingArticle
 from app.models.purchase_request import PurchaseRequest
 from app.models.purchase_request_line import PurchaseRequestLine
+from app.services.request_routing_service import resolve_request_routing
 
 
 class PurchaseRequestServiceError(Exception):
@@ -230,13 +231,18 @@ def list_purchase_requests(
     )
 
 def submit_purchase_request(*, request_id: int) -> PurchaseRequest:
+
     purchase_request = PurchaseRequest.query.get(request_id)
 
     if not purchase_request:
-        raise PurchaseRequestServiceError("La solicitud indicada no existe.")
+        raise PurchaseRequestServiceError(
+            "La solicitud indicada no existe."
+        )
 
     if purchase_request.status != "BORRADOR":
-        raise PurchaseRequestServiceError("Solo se pueden enviar solicitudes en borrador.")
+        raise PurchaseRequestServiceError(
+            "Solo se pueden enviar solicitudes en borrador."
+        )
 
     active_lines = [
         line for line in purchase_request.lines
@@ -244,9 +250,94 @@ def submit_purchase_request(*, request_id: int) -> PurchaseRequest:
     ]
 
     if not active_lines:
-        raise PurchaseRequestServiceError("La solicitud no tiene líneas activas.")
+        raise PurchaseRequestServiceError(
+            "La solicitud no tiene líneas activas."
+        )
 
-    purchase_request.status = "ENVIADA"
+    # =====================================================
+    # ROUTING CONFIGURABLE
+    # =====================================================
+
+    review_site_id = purchase_request.site_id
+
+    sent_direct_to_procurement = False
+
+    routing = resolve_request_routing(
+        origin_site_id=purchase_request.site_id,
+        request_type="PURCHASE_REQUEST",
+    )
+
+    if routing.get("has_rule"):
+
+        routing_mode = routing.get("routing_mode")
+
+        # =================================================
+        # MISMO DASHBOARD JEFATURA
+        # =================================================
+
+        if routing_mode == "LOCAL_MANAGER_DASHBOARD":
+
+            review_site_id = purchase_request.site_id
+
+            purchase_request.status = "ENVIADA"
+
+        # =================================================
+        # OTRO DASHBOARD JEFATURA
+        # =================================================
+
+        elif routing_mode == "OTHER_SITE_MANAGER_DASHBOARD":
+
+            review_site_id = (
+                routing.get("target_site_id")
+                or purchase_request.site_id
+            )
+
+            purchase_request.status = "ENVIADA"
+
+        # =================================================
+        # DIRECTO A PROVEEDURÍA
+        # =================================================
+
+        elif routing_mode == "DIRECT_TO_PROCUREMENT":
+
+            review_site_id = None
+
+            sent_direct_to_procurement = True
+
+            purchase_request.status = "EN_REVISION_PROVEEDURIA"
+
+            now = datetime.now(UTC)
+
+            for line in active_lines:
+                line.line_status = "ENVIADA_A_COTIZAR"
+                line.sent_to_quote_at = now
+
+        # =================================================
+        # FALLBACK
+        # =================================================
+
+        else:
+
+            purchase_request.status = "ENVIADA"
+
+            review_site_id = purchase_request.site_id
+
+    else:
+
+        # =================================================
+        # COMPORTAMIENTO ACTUAL
+        # =================================================
+
+        purchase_request.status = "ENVIADA"
+
+        review_site_id = purchase_request.site_id
+
+    purchase_request.review_site_id = review_site_id
+
+    purchase_request.sent_direct_to_procurement = (
+        sent_direct_to_procurement
+    )
+
     db.session.commit()
 
     return purchase_request

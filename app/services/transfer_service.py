@@ -16,6 +16,7 @@ from app.models.warehouse import Warehouse
 from app.services.audit_service import log_action
 from app.models.user import User
 from sqlalchemy import func
+from app.services.request_routing_service import resolve_request_routing
 
 
 class TransferServiceError(Exception):
@@ -285,6 +286,28 @@ def create_transfer_request(
     if origin_warehouse.id == destination_warehouse.id:
         raise TransferServiceError("La bodega origen y destino no pueden ser la misma.")
 
+    review_site_id = origin_warehouse.site_id
+
+    routing = resolve_request_routing(
+        origin_site_id=origin_warehouse.site_id,
+        request_type="TRANSFER_REQUEST",
+    )
+
+    if routing.get("has_rule"):
+        routing_mode = routing.get("routing_mode")
+
+        if routing_mode == "LOCAL_MANAGER_DASHBOARD":
+            review_site_id = origin_warehouse.site_id
+
+        elif routing_mode == "OTHER_SITE_MANAGER_DASHBOARD":
+            review_site_id = routing.get("target_site_id") or origin_warehouse.site_id
+
+        elif routing_mode == "DIRECT_TO_WAREHOUSE":
+            review_site_id = None
+
+        else:
+            review_site_id = origin_warehouse.site_id
+
     request_obj = TransferRequest(
         number=number or _build_number("STR"),
         requested_by_user_id=requested_by_user_id,
@@ -292,6 +315,7 @@ def create_transfer_request(
         origin_warehouse_id=origin_warehouse.id,
         destination_site_id=destination_warehouse.site_id,
         destination_warehouse_id=destination_warehouse.id,
+        review_site_id=review_site_id,
         priority=(priority or "NORMAL").strip().upper(),
         status=REQUEST_STATUS_BORRADOR,
         notes=(notes or "").strip() or None,
@@ -310,6 +334,11 @@ def create_transfer_request(
             "number": request_obj.number,
             "origin_warehouse_id": origin_warehouse.id,
             "destination_warehouse_id": destination_warehouse.id,
+            "origin_site_id": origin_warehouse.site_id,
+            "destination_site_id": destination_warehouse.site_id,
+            "review_site_id": review_site_id,
+            "routing_has_rule": routing.get("has_rule", False),
+            "routing_mode": routing.get("routing_mode"),
             "priority": request_obj.priority,
         },
         commit=False,
