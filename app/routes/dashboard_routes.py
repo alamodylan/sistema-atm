@@ -15,6 +15,7 @@ from app.models.work_order_request import WorkOrderRequest
 from app.models.work_order_task_line import WorkOrderTaskLine
 from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 from app.services.transfer_service import get_request_line_stock_context
+from app.services.transfer_service import get_request_lines_stock_context_bulk
 
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -298,7 +299,19 @@ def manager_dashboard():
     if not active_site_id:
         return render_template(
             "dashboard/manager.html",
-            **_empty_manager_context(),
+            title="Dashboard Jefatura",
+            subtitle="Revise y autorice solicitudes antes de que lleguen a bodega.",
+            pending_requests=[],
+            pending_requests_count=0,
+            pending_lines_count=0,
+            transfer_pending_requests=[],
+            transfer_pending_requests_count=0,
+            transfer_pending_lines_count=0,
+            task_finish_requests=[],
+            task_finish_requests_count=0,
+            purchase_requests=[],
+            purchase_requests_count=0,
+            purchase_request_lines_count=0,
         )
 
     try:
@@ -306,11 +319,6 @@ def manager_dashboard():
 
         pending_requests = (
             WorkOrderRequest.query
-            .options(
-                joinedload(WorkOrderRequest.work_order),
-                joinedload(WorkOrderRequest.mechanic),
-                selectinload(WorkOrderRequest.lines),
-            )
             .join(WorkOrder, WorkOrder.id == WorkOrderRequest.work_order_id)
             .filter(
                 db.or_(
@@ -328,18 +336,6 @@ def manager_dashboard():
             .all()
         )
 
-        work_order_stock_keys = []
-
-        for req in pending_requests:
-            warehouse_id = req.work_order.warehouse_id if req.work_order else None
-
-            for line in req.lines:
-                work_order_stock_keys.append(
-                    (line.article_id, warehouse_id)
-                )
-
-        work_order_stock_map = _stock_available_map(work_order_stock_keys)
-
         pending_requests_count = len(pending_requests)
         pending_lines_count = 0
 
@@ -354,12 +350,20 @@ def manager_dashboard():
             has_approved_lines = False
             all_lines_decided = True
 
-            warehouse_id = req.work_order.warehouse_id if req.work_order else None
-
             for line in req.lines:
-                line.stock_available = work_order_stock_map.get(
-                    (line.article_id, warehouse_id),
-                    0,
+                stock = (
+                    WarehouseStock.query
+                    .filter_by(
+                        article_id=line.article_id,
+                        warehouse_id=req.work_order.warehouse_id,
+                    )
+                    .first()
+                )
+
+                line.stock_available = (
+                    stock.available_quantity
+                    if stock and stock.available_quantity
+                    else 0
                 )
 
                 if line.manager_review_status == "RECHAZADA":
@@ -378,9 +382,6 @@ def manager_dashboard():
 
         purchase_requests = (
             PurchaseRequest.query
-            .options(
-                selectinload(PurchaseRequest.lines),
-            )
             .filter(
                 db.or_(
                     PurchaseRequest.review_site_id == active_site_id,
@@ -399,20 +400,6 @@ def manager_dashboard():
             .all()
         )
 
-        purchase_stock_keys = []
-
-        for req in purchase_requests:
-            for line in req.lines:
-                if line.line_status == "CANCELADA":
-                    continue
-
-                if line.article_id and req.warehouse_id:
-                    purchase_stock_keys.append(
-                        (line.article_id, req.warehouse_id)
-                    )
-
-        purchase_stock_map = _stock_available_map(purchase_stock_keys)
-
         purchase_requests_count = len(purchase_requests)
         purchase_request_lines_count = 0
 
@@ -423,9 +410,21 @@ def manager_dashboard():
                 if line.line_status == "CANCELADA":
                     continue
 
-                line.stock_available = purchase_stock_map.get(
-                    (line.article_id, req.warehouse_id),
-                    0,
+                stock = None
+                if line.article_id and req.warehouse_id:
+                    stock = (
+                        WarehouseStock.query
+                        .filter_by(
+                            article_id=line.article_id,
+                            warehouse_id=req.warehouse_id,
+                        )
+                        .first()
+                    )
+
+                line.stock_available = (
+                    stock.available_quantity
+                    if stock and stock.available_quantity
+                    else 0
                 )
 
                 req.visible_lines.append(line)
@@ -433,10 +432,6 @@ def manager_dashboard():
 
         transfer_pending_requests = (
             TransferRequest.query
-            .options(
-                joinedload(TransferRequest.requested_by_user),
-                selectinload(TransferRequest.lines),
-            )
             .filter(
                 db.or_(
                     TransferRequest.review_site_id == active_site_id,
@@ -452,6 +447,21 @@ def manager_dashboard():
             .all()
         )
 
+        transfer_lines_bulk = []
+
+        for req in transfer_pending_requests:
+            for line in req.lines:
+                transfer_lines_bulk.append({
+                    "line_id": line.id,
+                    "article_id": line.article_id,
+                    "requesting_warehouse_id": req.origin_warehouse_id,
+                    "supplying_warehouse_id": req.destination_warehouse_id,
+                })
+
+        bulk_transfer_stock_map = get_request_lines_stock_context_bulk(
+            transfer_lines_bulk
+        )
+
         transfer_pending_requests_count = len(transfer_pending_requests)
         transfer_pending_lines_count = 0
 
@@ -462,7 +472,6 @@ def manager_dashboard():
             all_lines_decided = True
 
             req.requested_by_name = "-"
-
             if req.requested_by_user:
                 if getattr(req.requested_by_user, "full_name", None):
                     req.requested_by_name = req.requested_by_user.full_name
@@ -479,10 +488,12 @@ def manager_dashboard():
                     line.manager_decision = "PENDIENTE"
                     all_lines_decided = False
 
-                req.stock_map[line.id] = get_request_line_stock_context(
-                    requesting_warehouse_id=req.origin_warehouse_id,
-                    supplying_warehouse_id=req.destination_warehouse_id,
-                    article_id=line.article_id,
+                req.stock_map[line.id] = bulk_transfer_stock_map.get(
+                    line.id,
+                    {
+                        "requesting_available_quantity": 0,
+                        "supplying_available_quantity": 0,
+                    },
                 )
 
                 req.visible_lines.append(line)
@@ -491,24 +502,17 @@ def manager_dashboard():
             req.finalize_review_enabled = (
                 req.status == "ENVIADA" and all_lines_decided
             )
-
             req.send_to_warehouse_enabled = (
                 req.status == "APROBADA" and has_approved_lines
             )
 
         task_finish_requests = (
             WorkOrderTaskLineFinishRequest.query
-            .options(
-                joinedload(WorkOrderTaskLineFinishRequest.task_line),
-            )
             .join(
                 WorkOrderTaskLine,
                 WorkOrderTaskLine.id == WorkOrderTaskLineFinishRequest.task_line_id,
             )
-            .join(
-                WorkOrder,
-                WorkOrder.id == WorkOrderTaskLine.work_order_id,
-            )
+            .join(WorkOrder, WorkOrder.id == WorkOrderTaskLine.work_order_id)
             .filter(
                 WorkOrder.site_id == active_site_id,
                 WorkOrderTaskLineFinishRequest.status == "PENDIENTE",
@@ -546,5 +550,17 @@ def manager_dashboard():
         print(f"[MANAGER DASHBOARD ERROR] {exc}")
         return render_template(
             "dashboard/manager.html",
-            **_empty_manager_context(),
+            title="Dashboard Jefatura",
+            subtitle="Revise y autorice solicitudes antes de que lleguen a bodega.",
+            pending_requests=[],
+            pending_requests_count=0,
+            pending_lines_count=0,
+            transfer_pending_requests=[],
+            transfer_pending_requests_count=0,
+            transfer_pending_lines_count=0,
+            task_finish_requests=[],
+            task_finish_requests_count=0,
+            purchase_requests=[],
+            purchase_requests_count=0,
+            purchase_request_lines_count=0,
         )

@@ -267,6 +267,102 @@ def get_request_line_stock_context(
         "supplying_available_quantity": _get_available_quantity(supplying_warehouse_id, article_id),
     }
 
+def get_request_lines_stock_context_bulk(lines_data: list[dict]) -> dict:
+    """
+    Optimización masiva para dashboard jefatura.
+
+    lines_data esperado:
+    [
+        {
+            "line_id": 1,
+            "article_id": 10,
+            "requesting_warehouse_id": 2,
+            "supplying_warehouse_id": 5,
+        }
+    ]
+
+    Retorna:
+    {
+        line_id: {
+            "requesting_available_quantity": X,
+            "supplying_available_quantity": Y,
+        }
+    }
+    """
+
+    if not lines_data:
+        return {}
+
+    warehouse_article_pairs = set()
+
+    for item in lines_data:
+        article_id = item.get("article_id")
+        requesting_warehouse_id = item.get("requesting_warehouse_id")
+        supplying_warehouse_id = item.get("supplying_warehouse_id")
+
+        if article_id and requesting_warehouse_id:
+            warehouse_article_pairs.add(
+                (requesting_warehouse_id, article_id)
+            )
+
+        if article_id and supplying_warehouse_id:
+            warehouse_article_pairs.add(
+                (supplying_warehouse_id, article_id)
+            )
+
+    warehouse_ids = {
+        warehouse_id
+        for warehouse_id, _ in warehouse_article_pairs
+    }
+
+    article_ids = {
+        article_id
+        for _, article_id in warehouse_article_pairs
+    }
+
+    stocks = (
+        WarehouseStock.query
+        .filter(
+            WarehouseStock.warehouse_id.in_(warehouse_ids),
+            WarehouseStock.article_id.in_(article_ids),
+        )
+        .all()
+    )
+
+    stock_map = {
+        (stock.warehouse_id, stock.article_id): Decimal(
+            str(stock.available_quantity or 0)
+        )
+        for stock in stocks
+    }
+
+    result = {}
+
+    for item in lines_data:
+        line_id = item["line_id"]
+
+        requesting_qty = stock_map.get(
+            (
+                item.get("requesting_warehouse_id"),
+                item.get("article_id"),
+            ),
+            Decimal("0"),
+        )
+
+        supplying_qty = stock_map.get(
+            (
+                item.get("supplying_warehouse_id"),
+                item.get("article_id"),
+            ),
+            Decimal("0"),
+        )
+
+        result[line_id] = {
+            "requesting_available_quantity": requesting_qty,
+            "supplying_available_quantity": supplying_qty,
+        }
+
+    return result
 
 def create_transfer_request(
     *,
