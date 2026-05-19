@@ -43,6 +43,23 @@ class PurchaseRequest(db.Model):
         server_default=db.func.now(),
     )
 
+    review_site_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("atm.sites.id"),
+        nullable=True,
+    )
+
+    sent_direct_to_procurement = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    review_site = db.relationship(
+        "Site",
+        foreign_keys=[review_site_id],
+    )
+
     requested_by_user = db.relationship("User")
     site = db.relationship("Site", back_populates="purchase_requests")
     warehouse = db.relationship("Warehouse")
