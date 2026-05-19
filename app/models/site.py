@@ -58,6 +58,7 @@ class Site(db.Model):
 
     purchase_requests = db.relationship(
         "PurchaseRequest",
+        foreign_keys="PurchaseRequest.site_id",
         back_populates="site",
         lazy="dynamic",
     )
