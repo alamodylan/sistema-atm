@@ -74,9 +74,20 @@ class WorkOrderRequest(db.Model):
         nullable=True,
     )
 
+    review_site_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("atm.sites.id"),
+        nullable=True,
+    )
+
     work_order = db.relationship(
         "WorkOrder",
         back_populates="requests",
+    )
+
+    review_site = db.relationship(
+        "Site",
+        foreign_keys=[review_site_id],
     )
 
     requested_by_user = db.relationship(

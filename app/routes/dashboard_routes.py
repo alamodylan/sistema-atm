@@ -296,7 +296,25 @@ def manager_dashboard():
             WorkOrderRequest.query
             .join(WorkOrder, WorkOrder.id == WorkOrderRequest.work_order_id)
             .filter(
-                WorkOrder.site_id == active_site_id,
+                db.or_(
+
+                    # =====================================================
+                    # NUEVO ROUTING
+                    # =====================================================
+
+                    WorkOrderRequest.review_site_id == active_site_id,
+
+                    # =====================================================
+                    # COMPATIBILIDAD SOLICITUDES VIEJAS
+                    # =====================================================
+
+                    db.and_(
+                        WorkOrderRequest.review_site_id.is_(None),
+                        WorkOrder.site_id == active_site_id,
+                        WorkOrderRequest.sent_to_warehouse_at.is_(None),
+                    )
+
+                ),
                 WorkOrderRequest.request_status == "ENVIADA",
                 WorkOrderRequest.sent_to_warehouse_at.is_(None),
             )

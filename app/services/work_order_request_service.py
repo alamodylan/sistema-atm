@@ -10,6 +10,7 @@ from app.models.work_order_request import WorkOrderRequest
 from app.models.work_order_request_line import WorkOrderRequestLine
 from app.services.audit_service import log_action
 from app.models.tool_loan import ToolLoan
+from app.services.request_routing_service import resolve_request_routing
 from app.services.inventory_service import (
     InventoryServiceError,
     get_warehouse_stock_record,
@@ -357,15 +358,19 @@ def send_request(
     performed_by_user_id: int,
     commit: bool = True,
 ) -> WorkOrderRequest:
+
     if not request_id:
         raise WorkOrderRequestServiceError("La solicitud no existe.")
 
     request_obj = WorkOrderRequest.query.get(request_id)
+
     if not request_obj:
         raise WorkOrderRequestServiceError("La solicitud no existe.")
 
     if request_obj.request_status != "ABIERTA":
-        raise WorkOrderRequestServiceError("Solo solicitudes abiertas pueden enviarse.")
+        raise WorkOrderRequestServiceError(
+            "Solo solicitudes abiertas pueden enviarse."
+        )
 
     active_lines_count = sum(
         1 for line in request_obj.lines
@@ -373,9 +378,81 @@ def send_request(
     )
 
     if active_lines_count == 0:
-        raise WorkOrderRequestServiceError("No se puede enviar una solicitud sin líneas activas.")
+        raise WorkOrderRequestServiceError(
+            "No se puede enviar una solicitud sin líneas activas."
+        )
+
+    work_order = request_obj.work_order
+
+    if not work_order:
+        raise WorkOrderRequestServiceError(
+            "La solicitud no tiene OT asociada."
+        )
+
+    # =====================================================
+    # ROUTING CONFIGURABLE
+    # =====================================================
+
+    review_site_id = work_order.site_id
+
+    routing = resolve_request_routing(
+        origin_site_id=work_order.site_id,
+        request_type="WORK_ORDER_REQUEST",
+    )
 
     request_obj.request_status = "ENVIADA"
+
+    if routing.get("has_rule"):
+
+        routing_mode = routing.get("routing_mode")
+
+        # =================================================
+        # DASHBOARD JEFATURA LOCAL
+        # =================================================
+
+        if routing_mode == "LOCAL_MANAGER_DASHBOARD":
+
+            review_site_id = work_order.site_id
+
+        # =================================================
+        # DASHBOARD JEFATURA OTRO PREDIO
+        # =================================================
+
+        elif routing_mode == "OTHER_SITE_MANAGER_DASHBOARD":
+
+            review_site_id = (
+                routing.get("target_site_id")
+                or work_order.site_id
+            )
+
+        # =================================================
+        # DIRECTO A BODEGA
+        # =================================================
+
+        elif routing_mode == "DIRECT_TO_WAREHOUSE":
+
+            review_site_id = None
+
+            request_obj.approved_by_user_id = performed_by_user_id
+            request_obj.approved_at = db.func.now()
+
+            request_obj.sent_to_warehouse_by_user_id = (
+                performed_by_user_id
+            )
+
+            request_obj.sent_to_warehouse_at = db.func.now()
+
+            for line in request_obj.lines:
+
+                if line.line_status == "CANCELADA":
+                    continue
+
+                line.manager_review_status = "APROBADA"
+                line.manager_reviewed_by_user_id = performed_by_user_id
+                line.manager_reviewed_at = db.func.now()
+
+    request_obj.review_site_id = review_site_id
+
     db.session.flush()
 
     log_action(
@@ -383,7 +460,15 @@ def send_request(
         action="SEND_WORK_ORDER_REQUEST",
         table_name="work_order_requests",
         record_id=str(request_obj.id),
-        details={"status": request_obj.request_status},
+        details={
+            "status": request_obj.request_status,
+            "review_site_id": review_site_id,
+            "routing_mode": routing.get("routing_mode"),
+            "routing_has_rule": routing.get("has_rule", False),
+            "sent_direct_to_warehouse": bool(
+                request_obj.sent_to_warehouse_at
+            ),
+        },
         commit=False,
     )
 
