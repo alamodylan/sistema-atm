@@ -595,8 +595,14 @@
     <div class="card-body p-4">
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
             <div>
-                <div class="text-success small fw-semibold text-uppercase mb-1">Módulo de traslados</div>
-                <h5 class="fw-bold mb-1">Solicitudes de traslado pendientes de jefatura</h5>
+                <div class="text-success small fw-semibold text-uppercase mb-1">
+                    Módulo de traslados
+                </div>
+
+                <h5 class="fw-bold mb-1">
+                    Solicitudes de traslado pendientes de jefatura
+                </h5>
+
                 <div class="text-muted small">
                     Revise, apruebe o rechace cada línea y luego envíe la solicitud a bodega abastecedora.
                 </div>
@@ -605,86 +611,128 @@
 
         {% for req in transfer_pending_requests %}
         <div class="border rounded-4 p-3 p-lg-4 mb-4 bg-white">
+
             <div class="row g-3 mb-3">
+
                 <div class="col-12 col-lg-8">
+
                     <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-                        <span class="badge rounded-pill text-bg-success">SOLICITUD DE TRASLADO</span>
+
+                        <span class="badge rounded-pill text-bg-success">
+                            SOLICITUD DE TRASLADO
+                        </span>
 
                         {% if req.status == 'ENVIADA' %}
-                            <span class="badge rounded-pill text-bg-warning text-dark">PENDIENTE JEFATURA</span>
+                            <span class="badge rounded-pill text-bg-warning text-dark">
+                                PENDIENTE JEFATURA
+                            </span>
+
                         {% elif req.status == 'APROBADA' %}
-                            <span class="badge rounded-pill text-bg-primary">APROBADA</span>
+                            <span class="badge rounded-pill text-bg-primary">
+                                APROBADA
+                            </span>
                         {% endif %}
+
                     </div>
 
-                    <h6 class="fw-bold mb-2">Solicitud {{ req.number }}</h6>
+                    <h6 class="fw-bold mb-2">
+                        Solicitud {{ req.number }}
+                    </h6>
 
                     <div class="row g-3">
+
                         <div class="col-12 col-md-6">
                             <div class="border rounded-4 p-3 h-100 bg-light-subtle">
-                                <div class="small text-uppercase text-muted fw-semibold mb-1">Bodega de origen</div>
+
+                                <div class="small text-uppercase text-muted fw-semibold mb-1">
+                                    Bodega de origen
+                                </div>
+
                                 <div class="fw-bold text-dark">
                                     {{ req.origin_warehouse.name if req.origin_warehouse else '-' }}
                                 </div>
+
                                 <div class="small text-muted mt-1">
                                     Bodega que realizó la solicitud.
                                 </div>
+
                             </div>
                         </div>
 
                         <div class="col-12 col-md-6">
                             <div class="border rounded-4 p-3 h-100 bg-light-subtle">
-                                <div class="small text-uppercase text-muted fw-semibold mb-1">Bodega abastecedora</div>
+
+                                <div class="small text-uppercase text-muted fw-semibold mb-1">
+                                    Bodega abastecedora
+                                </div>
+
                                 <div class="fw-bold text-dark">
                                     {{ req.destination_warehouse.name if req.destination_warehouse else '-' }}
                                 </div>
+
                                 <div class="small text-muted mt-1">
                                     Bodega a la que se le solicita el traslado.
                                 </div>
+
                             </div>
                         </div>
 
                         <div class="col-12 col-md-4">
-                            <div class="small text-muted">Prioridad</div>
-                            <div class="fw-semibold text-dark">{{ req.priority }}</div>
+                            <div class="small text-muted">
+                                Prioridad
+                            </div>
+
+                            <div class="fw-semibold text-dark">
+                                {{ req.priority }}
+                            </div>
                         </div>
+
                         <div class="col-12 col-md-4">
-                            <div class="small text-muted">Solicitó</div>
-                            <div class="fw-semibold text-dark">{{ req.requested_by_name }}</div>
+                            <div class="small text-muted">
+                                Solicitó
+                            </div>
+
+                            <div class="fw-semibold text-dark">
+                                {{ req.requested_by_name }}
+                            </div>
                         </div>
+
                         <div class="col-12 col-md-4">
-                            <div class="small text-muted">Fecha</div>
-                            <div class="fw-semibold text-dark">{{ req.created_at|cr_datetime }}</div>
+                            <div class="small text-muted">
+                                Fecha
+                            </div>
+
+                            <div class="fw-semibold text-dark">
+                                {{ req.created_at|cr_datetime }}
+                            </div>
                         </div>
+
                     </div>
                 </div>
 
                 <div class="col-12 col-lg-4 d-flex flex-column flex-lg-row justify-content-lg-end align-items-start gap-2">
+
                     <a href="{{ url_for('transfers.detail_request', transfer_request_id=req.id) }}"
                        class="btn btn-outline-secondary rounded-3 px-4">
                         Ver detalle
                     </a>
 
-                    {% if req.finalize_review_enabled %}
-                    <form method="POST" action="{{ url_for('transfers.finalize_request_review', transfer_request_id=req.id) }}">
-                        <button class="btn btn-warning rounded-3 px-4">
-                            Finalizar revisión
-                        </button>
-                    </form>
-                    {% endif %}
-
-                    {% if req.send_to_warehouse_enabled %}
-                    <form method="POST" action="{{ url_for('transfers.submit_request_to_warehouse', transfer_request_id=req.id) }}">
-                        <button class="btn btn-primary rounded-3 px-4">
-                            Enviar a bodega
-                        </button>
-                    </form>
-                    {% endif %}
                 </div>
+
             </div>
 
+            {% if req.status == 'ENVIADA' %}
+            <form
+                method="POST"
+                action="{{ url_for('transfers.review_request_bulk', transfer_request_id=req.id) }}"
+                onsubmit="return confirm('¿Está seguro de revisar las líneas y enviar la solicitud a bodega?');"
+            >
+            {% endif %}
+
             <div class="table-responsive">
+
                 <table class="table align-middle mb-0">
+
                     <thead class="table-light">
                         <tr>
                             <th>Artículo</th>
@@ -693,122 +741,237 @@
                             <th class="text-end">Stock abastecedora</th>
                             <th class="text-end">Cantidad aprobada</th>
                             <th>Estado</th>
-                            <th style="min-width: 320px;">Acción jefatura</th>
+                            <th style="min-width: 320px;">
+                                Acción jefatura
+                            </th>
                         </tr>
                     </thead>
+
                     <tbody>
+
                         {% for line in req.visible_lines %}
+
                         {% set line_stock = req.stock_map.get(line.id) %}
                         {% set origin_stock = line_stock.requesting_available_quantity if line_stock else 0 %}
                         {% set supplying_stock = line_stock.supplying_available_quantity if line_stock else 0 %}
+
                         <tr>
+
                             <td>
-                                <div class="fw-semibold">{{ line.article.code }} - {{ line.article.name }}</div>
+
+                                <div class="fw-semibold">
+                                    {{ line.article.code }} - {{ line.article.name }}
+                                </div>
+
                                 {% if line.notes %}
-                                    <div class="small text-muted mt-1">{{ line.notes }}</div>
+                                <div class="small text-muted mt-1">
+                                    {{ line.notes }}
+                                </div>
                                 {% endif %}
+
                                 {% if line.not_delivered_reason %}
-                                    <div class="small text-danger mt-1">Motivo: {{ line.not_delivered_reason }}</div>
+                                <div class="small text-danger mt-1">
+                                    Motivo: {{ line.not_delivered_reason }}
+                                </div>
                                 {% endif %}
+
                             </td>
 
-                            <td class="text-end">{{ line.quantity_requested }}</td>
+                            <td class="text-end">
+                                {{ line.quantity_requested }}
+                            </td>
 
                             <td class="text-end text-muted">
                                 {{ origin_stock }}
                             </td>
 
                             <td class="text-end">
+
                                 {% if supplying_stock >= line.quantity_requested %}
-                                    <span class="fw-semibold text-success">{{ supplying_stock }}</span>
+                                    <span class="fw-semibold text-success">
+                                        {{ supplying_stock }}
+                                    </span>
+
                                 {% elif supplying_stock > 0 %}
-                                    <span class="fw-semibold text-warning">{{ supplying_stock }}</span>
+                                    <span class="fw-semibold text-warning">
+                                        {{ supplying_stock }}
+                                    </span>
+
                                 {% else %}
-                                    <span class="fw-semibold text-danger">{{ supplying_stock }}</span>
+                                    <span class="fw-semibold text-danger">
+                                        {{ supplying_stock }}
+                                    </span>
                                 {% endif %}
+
                             </td>
 
-                            <td class="text-end">{{ line.quantity_approved or 0 }}</td>
+                            <td class="text-end">
+                                {{ line.quantity_approved or 0 }}
+                            </td>
 
                             <td>
+
                                 {% if line.manager_decision == "PENDIENTE" %}
-                                    <span class="badge text-bg-secondary rounded-pill">PENDIENTE</span>
+                                    <span class="badge text-bg-secondary rounded-pill">
+                                        PENDIENTE
+                                    </span>
+
                                 {% elif line.manager_decision == "APROBADA" %}
-                                    <span class="badge text-bg-success rounded-pill">APROBADA</span>
+                                    <span class="badge text-bg-success rounded-pill">
+                                        APROBADA
+                                    </span>
+
                                 {% elif line.manager_decision == "RECHAZADA" %}
-                                    <span class="badge text-bg-danger rounded-pill">RECHAZADA</span>
+                                    <span class="badge text-bg-danger rounded-pill">
+                                        RECHAZADA
+                                    </span>
+
                                 {% else %}
-                                    <span class="badge text-bg-secondary rounded-pill">PENDIENTE</span>
+                                    <span class="badge text-bg-secondary rounded-pill">
+                                        PENDIENTE
+                                    </span>
+
                                 {% endif %}
+
                             </td>
 
                             <td>
+
                                 {% if req.status == 'ENVIADA' %}
-                                <div class="d-flex flex-column flex-lg-row gap-2">
-                                    <form method="POST" action="{{ url_for('transfers.review_request_line', transfer_request_line_id=line.id) }}" class="d-flex flex-wrap gap-2">
-                                        <input type="hidden" name="action" value="APROBAR">
+
+                                <input
+                                    type="hidden"
+                                    name="line_id[]"
+                                    value="{{ line.id }}"
+                                >
+
+                                <div class="d-flex flex-wrap gap-3 align-items-end">
+
+                                    <div>
+
+                                        <label class="small text-muted mb-1">
+                                            Acción
+                                        </label>
+
+                                        <select
+                                            name="action_{{ line.id }}"
+                                            class="form-select form-select-sm"
+                                            style="width: 150px;"
+                                        >
+
+                                            <option value="APROBAR">
+                                                Aprobar
+                                            </option>
+
+                                            <option value="RECHAZAR">
+                                                Rechazar
+                                            </option>
+
+                                        </select>
+
+                                    </div>
+
+                                    <div>
+
+                                        <label class="small text-muted mb-1">
+                                            Cantidad
+                                        </label>
+
                                         <input
                                             type="number"
                                             step="{{ '1' if line.article.unit.code == 'UND' else '0.01' }}"
                                             min="{{ '1' if line.article.unit.code == 'UND' else '0.01' }}"
                                             max="{{ supplying_stock }}"
-                                            name="quantity"
+                                            name="quantity_{{ line.id }}"
                                             value="{% if line.quantity_requested > supplying_stock %}{{ supplying_stock }}{% else %}{{ line.quantity_requested }}{% endif %}"
                                             class="form-control form-control-sm"
                                             style="width: 120px;"
                                             {% if supplying_stock <= 0 %}disabled{% endif %}
                                         >
-                                        <button
-                                            class="btn btn-sm btn-outline-success rounded-3"
-                                            {% if supplying_stock <= 0 %}disabled{% endif %}
-                                        >
-                                            Aprobar / Ajustar
-                                        </button>
-                                    </form>
 
-                                    <form method="POST" action="{{ url_for('transfers.review_request_line', transfer_request_line_id=line.id) }}" class="d-flex flex-wrap gap-2">
-                                        <input type="hidden" name="action" value="RECHAZAR">
+                                    </div>
+
+                                    <div>
+
+                                        <label class="small text-muted mb-1">
+                                            Motivo rechazo
+                                        </label>
+
                                         <input
                                             type="text"
-                                            name="rejection_reason"
+                                            name="rejection_reason_{{ line.id }}"
                                             class="form-control form-control-sm"
-                                            placeholder="Motivo rechazo"
+                                            placeholder="Opcional"
                                             style="width: 180px;"
                                         >
-                                        <button class="btn btn-sm btn-outline-danger rounded-3">
-                                            Rechazar
-                                        </button>
-                                    </form>
+
+                                    </div>
+
                                 </div>
+
                                 {% elif line.manager_decision == "APROBADA" %}
+
                                 <div class="text-success small fw-semibold">
                                     Línea aprobada por jefatura
                                 </div>
+
                                 {% elif line.manager_decision == "RECHAZADA" %}
+
                                 <div class="text-danger small fw-semibold">
                                     Línea rechazada por jefatura
                                 </div>
+
                                 {% else %}
+
                                 <span class="text-muted small">—</span>
+
                                 {% endif %}
+
                             </td>
+
                         </tr>
+
                         {% else %}
+
                         <tr>
                             <td colspan="7" class="text-center text-muted py-4">
                                 Esta solicitud de traslado no tiene líneas visibles.
                             </td>
                         </tr>
+
                         {% endfor %}
+
                     </tbody>
+
                 </table>
+
             </div>
+
+            {% if req.status == 'ENVIADA' %}
+            <div class="d-flex justify-content-end mt-4">
+
+                <button
+                    type="submit"
+                    class="btn btn-primary rounded-3 px-4"
+                >
+                    Guardar revisión y enviar a bodega
+                </button>
+
+            </div>
+
+            </form>
+            {% endif %}
+
         </div>
+
         {% else %}
+
         <div class="text-muted">
             No hay solicitudes de traslado pendientes de revisión en jefatura.
         </div>
+
         {% endfor %}
+
     </div>
 </div>
 {% endblock %}

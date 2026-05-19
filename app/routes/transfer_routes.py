@@ -534,6 +534,129 @@ def review_request_line(transfer_request_line_id: int):
 
     return _redirect_after_request_action(line.transfer_request_id)
 
+@transfer_bp.route(
+    "/requests/<int:transfer_request_id>/review-bulk",
+    methods=["POST"]
+)
+@login_required
+def review_request_bulk(transfer_request_id: int):
+
+    request_obj = TransferRequest.query.get_or_404(
+        transfer_request_id
+    )
+
+    try:
+
+        line_ids = request.form.getlist("line_id[]")
+
+        if not line_ids:
+            raise TransferServiceError(
+                "No se enviaron líneas para revisión."
+            )
+
+        approved_exists = False
+
+        # =====================================================
+        # REVISAR CADA LÍNEA
+        # =====================================================
+
+        for raw_line_id in line_ids:
+
+            line_id = int(raw_line_id)
+
+            action = (
+                request.form.get(f"action_{line_id}") or ""
+            ).strip().upper()
+
+            quantity = (
+                request.form.get(f"quantity_{line_id}") or ""
+            ).strip()
+
+            rejection_reason = (
+                request.form.get(
+                    f"rejection_reason_{line_id}"
+                ) or ""
+            ).strip() or None
+
+            if action not in {"APROBAR", "RECHAZAR"}:
+                continue
+
+            kwargs = {
+                "transfer_request_line_id": line_id,
+                "performed_by_user_id": current_user.id,
+                "action": action,
+                "commit": False,
+            }
+
+            if action == "APROBAR":
+
+                kwargs["quantity_approved"] = quantity
+
+                approved_exists = True
+
+            else:
+
+                kwargs["rejection_reason"] = (
+                    rejection_reason
+                )
+
+            review_transfer_request_line(
+                **kwargs
+            )
+
+        # =====================================================
+        # FINALIZAR REVISIÓN
+        # =====================================================
+
+        finalize_transfer_request_review(
+            transfer_request_id=transfer_request_id,
+            performed_by_user_id=current_user.id,
+            approval_note=None,
+            commit=False,
+        )
+
+        # =====================================================
+        # ENVIAR A BODEGA SI HAY APROBADAS
+        # =====================================================
+
+        if approved_exists:
+
+            send_transfer_request_to_warehouse(
+                transfer_request_id=transfer_request_id,
+                performed_by_user_id=current_user.id,
+                commit=False,
+            )
+
+        db.session.commit()
+
+        flash(
+            "Solicitud revisada y enviada correctamente.",
+            "success"
+        )
+
+    except TransferServiceError as exc:
+
+        db.session.rollback()
+
+        flash(str(exc), "danger")
+
+    except Exception as exc:
+
+        db.session.rollback()
+
+        current_app.logger.exception(
+            "[TRANSFER BULK REVIEW ERROR] request_id=%s",
+            transfer_request_id,
+        )
+
+        flash(
+            f"No se pudo procesar la revisión masiva: {exc}",
+            "danger"
+        )
+
+    return _redirect_after_request_action(
+        transfer_request_id
+    )
 
 @transfer_bp.route("/requests/<int:transfer_request_id>/finalize-review", methods=["POST"])
 @login_required
