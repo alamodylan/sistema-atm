@@ -61,7 +61,13 @@ class PurchaseRequest(db.Model):
     )
 
     requested_by_user = db.relationship("User")
-    site = db.relationship("Site", back_populates="purchase_requests")
+
+    site = db.relationship(
+        "Site",
+        foreign_keys=[site_id],
+        back_populates="purchase_requests",
+    )
+
     warehouse = db.relationship("Warehouse")
 
     lines = db.relationship(
