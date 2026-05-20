@@ -289,35 +289,30 @@ def get_work_order(work_order_id: int):
         work_order = (
             WorkOrder.query
             .options(
+                # =====================================================
+                # RELACIONES PRINCIPALES
+                # =====================================================
                 joinedload(WorkOrder.mechanics),
                 joinedload(WorkOrder.equipment),
                 joinedload(WorkOrder.warehouse),
                 joinedload(WorkOrder.responsible_user),
 
-                selectinload(WorkOrder.requests).selectinload(WorkOrderRequest.lines),
-                selectinload(WorkOrder.requests).selectinload(WorkOrderRequest.requested_by_user),
-                selectinload(WorkOrder.requests).selectinload(WorkOrderRequest.approved_by_user),
-                selectinload(WorkOrder.requests).selectinload(WorkOrderRequest.sent_to_warehouse_by_user),
-
+                # =====================================================
+                # SOLICITUDES OT
+                # =====================================================
                 selectinload(WorkOrder.requests)
                     .selectinload(WorkOrderRequest.lines)
                     .selectinload(WorkOrderRequestLine.article),
 
-                selectinload(WorkOrder.lines),
-                selectinload(WorkOrder.lines).selectinload(WorkOrderLine.article),
-                selectinload(WorkOrder.lines).selectinload(WorkOrderLine.delete_requests),
-                selectinload(WorkOrder.lines).selectinload(WorkOrderLine.delivered_by_user),
-                selectinload(WorkOrder.lines).selectinload(WorkOrderLine.received_by_user),
+                # =====================================================
+                # LÍNEAS OT
+                # =====================================================
+                selectinload(WorkOrder.lines)
+                    .selectinload(WorkOrderLine.article),
 
                 selectinload(WorkOrder.lines)
                     .selectinload(WorkOrderLine.request_line)
-                    .selectinload(WorkOrderRequestLine.work_order_request)
-                    .selectinload(WorkOrderRequest.mechanic),
-
-                selectinload(WorkOrder.lines)
-                    .selectinload(WorkOrderLine.request_line)
-                    .selectinload(WorkOrderRequestLine.work_order_request)
-                    .selectinload(WorkOrderRequest.approved_by_user),
+                    .selectinload(WorkOrderRequestLine.work_order_request),
             )
             .filter(WorkOrder.id == work_order_id)
             .first()
@@ -326,6 +321,9 @@ def get_work_order(work_order_id: int):
         if not work_order:
             raise ValueError("Orden de trabajo no encontrada.")
 
+        # =========================================================
+        # LÍNEAS YA ATENDIDAS
+        # =========================================================
         existing_request_line_ids = {
             line.request_line_id
             for line in work_order.lines
@@ -334,20 +332,29 @@ def get_work_order(work_order_id: int):
 
         visible_requests = []
 
+        # =========================================================
+        # STOCK MASIVO SOLO SI VIENE DESDE DASHBOARD
+        # =========================================================
         stock_by_article_id = {}
 
         if source == "dashboard":
+
             article_ids = set()
 
             for req in work_order.requests:
+
+                if not req.sent_to_warehouse_at:
+                    continue
+
                 for line in req.lines:
-                    if line.line_status in ["CANCELADA"]:
+
+                    if line.line_status == "CANCELADA":
                         continue
 
-                    if not req.sent_to_warehouse_at:
-                        continue
-
-                    if hasattr(line, "manager_review_status") and line.manager_review_status != "APROBADA":
+                    if (
+                        hasattr(line, "manager_review_status")
+                        and line.manager_review_status != "APROBADA"
+                    ):
                         continue
 
                     if line.id in existing_request_line_ids:
@@ -357,6 +364,7 @@ def get_work_order(work_order_id: int):
                         article_ids.add(line.article_id)
 
             if article_ids:
+
                 stocks = (
                     WarehouseStock.query
                     .filter(
@@ -371,23 +379,35 @@ def get_work_order(work_order_id: int):
                     for stock in stocks
                 }
 
+        # =========================================================
+        # FILTRAR SOLICITUDES VISIBLES
+        # =========================================================
         for req in work_order.requests:
+
+            if not req.sent_to_warehouse_at:
+                continue
+
             request_lines_for_view = []
 
             for line in req.lines:
-                if line.line_status in ["CANCELADA"]:
+
+                if line.line_status == "CANCELADA":
                     continue
 
-                if not req.sent_to_warehouse_at:
-                    continue
-
-                if hasattr(line, "manager_review_status") and line.manager_review_status != "APROBADA":
+                if (
+                    hasattr(line, "manager_review_status")
+                    and line.manager_review_status != "APROBADA"
+                ):
                     continue
 
                 if line.id in existing_request_line_ids:
                     continue
 
+                # =====================================================
+                # CONTEXTO BODEGA SOLO DASHBOARD
+                # =====================================================
                 if source == "dashboard":
+
                     stock = stock_by_article_id.get(line.article_id)
 
                     available_qty = (
@@ -402,13 +422,18 @@ def get_work_order(work_order_id: int):
                     )
 
                     line.stock_available = available_qty
+
                     line.suggested_attend_quantity = (
                         min(available_qty, remaining)
                         if remaining > 0
                         else Decimal("0")
                     )
 
-                    line.warehouse_action_enabled = available_qty > 0 and remaining > 0
+                    line.warehouse_action_enabled = (
+                        available_qty > 0
+                        and remaining > 0
+                    )
+
                     line.location_label = (
                         stock.location_name
                         if stock and hasattr(stock, "location_name")
@@ -423,21 +448,50 @@ def get_work_order(work_order_id: int):
             req.filtered_lines = request_lines_for_view
             visible_requests.append(req)
 
-        repair_types, repair_type_mechanics_map = _build_repair_type_mechanics_map(
-            site_id=work_order.site_id
+        # =========================================================
+        # TIPOS REPARACIÓN + MECÁNICOS
+        # =========================================================
+        repair_types, repair_type_mechanics_map = (
+            _build_repair_type_mechanics_map(
+                site_id=work_order.site_id
+            )
         )
 
+        # =========================================================
+        # TRABAJOS OT
+        # =========================================================
         task_lines = (
             WorkOrderTaskLine.query
             .options(
                 selectinload(WorkOrderTaskLine.assigned_mechanic),
                 selectinload(WorkOrderTaskLine.repair_type),
-                selectinload(WorkOrderTaskLine.assignments),
             )
-            .filter(WorkOrderTaskLine.work_order_id == work_order.id)
-            .order_by(WorkOrderTaskLine.created_at.asc())
+            .filter(
+                WorkOrderTaskLine.work_order_id == work_order.id
+            )
+            .order_by(
+                WorkOrderTaskLine.created_at.asc()
+            )
             .all()
         )
+
+        # =========================================================
+        # ÚLTIMA SOLICITUD DE ELIMINACIÓN POR LÍNEA
+        # =========================================================
+        latest_delete_request_map = {}
+
+        for line in work_order.lines:
+
+            latest_delete = None
+
+            if hasattr(line, "delete_requests") and line.delete_requests:
+
+                latest_delete = max(
+                    line.delete_requests,
+                    key=lambda x: x.created_at or datetime.min
+                )
+
+            latest_delete_request_map[line.id] = latest_delete
 
         return render_template(
             "work_orders/detail.html",
@@ -449,17 +503,30 @@ def get_work_order(work_order_id: int):
             repair_types=repair_types,
             repair_type_mechanics_map=repair_type_mechanics_map,
             task_lines=task_lines,
+            latest_delete_request_map=latest_delete_request_map,
             source=source,
         )
 
     except ValueError as exc:
+
         flash(str(exc), "danger")
-        return redirect(url_for("work_orders.list_work_orders"))
+
+        return redirect(
+            url_for("work_orders.list_work_orders")
+        )
 
     except Exception as exc:
+
         print(f"[ERROR OT DETAIL] {exc}")
-        flash("Error al cargar la orden de trabajo.", "danger")
-        return redirect(url_for("work_orders.list_work_orders"))
+
+        flash(
+            "Error al cargar la orden de trabajo.",
+            "danger"
+        )
+
+        return redirect(
+            url_for("work_orders.list_work_orders")
+        )
 
 
 # =========================================================

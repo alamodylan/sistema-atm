@@ -722,7 +722,7 @@
 
                         <tbody>
                             {% for line in work_order.lines %}
-                            {% set delete_req = line.delete_requests|sort(attribute='created_at', reverse=True)|first %}
+                            {% set delete_req = latest_delete_request_map.get(line.id) %}
                             <tr>
                                 <td>{{ line.article.code }} - {{ line.article.name }}</td>
 
