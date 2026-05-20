@@ -1,6 +1,9 @@
+from datetime import datetime, time
+
 from flask import Blueprint, flash, render_template, request
 from flask_login import login_required
 
+from app.extensions import db
 from app.models.inventory import InventoryLedger
 from app.models.work_order import WorkOrder
 from app.models.waste_act import WasteAct
@@ -44,16 +47,34 @@ def inventory_movements_report():
         )
 
         if date_from:
-            query = query.filter(InventoryLedger.created_at >= date_from)
+            parsed_date_from = datetime.combine(
+                datetime.strptime(date_from, "%Y-%m-%d").date(),
+                time.min,
+            )
+
+            query = query.filter(
+                InventoryLedger.created_at >= parsed_date_from
+            )
 
         if date_to:
-            query = query.filter(InventoryLedger.created_at <= date_to)
+            parsed_date_to = datetime.combine(
+                datetime.strptime(date_to, "%Y-%m-%d").date(),
+                time.max,
+            )
+
+            query = query.filter(
+                InventoryLedger.created_at <= parsed_date_to
+            )
 
         if article_code:
-            query = query.filter(Article.code.ilike(f"%{article_code}%"))
+            query = query.filter(
+                Article.code.ilike(f"%{article_code}%")
+            )
 
         if warehouse_id:
-            query = query.filter(InventoryLedger.warehouse_id == int(warehouse_id))
+            query = query.filter(
+                InventoryLedger.warehouse_id == int(warehouse_id)
+            )
 
         pagination = (
             query
@@ -87,7 +108,10 @@ def inventory_movements_report():
         )
 
     except Exception:
+        db.session.rollback()
+
         flash("Error al cargar el reporte de movimientos.", "danger")
+
         return render_template(
             "reports/inventory_movements.html",
             title="Reporte de movimientos de inventario",
@@ -116,7 +140,12 @@ def work_orders_report():
         if status:
             query = query.filter(WorkOrder.status == status)
 
-        work_orders = query.order_by(WorkOrder.created_at.desc()).limit(200).all()
+        work_orders = (
+            query
+            .order_by(WorkOrder.created_at.desc())
+            .limit(200)
+            .all()
+        )
 
         return render_template(
             "reports/work_orders.html",
@@ -127,7 +156,10 @@ def work_orders_report():
         )
 
     except Exception:
+        db.session.rollback()
+
         flash("Error al cargar el reporte de OT.", "danger")
+
         return render_template(
             "reports/work_orders.html",
             work_orders=[],
@@ -149,7 +181,12 @@ def waste_acts_report():
         if status:
             query = query.filter(WasteAct.status == status)
 
-        waste_acts = query.order_by(WasteAct.created_at.desc()).limit(200).all()
+        waste_acts = (
+            query
+            .order_by(WasteAct.created_at.desc())
+            .limit(200)
+            .all()
+        )
 
         return render_template(
             "reports/waste_acts.html",
@@ -160,7 +197,10 @@ def waste_acts_report():
         )
 
     except Exception:
+        db.session.rollback()
+
         flash("Error al cargar el reporte de actas.", "danger")
+
         return render_template(
             "reports/waste_acts.html",
             waste_acts=[],
