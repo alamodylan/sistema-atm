@@ -1,0 +1,159 @@
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+            <h5 class="fw-bold mb-0">Líneas de la OT</h5>
+
+            <div class="d-flex flex-wrap gap-2">
+                {% if work_order.status == "EN_PROCESO" %}
+                    <form method="POST" action="{{ url_for('work_orders.finalize_work_order_action', work_order_id=work_order.id) }}">
+                        <button type="submit" class="btn btn-outline-success">
+                            Finalizar OT
+                        </button>
+                    </form>
+                {% endif %}
+
+                {% if work_order.status == "FINALIZADA" %}
+                    <form method="POST" action="{{ url_for('work_orders.close_work_order_action', work_order_id=work_order.id) }}">
+                        <button type="submit" class="btn btn-outline-dark">
+                            Cerrar OT
+                        </button>
+                    </form>
+                {% endif %}
+
+                <a href="{{ url_for('work_orders.print_work_order', work_order_id=work_order.id) }}" class="btn btn-primary">
+                    Imprimir
+                </a>
+            </div>
+        </div>
+
+        {% if work_order.status == "EN_PROCESO" %}
+        <div class="alert alert-warning">
+            Las líneas deben generarse desde solicitudes confirmadas en terminal.
+        </div>
+        {% endif %}
+
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Artículo</th>
+                        <th>Cantidad</th>
+                        <th>Inventario</th>
+                        <th>Recibido</th>
+                        <th>Entregado</th>
+                        <th>Jefatura</th>
+                        <th>Estado</th>
+                        <th>Acción / Historial</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for line in work_order.lines %}
+                    {% set delete_req = latest_delete_request_map.get(line.id) %}
+
+                    <tr>
+                        <td>
+                            {{ line.article.code }} - {{ line.article.name }}
+                        </td>
+
+                        <td>
+                            {{ line.quantity }}
+                        </td>
+
+                        <td>
+                            {% if line.inventory_posted %}
+                                <span class="badge text-bg-success">Aplicado</span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">No aplicado</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if line.request_line and line.request_line.work_order_request and line.request_line.work_order_request.mechanic %}
+                                <div class="fw-semibold text-success">
+                                    {{ line.request_line.work_order_request.mechanic.name }}
+                                </div>
+                                <div class="small text-muted">
+                                    {{ line.received_at or '-' }}
+                                </div>
+                            {% elif line.received_by_user %}
+                                <div class="fw-semibold text-success">
+                                    {{ line.received_by_user.full_name }}
+                                </div>
+                                <div class="small text-muted">
+                                    {{ line.received_at or '-' }}
+                                </div>
+                            {% else %}
+                                <span class="text-muted">Pendiente</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if line.delivered_by_user %}
+                                {{ line.delivered_by_user.full_name }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if line.request_line and line.request_line.work_order_request and line.request_line.work_order_request.approved_by_user %}
+                                {{ line.request_line.work_order_request.approved_by_user.full_name }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if line.line_status == "ACTIVE" %}
+                                <span class="badge text-bg-success">Activa</span>
+                            {% elif line.line_status == "REMOVAL_PENDING" %}
+                                <span class="badge text-bg-warning">Pendiente eliminación</span>
+                            {% elif line.line_status == "REMOVED" %}
+                                <span class="badge text-bg-danger">Eliminada</span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">{{ line.line_status }}</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if delete_req %}
+                                <span class="text-muted">Solicitud de eliminación registrada</span>
+                            {% elif work_order.status == "EN_PROCESO" and line.line_status == "ACTIVE" %}
+                                <span class="text-muted">Disponible para gestión</span>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            No hay líneas registradas para esta OT.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <hr class="my-4">
+
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+            <h6 class="fw-bold mb-0">Mecánicos asignados</h6>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            {% for mechanic in work_order.mechanics %}
+                <span class="badge rounded-pill text-bg-light border text-dark px-3 py-2">
+                    {{ mechanic.name }}
+                </span>
+            {% else %}
+                <span class="text-muted">No hay mecánicos asignados.</span>
+            {% endfor %}
+        </div>
+
+    </div>
+</div>

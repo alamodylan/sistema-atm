@@ -109,275 +109,29 @@
     <!-- ===================== CONTENIDO ===================== -->
     <div class="col-12 col-xl-9">
 
-        <!-- ===================== SOLICITUDES ===================== -->
-        {% if visible_requests %}
-        <div class="card border-0 shadow-sm rounded-4 mb-4">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                        <h5 class="fw-bold mb-1">Solicitudes de artículos</h5>
-                    </div>
-                </div>
+        <!-- ===================== SOLICITUDES AJAX ===================== -->
 
-                {% for req in visible_requests %}
-                <div class="border rounded-4 p-3 mb-3">
-                    <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-2">
-                        <div>
-                            <div class="fw-semibold">
-                                Solicitud #{{ req.id }}
+        <div id="work-order-requests-container">
 
-                                {% if req.request_status == "ABIERTA" %}
-                                    <span class="badge text-bg-secondary">ABIERTA</span>
-                                {% elif req.request_status == "ENVIADA" and not req.sent_to_warehouse_at %}
-                                    <span class="badge text-bg-warning text-dark">PENDIENTE JEFATURA</span>
-                                {% elif req.request_status == "ENVIADA" and req.sent_to_warehouse_at %}
-                                    <span class="badge text-bg-primary">EN BODEGA</span>
-                                {% elif req.request_status == "ATENDIDA" %}
-                                    <span class="badge text-bg-success">ATENDIDA</span>
-                                {% elif req.request_status == "CANCELADA" %}
-                                    <span class="badge text-bg-danger">CANCELADA</span>
-                                {% else %}
-                                    <span class="badge text-bg-secondary">{{ req.request_status }}</span>
-                                {% endif %}
-                            </div>
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-body p-4">
 
-                            <div class="small text-muted mt-1">
-                                Creada por:
-                                <strong>{{ req.requested_by_user.full_name if req.requested_by_user else '-' }}</strong>
-                                · {{ req.created_at|cr_datetime }}
-                            </div>
+                    <div class="d-flex align-items-center gap-3">
 
-                            {% if req.approved_by_user %}
-                            <div class="small text-muted mt-1">
-                                Aprobó jefatura:
-                                <strong>{{ req.approved_by_user.full_name }}</strong>
-                                {% if req.approved_at|cr_datetime %}· {{ req.approved_at|cr_datetime }}{% endif %}
-                            </div>
-                            {% endif %}
-
-                            {% if req.sent_to_warehouse_at %}
-                            <div class="small text-muted mt-1">
-                                Enviada a bodega:
-                                <strong>{{ req.sent_to_warehouse_by_user.full_name if req.sent_to_warehouse_by_user else '-' }}</strong>
-                                · {{ req.sent_to_warehouse_at|cr_datetime }}
-                            </div>
-                            {% endif %}
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
                         </div>
 
-                        <div class="d-flex flex-wrap gap-2">
-                            {% if req.request_status == "ABIERTA" and source != "dashboard" %}
-                            <form method="POST" action="{{ url_for('work_order_requests.send_request_action', request_id=req.id) }}">
-                                <button class="btn btn-sm btn-success">
-                                    Enviar a jefatura
-                                </button>
-                            </form>
-                            {% endif %}
-
-                            {% if req.request_status == "ENVIADA" and not req.sent_to_warehouse_at and req.send_to_warehouse_enabled is defined and req.send_to_warehouse_enabled and source != "dashboard" %}
-                            <form method="POST" action="{{ url_for('work_order_requests.send_request_to_warehouse_action', request_id=req.id) }}">
-                                <button class="btn btn-sm btn-primary">
-                                    Enviar a bodega
-                                </button>
-                            </form>
-                            {% endif %}
+                        <div class="text-muted">
+                            Cargando solicitudes de artículos...
                         </div>
+
                     </div>
 
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Artículo</th>
-                                    <th class="text-end">Solicitado</th>
-                                    <th class="text-end">Atendido</th>
-                                    <th class="text-end">Stock</th>
-                                    <th>Ubicación</th>
-                                    <th>Estado</th>
-                                    <th>Acción</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% set lines = req.filtered_lines if req.filtered_lines is defined else req.lines %}
-                                {% for line in lines if line.line_status not in ["CANCELADA"] and req.sent_to_warehouse_at %}
-                                <tr>
-                                    <td>
-                                        <div>{{ line.article.code }} - {{ line.article.name }}</div>
-                                        {% if line.notes %}
-                                            <div class="small text-muted">{{ line.notes }}</div>
-                                        {% endif %}
-                                        {% if line.not_delivered_reason %}
-                                            <div class="small text-danger">Motivo: {{ line.not_delivered_reason }}</div>
-                                        {% endif %}
-                                    </td>
-
-                                    <td class="text-end">{{ line.quantity_requested }}</td>
-                                    <td class="text-end">{{ line.quantity_attended }}</td>
-
-                                    <td class="text-end">
-                                        {% if line.stock_available is defined %}
-                                            {{ line.stock_available }}
-                                        {% elif line.available_quantity is defined %}
-                                            {{ line.available_quantity }}
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
-
-                                    <td>
-                                        {% if line.location_label is defined and line.location_label %}
-                                            {{ line.location_label }}
-                                        {% elif line.warehouse_location_name is defined and line.warehouse_location_name %}
-                                            {{ line.warehouse_location_name }}
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
-
-                                    <td>
-                                        {% if line.line_status == "SOLICITADA" %}
-                                            <span class="badge text-bg-secondary">SOLICITADA</span>
-                                        {% elif line.line_status == "ATENDIDA_PARCIAL" %}
-                                            <span class="badge text-bg-warning text-dark">ATENDIDA PARCIAL</span>
-                                        {% elif line.line_status == "ENTREGADA" %}
-                                            <span class="badge text-bg-success">ENTREGADA</span>
-                                        {% elif line.line_status == "NO_ENTREGADA" %}
-                                            <span class="badge text-bg-danger">NO ENTREGADA</span>
-                                        {% elif line.line_status == "CANCELADA" %}
-                                            <span class="badge text-bg-dark">RECHAZADA</span>
-                                        {% elif line.line_status == "PRESTADA" %}
-                                            <span class="badge text-bg-primary">PRESTADA</span>
-                                        {% else %}
-                                            <span class="badge text-bg-secondary">{{ line.line_status }}</span>
-                                        {% endif %}
-                                    </td>
-
-                                    <td>
-                                        <div class="d-flex flex-column gap-2">
-                                            {% if req.request_status == "ENVIADA" and not req.sent_to_warehouse_at and line.line_status == "SOLICITADA" and line.manager_review_enabled is defined and line.manager_review_enabled and source != "dashboard" %}
-                                            <div class="border rounded-3 p-2 bg-light-subtle">
-                                                <div class="small fw-semibold mb-2">Jefatura</div>
-                                                <div class="d-flex flex-column flex-md-row gap-2">
-                                                    <form method="POST" action="{{ url_for('work_order_requests.approve_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2">
-                                                        <input
-                                                            name="quantity"
-                                                            class="form-control form-control-sm"
-                                                            type="number"
-                                                            step="0.01"
-                                                            min="0.01"
-                                                            max="{{ line.stock_available if line.stock_available is defined else '' }}"
-                                                            value="{{ line.suggested_attend_quantity if line.suggested_attend_quantity is defined else line.quantity_requested }}"
-                                                            style="width: 110px;"
-                                                            {% if line.force_exact_attend is defined and line.force_exact_attend %}readonly{% endif %}
-                                                        >
-                                                        <button class="btn btn-sm btn-outline-success">Aprobar</button>
-                                                    </form>
-
-                                                    <form method="POST" action="{{ url_for('work_order_requests.reject_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2">
-                                                        <input
-                                                            name="reason"
-                                                            class="form-control form-control-sm"
-                                                            placeholder="Motivo rechazo"
-                                                            style="width: 150px;"
-                                                        >
-                                                        <button class="btn btn-sm btn-outline-danger">Rechazar</button>
-                                                    </form>
-                                                </div>
-                                            </div>
-                                            {% endif %}
-
-                                            {% set is_tool_line = line.article and (line.article.code|int >= 19000 and line.article.code|int <= 19999) %}
-
-                                            {% if req.sent_to_warehouse_at and req.request_status in ["ENVIADA", "ATENDIDA"] and line.line_status in ["SOLICITADA", "ATENDIDA_PARCIAL"] and line.warehouse_action_enabled is defined and line.warehouse_action_enabled %}
-                                            <div class="border rounded-3 p-2 bg-light-subtle">
-
-                                                <div class="small fw-semibold mb-2">
-                                                    Bodega
-                                                </div>
-
-                                                {% if is_tool_line %}
-
-                                                <form method="POST"
-                                                    action="{{ url_for('work_order_requests.mark_request_line_loaned_action', line_id=line.id) }}"
-                                                    class="d-flex flex-wrap gap-2 align-items-center">
-
-                                                    <input
-                                                        name="quantity"
-                                                        class="form-control form-control-sm"
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0.01"
-                                                        max="{{ line.stock_available if line.stock_available is defined else '' }}"
-                                                        value="{{ line.suggested_attend_quantity if line.suggested_attend_quantity is defined else line.quantity_requested }}"
-                                                        style="width: 110px;"
-                                                    >
-
-                                                    <button class="btn btn-sm btn-outline-warning">
-                                                        Prestar herramienta
-                                                    </button>
-
-                                                </form>
-
-                                                {% else %}
-
-                                                <form method="POST"
-                                                    action="{{ url_for('work_order_requests.attend_request_line_action', line_id=line.id) }}"
-                                                    class="d-flex flex-wrap gap-2 align-items-center">
-
-                                                    <input
-                                                        name="quantity"
-                                                        class="form-control form-control-sm"
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0.01"
-                                                        max="{{ line.stock_available if line.stock_available is defined else '' }}"
-                                                        value="{{ line.suggested_attend_quantity if line.suggested_attend_quantity is defined else line.quantity_requested }}"
-                                                        style="width: 110px;"
-                                                    >
-
-                                                    <button class="btn btn-sm btn-outline-primary">
-                                                        Preparar
-                                                    </button>
-
-                                                </form>
-
-                                                {% endif %}
-
-                                            </div>
-                                            {% endif %}
-
-                                            {% if line.line_status == "ENTREGADA" %}
-                                            <div class="small text-success fw-semibold">
-                                                Lista para confirmación en terminal taller.
-                                            </div>
-                                            {% endif %}
-
-                                            {% if line.line_status == "CANCELADA" and not req.sent_to_warehouse_at %}
-                                            <div class="small text-danger fw-semibold">
-                                                Línea rechazada por jefatura.
-                                            </div>
-                                            {% endif %}
-
-                                            {% if line.line_status == "NO_ENTREGADA" %}
-                                            <div class="small text-danger fw-semibold">
-                                                Línea no atendida.
-                                            </div>
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="7" class="text-muted text-center">Sin líneas</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
                 </div>
-                {% endfor %}
             </div>
+
         </div>
-        {% endif %}
 
         {% if current_user.has_permission("ot_trabajos") %}
         <!-- ===================== TRABAJOS OT ===================== -->
@@ -543,292 +297,39 @@
             </div>
         </div>
         {% endif %}
-        <!-- ===================== LÍNEAS ===================== -->
-         {% if work_order.tool_loans %}
-        <div class="card border-0 shadow-sm rounded-4 mb-4">
-            <div class="card-body p-4">
+        <!-- ===================== LÍNEAS AJAX ===================== -->
 
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-bold mb-0">
-                        Herramientas prestadas
-                    </h5>
-                </div>
+        <div id="work-order-lines-container">
 
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
 
-                        <thead class="table-light">
-                            <tr>
-                                <th>Herramienta</th>
-                                <th>Cantidad</th>
-                                <th>Solicitó</th>
-                                <th>Entregó</th>
-                                <th>Solicitó devolución</th>
-                                <th>Recibió devolución</th>
-                                <th>Fecha préstamo</th>
-                                <th>Estado</th>
-                            </tr>
-                        </thead>
+                    <div class="d-flex align-items-center gap-3">
 
-                        <tbody>
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
 
-                            {% for loan in work_order.tool_loans %}
+                        <div class="text-muted">
+                            Cargando información de líneas y herramientas...
+                        </div>
 
-                            <tr>
-
-                                <td>
-                                    {% if loan.article %}
-                                        {{ loan.article.code }} - {{ loan.article.name }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
-
-                                <td>
-                                    {{ loan.quantity }}
-                                </td>
-
-                                <td>
-                                    {% if loan.requested_by_user %}
-                                        {{ loan.requested_by_user.full_name }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
-
-                                <td>
-                                    {% if loan.delivered_by_user %}
-                                        {{ loan.delivered_by_user.full_name }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
-
-                                <td>
-                                    {% if loan.returned_by_user %}
-                                        {{ loan.returned_by_user.full_name }}
-                                    {% else %}
-                                        <span class="text-muted">Pendiente</span>
-                                    {% endif %}
-                                </td>
-
-                                <td>
-                                    {% if loan.received_return_by_user %}
-                                        {{ loan.received_return_by_user.full_name }}
-                                    {% else %}
-                                        <span class="text-muted">Pendiente</span>
-                                    {% endif %}
-                                </td>
-
-                                <td>
-                                    {{ loan.loaned_at|cr_datetime }}
-                                </td>
-
-                                <td>
-
-                                    {% if loan.loan_status == "PRESTADA" %}
-                                        <span class="badge text-bg-warning text-dark">
-                                            PRESTADA
-                                        </span>
-
-                                    {% elif loan.loan_status == "DEVOLUCION_SOLICITADA" %}
-                                        <div class="d-flex flex-column gap-2">
-                                            <span class="badge text-bg-primary">
-                                                PENDIENTE RECEPCIÓN
-                                            </span>
-
-                                            <form method="POST"
-                                                  action="{{ url_for('work_order_requests.confirm_tool_return_action', tool_loan_id=loan.id) }}">
-                                                <button class="btn btn-sm btn-success">
-                                                    Recibir herramienta
-                                                </button>
-                                            </form>
-                                        </div>
-
-                                    {% elif loan.loan_status == "DEVUELTA" %}
-                                        <span class="badge text-bg-success">
-                                            DEVUELTA
-                                        </span>
-
-                                    {% else %}
-                                        <span class="badge text-bg-secondary">
-                                            {{ loan.loan_status }}
-                                        </span>
-                                    {% endif %}
-
-                                </td>
-
-                            </tr>
-
-                            {% endfor %}
-
-                        </tbody>
-
-                    </table>
-                </div>
-
-            </div>
-        </div>
-        {% endif %}
-        <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-body p-4">
-
-                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
-                    <h5 class="fw-bold mb-0">Líneas de la OT</h5>
-
-                    <div class="d-flex flex-wrap gap-2">
-                        {% if work_order.status == "EN_PROCESO" %}
-                            <form method="POST" action="{{ url_for('work_orders.finalize_work_order_action', work_order_id=work_order.id) }}">
-                                <button type="submit" class="btn btn-outline-success">
-                                    Finalizar OT
-                                </button>
-                            </form>
-                        {% endif %}
-
-                        {% if work_order.status == "FINALIZADA" %}
-                            <form method="POST" action="{{ url_for('work_orders.close_work_order_action', work_order_id=work_order.id) }}">
-                                <button type="submit" class="btn btn-outline-dark">
-                                    Cerrar OT
-                                </button>
-                            </form>
-                        {% endif %}
-
-                        <a href="{{ url_for('work_orders.print_work_order', work_order_id=work_order.id) }}" class="btn btn-primary">
-                            Imprimir
-                        </a>
                     </div>
+
                 </div>
-
-                {% if work_order.status == "EN_PROCESO" %}
-                <div class="alert alert-warning">
-                    Las líneas deben generarse desde solicitudes confirmadas en terminal.
-                </div>
-                {% endif %}
-
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Artículo</th>
-                                <th>Cantidad</th>
-                                <th>Inventario</th>
-                                <th>Recibido</th>
-                                <th>Entregado</th>
-                                <th>Jefatura</th>
-                                <th>Estado</th>
-                                <th>Acción / Historial</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            {% for line in work_order.lines %}
-                            {% set delete_req = latest_delete_request_map.get(line.id) %}
-                            <tr>
-                                <td>{{ line.article.code }} - {{ line.article.name }}</td>
-
-                                <td>{{ line.quantity }}</td>
-
-                                <td>
-                                    {% if line.inventory_posted %}
-                                        <span class="badge text-bg-success">Aplicado</span>
-                                    {% else %}
-                                        <span class="badge text-bg-secondary">No aplicado</span>
-                                    {% endif %}
-                                </td>
-
-                                <td>
-                                    {% if line.request_line and line.request_line.work_order_request and line.request_line.work_order_request.mechanic %}
-                                        <div class="fw-semibold text-success">
-                                            {{ line.request_line.work_order_request.mechanic.name }}
-                                        </div>
-                                        <div class="small text-muted">
-                                            {{ line.received_at or '-' }}
-                                        </div>
-                                    {% elif line.received_by_user %}
-                                        <div class="fw-semibold text-success">
-                                            {{ line.received_by_user.full_name }}
-                                        </div>
-                                        <div class="small text-muted">
-                                            {{ line.received_at or '-' }}
-                                        </div>
-                                    {% else %}
-                                        <span class="text-muted">Pendiente</span>
-                                    {% endif %}
-                                </td>
-
-                                <td>
-                                    {% if line.delivered_by_user %}
-                                        {{ line.delivered_by_user.full_name }}
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-
-                                <td>
-                                    {% if line.request_line and line.request_line.work_order_request and line.request_line.work_order_request.approved_by_user %}
-                                        {{ line.request_line.work_order_request.approved_by_user.full_name }}
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-
-                                <td>
-                                    {% if line.line_status == "ACTIVE" %}
-                                        <span class="badge text-bg-success">Activa</span>
-                                    {% elif line.line_status == "REMOVAL_PENDING" %}
-                                        <span class="badge text-bg-warning">Pendiente eliminación</span>
-                                    {% elif line.line_status == "REMOVED" %}
-                                        <span class="badge text-bg-danger">Eliminada</span>
-                                    {% else %}
-                                        <span class="badge text-bg-secondary">{{ line.line_status }}</span>
-                                    {% endif %}
-                                </td>
-
-                                <td>
-                                    {% if delete_req %}
-                                        <span class="text-muted">Solicitud de eliminación registrada</span>
-                                    {% elif work_order.status == "EN_PROCESO" and line.line_status == "ACTIVE" %}
-                                        <span class="text-muted">Disponible para gestión</span>
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="8" class="text-center text-muted py-4">
-                                    No hay líneas registradas para esta OT.
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-                <hr class="my-4">
-
-                <!-- ===================== MECÁNICOS ===================== -->
-                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
-                    <h6 class="fw-bold mb-0">Mecánicos asignados</h6>
-                </div>
-
-                <div class="d-flex flex-wrap gap-2">
-                    {% for mechanic in work_order.mechanics %}
-                        <span class="badge rounded-pill text-bg-light border text-dark px-3 py-2">
-                            {{ mechanic.name }}
-                        </span>
-                    {% else %}
-                        <span class="text-muted">No hay mecánicos asignados.</span>
-                    {% endfor %}
-                </div>
-
             </div>
+
         </div>
 
     </div>
 </div>
 
 <script>
+
+    // =====================================================
+    // REPAIR TYPES
+    // =====================================================
+
     const repairTypeSelect = document.getElementById("repairTypeSelect");
     const mechanicSelect = document.getElementById("mechanicSelect");
 
@@ -837,31 +338,100 @@
     );
 
     if (repairTypeSelect && mechanicSelect) {
+
         repairTypeSelect.addEventListener("change", function () {
+
             const repairTypeId = this.value;
-            const mechanics = repairTypeMechanicsMap[repairTypeId] || [];
+
+            const mechanics =
+                repairTypeMechanicsMap[repairTypeId] || [];
 
             mechanicSelect.innerHTML = "";
 
             if (!repairTypeId) {
-                mechanicSelect.innerHTML = '<option value="">Seleccione tipo primero...</option>';
+
+                mechanicSelect.innerHTML =
+                    '<option value="">Seleccione tipo primero...</option>';
+
                 return;
             }
 
             if (mechanics.length === 0) {
-                mechanicSelect.innerHTML = '<option value="">Sin mecánicos compatibles</option>';
+
+                mechanicSelect.innerHTML =
+                    '<option value="">Sin mecánicos compatibles</option>';
+
                 return;
             }
 
-            mechanicSelect.innerHTML = '<option value="">Asignar luego</option>';
+            mechanicSelect.innerHTML =
+                '<option value="">Asignar luego</option>';
 
             mechanics.forEach(function (mechanic) {
-                const option = document.createElement("option");
+
+                const option =
+                    document.createElement("option");
+
                 option.value = mechanic.id;
                 option.textContent = mechanic.name;
+
                 mechanicSelect.appendChild(option);
+
             });
+
         });
+
     }
+
+    // =====================================================
+    // AJAX LÍNEAS OT
+    // =====================================================
+
+    document.addEventListener("DOMContentLoaded", function () {
+
+        const linesContainer =
+            document.getElementById(
+                "work-order-lines-container"
+            );
+
+        if (!linesContainer) {
+            return;
+        }
+
+        fetch(
+            "{{ url_for('work_orders.get_work_order_lines_partial', work_order_id=work_order.id) }}"
+        )
+        .then(function (response) {
+
+            if (!response.ok) {
+
+                throw new Error(
+                    "No se pudo cargar el parcial."
+                );
+
+            }
+
+            return response.text();
+
+        })
+        .then(function (html) {
+
+            linesContainer.innerHTML = html;
+
+        })
+        .catch(function (error) {
+
+            console.error(error);
+
+            linesContainer.innerHTML = `
+                <div class="alert alert-danger rounded-4">
+                    No se pudieron cargar las líneas de la OT.
+                </div>
+            `;
+
+        });
+
+    });
+
 </script>
 {% endblock %}

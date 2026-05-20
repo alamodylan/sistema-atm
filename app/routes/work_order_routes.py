@@ -528,6 +528,206 @@ def get_work_order(work_order_id: int):
             url_for("work_orders.list_work_orders")
         )
 
+@work_order_bp.route("/<int:work_order_id>/partial/lines", methods=["GET"])
+@login_required
+@permission_required("ot")
+def get_work_order_lines_partial(work_order_id: int):
+    try:
+        work_order = (
+            WorkOrder.query
+            .options(
+                selectinload(WorkOrder.lines)
+                    .selectinload(WorkOrderLine.article),
+
+                selectinload(WorkOrder.lines)
+                    .selectinload(WorkOrderLine.request_line)
+                    .selectinload(WorkOrderRequestLine.work_order_request)
+                    .selectinload(WorkOrderRequest.mechanic),
+
+                selectinload(WorkOrder.lines)
+                    .selectinload(WorkOrderLine.request_line)
+                    .selectinload(WorkOrderRequestLine.work_order_request)
+                    .selectinload(WorkOrderRequest.approved_by_user),
+
+                selectinload(WorkOrder.lines)
+                    .selectinload(WorkOrderLine.delivered_by_user),
+
+                selectinload(WorkOrder.lines)
+                    .selectinload(WorkOrderLine.received_by_user),
+
+                selectinload(WorkOrder.lines)
+                    .selectinload(WorkOrderLine.delete_requests),
+            )
+            .filter(WorkOrder.id == work_order_id)
+            .first()
+        )
+
+        if not work_order:
+            return "<div class='alert alert-danger'>Orden de trabajo no encontrada.</div>", 404
+
+        latest_delete_request_map = {}
+
+        for line in work_order.lines:
+            latest_delete = None
+
+            if line.delete_requests:
+                latest_delete = max(
+                    line.delete_requests,
+                    key=lambda x: x.created_at or datetime.min,
+                )
+
+            latest_delete_request_map[line.id] = latest_delete
+
+        return render_template(
+            "work_orders/partials/_lines.html",
+            work_order=work_order,
+            latest_delete_request_map=latest_delete_request_map,
+        )
+
+    except Exception as exc:
+        print(f"[OT LINES PARTIAL ERROR] {exc}")
+        return "<div class='alert alert-danger'>Error al cargar líneas de la OT.</div>", 500
+    
+@work_order_bp.route("/<int:work_order_id>/partial/requests", methods=["GET"])
+@login_required
+@permission_required("ot")
+def get_work_order_requests_partial(work_order_id: int):
+    try:
+        source = (request.args.get("source") or "").strip()
+
+        work_order = (
+            WorkOrder.query
+            .options(
+                selectinload(WorkOrder.requests)
+                    .selectinload(WorkOrderRequest.lines)
+                    .selectinload(WorkOrderRequestLine.article),
+
+                selectinload(WorkOrder.requests)
+                    .selectinload(WorkOrderRequest.requested_by_user),
+
+                selectinload(WorkOrder.requests)
+                    .selectinload(WorkOrderRequest.approved_by_user),
+
+                selectinload(WorkOrder.requests)
+                    .selectinload(WorkOrderRequest.sent_to_warehouse_by_user),
+
+                selectinload(WorkOrder.lines),
+            )
+            .filter(WorkOrder.id == work_order_id)
+            .first()
+        )
+
+        if not work_order:
+            return "<div class='alert alert-danger'>Orden de trabajo no encontrada.</div>", 404
+
+        existing_request_line_ids = {
+            line.request_line_id
+            for line in work_order.lines
+            if line.request_line_id
+        }
+
+        visible_requests = []
+        stock_by_article_id = {}
+
+        if source == "dashboard":
+            article_ids = set()
+
+            for req in work_order.requests:
+                if not req.sent_to_warehouse_at:
+                    continue
+
+                for line in req.lines:
+                    if line.line_status == "CANCELADA":
+                        continue
+
+                    if (
+                        hasattr(line, "manager_review_status")
+                        and line.manager_review_status != "APROBADA"
+                    ):
+                        continue
+
+                    if line.id in existing_request_line_ids:
+                        continue
+
+                    if line.article_id:
+                        article_ids.add(line.article_id)
+
+            if article_ids:
+                stocks = (
+                    WarehouseStock.query
+                    .filter(
+                        WarehouseStock.warehouse_id == work_order.warehouse_id,
+                        WarehouseStock.article_id.in_(article_ids),
+                    )
+                    .all()
+                )
+
+                stock_by_article_id = {
+                    stock.article_id: stock
+                    for stock in stocks
+                }
+
+        for req in work_order.requests:
+            if not req.sent_to_warehouse_at:
+                continue
+
+            request_lines_for_view = []
+
+            for line in req.lines:
+                if line.line_status == "CANCELADA":
+                    continue
+
+                if (
+                    hasattr(line, "manager_review_status")
+                    and line.manager_review_status != "APROBADA"
+                ):
+                    continue
+
+                if line.id in existing_request_line_ids:
+                    continue
+
+                if source == "dashboard":
+                    stock = stock_by_article_id.get(line.article_id)
+
+                    available_qty = (
+                        Decimal(str(stock.available_quantity))
+                        if stock and stock.available_quantity
+                        else Decimal("0")
+                    )
+
+                    remaining = (
+                        Decimal(str(line.quantity_requested))
+                        - Decimal(str(line.quantity_attended))
+                    )
+
+                    line.stock_available = available_qty
+                    line.suggested_attend_quantity = (
+                        min(available_qty, remaining)
+                        if remaining > 0
+                        else Decimal("0")
+                    )
+                    line.warehouse_action_enabled = available_qty > 0 and remaining > 0
+                    line.location_label = (
+                        stock.location_name
+                        if stock and hasattr(stock, "location_name")
+                        else "-"
+                    )
+
+                request_lines_for_view.append(line)
+
+            if request_lines_for_view:
+                req.filtered_lines = request_lines_for_view
+                visible_requests.append(req)
+
+        return render_template(
+            "work_orders/partials/_requests.html",
+            visible_requests=visible_requests,
+            source=source,
+        )
+
+    except Exception as exc:
+        print(f"[OT REQUESTS PARTIAL ERROR] {exc}")
+        return "<div class='alert alert-danger'>Error al cargar solicitudes de artículos.</div>", 500
 
 # =========================================================
 # CREAR LÍNEA DE TRABAJO EN OT
