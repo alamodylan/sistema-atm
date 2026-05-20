@@ -34,6 +34,7 @@ def inventory_movements_report():
     date_to = (request.args.get("date_to") or "").strip()
     article_code = (request.args.get("article_code") or "").strip()
     warehouse_id = (request.args.get("warehouse_id") or "").strip()
+    page = request.args.get("page", 1, type=int)
 
     try:
         query = (
@@ -54,15 +55,30 @@ def inventory_movements_report():
         if warehouse_id:
             query = query.filter(InventoryLedger.warehouse_id == int(warehouse_id))
 
-        movements = query.order_by(InventoryLedger.created_at.desc()).limit(300).all()
+        pagination = (
+            query
+            .order_by(InventoryLedger.created_at.desc())
+            .paginate(
+                page=page,
+                per_page=30,
+                error_out=False,
+            )
+        )
 
-        warehouses = Warehouse.query.order_by(Warehouse.name.asc()).all()
+        movements = pagination.items
+
+        warehouses = (
+            Warehouse.query
+            .order_by(Warehouse.name.asc())
+            .all()
+        )
 
         return render_template(
             "reports/inventory_movements.html",
             title="Reporte de movimientos de inventario",
             subtitle="Entradas y salidas por rango de fechas, artículo, predio o bodega.",
             movements=movements,
+            pagination=pagination,
             warehouses=warehouses,
             date_from=date_from,
             date_to=date_to,
@@ -74,8 +90,15 @@ def inventory_movements_report():
         flash("Error al cargar el reporte de movimientos.", "danger")
         return render_template(
             "reports/inventory_movements.html",
+            title="Reporte de movimientos de inventario",
+            subtitle="Entradas y salidas por rango de fechas, artículo, predio o bodega.",
             movements=[],
+            pagination=None,
             warehouses=[],
+            date_from=date_from,
+            date_to=date_to,
+            article_code=article_code,
+            warehouse_id=warehouse_id,
         )
 
 

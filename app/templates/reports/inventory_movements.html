@@ -64,6 +64,15 @@
 
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body">
+
+        {% if pagination %}
+            <div class="d-flex justify-content-end mb-3">
+                <span class="badge bg-light text-dark border">
+                    Página {{ pagination.page }} de {{ pagination.pages }}
+                </span>
+            </div>
+        {% endif %}
+
         <div class="table-responsive">
             <table class="table align-middle table-hover">
                 <thead class="table-light">
@@ -82,9 +91,7 @@
                     {% if movements %}
                         {% for movement in movements %}
                             <tr>
-                                <td>
-                                    {{ movement.created_at|cr_datetime if movement.created_at else "-" }}
-                                </td>
+                                <td>{{ movement.created_at|cr_datetime if movement.created_at else "-" }}</td>
 
                                 <td>
                                     {% if movement.quantity_change > 0 %}
@@ -96,21 +103,13 @@
                                     {% endif %}
                                 </td>
 
-                                <td>
-                                    {{ movement.article.code if movement.article else "-" }}
-                                </td>
+                                <td>{{ movement.article.code if movement.article else "-" }}</td>
 
-                                <td>
-                                    {{ movement.article.name if movement.article else "-" }}
-                                </td>
+                                <td>{{ movement.article.name if movement.article else "-" }}</td>
 
-                                <td>
-                                    {{ movement.warehouse.name if movement.warehouse else "-" }}
-                                </td>
+                                <td>{{ movement.warehouse.name if movement.warehouse else "-" }}</td>
 
-                                <td>
-                                    {{ movement.quantity_change }}
-                                </td>
+                                <td>{{ movement.quantity_change }}</td>
 
                                 <td>
                                     {% if movement.reference_number %}
@@ -122,9 +121,7 @@
                                     {% endif %}
                                 </td>
 
-                                <td>
-                                    {{ movement.performed_by_user.full_name if movement.performed_by_user else "-" }}
-                                </td>
+                                <td>{{ movement.performed_by_user.full_name if movement.performed_by_user else "-" }}</td>
                             </tr>
                         {% endfor %}
                     {% else %}
@@ -137,6 +134,83 @@
                 </tbody>
             </table>
         </div>
+
+        {% if pagination and pagination.pages > 1 %}
+            <nav class="mt-4">
+                <ul class="pagination justify-content-center flex-wrap gap-1">
+
+                    {% if pagination.has_prev %}
+                        <li class="page-item">
+                            <a
+                                class="page-link"
+                                href="{{ url_for(
+                                    'reports.inventory_movements_report',
+                                    page=pagination.prev_num,
+                                    date_from=date_from,
+                                    date_to=date_to,
+                                    article_code=article_code,
+                                    warehouse_id=warehouse_id
+                                ) }}"
+                            >
+                                Anterior
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Anterior</span>
+                        </li>
+                    {% endif %}
+
+                    {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if p %}
+                            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                                <a
+                                    class="page-link"
+                                    href="{{ url_for(
+                                        'reports.inventory_movements_report',
+                                        page=p,
+                                        date_from=date_from,
+                                        date_to=date_to,
+                                        article_code=article_code,
+                                        warehouse_id=warehouse_id
+                                    ) }}"
+                                >
+                                    {{ p }}
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">…</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if pagination.has_next %}
+                        <li class="page-item">
+                            <a
+                                class="page-link"
+                                href="{{ url_for(
+                                    'reports.inventory_movements_report',
+                                    page=pagination.next_num,
+                                    date_from=date_from,
+                                    date_to=date_to,
+                                    article_code=article_code,
+                                    warehouse_id=warehouse_id
+                                ) }}"
+                            >
+                                Siguiente
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Siguiente</span>
+                        </li>
+                    {% endif %}
+
+                </ul>
+            </nav>
+        {% endif %}
+
     </div>
 </div>
 {% endblock %}
