@@ -19,18 +19,26 @@ articles_bp = Blueprint("articles", __name__)
 @articles_bp.route("/", methods=["GET"])
 @login_required
 def inventory_home():
-    query = (
+    page = request.args.get("page", 1, type=int)
+
+    pagination = (
         db_query_articles()
         .order_by(Article.name.asc())
-        .limit(100)
-        .all()
+        .paginate(
+            page=page,
+            per_page=20,
+            error_out=False,
+        )
     )
+
+    articles = pagination.items
 
     return render_template(
         "articles/index.html",
         title="Artículos",
         subtitle="Consulta global de artículos y distribución en bodegas.",
-        articles=query,
+        articles=articles,
+        pagination=pagination,
     )
 
 
@@ -57,7 +65,19 @@ def search_articles():
         if code:
             query = query.filter(Article.code.ilike(f"%{code}%"))
 
-        articles = query.order_by(Article.name.asc()).all()
+        page = request.args.get("page", 1, type=int)
+
+        pagination = (
+            query
+            .order_by(Article.name.asc())
+            .paginate(
+                page=page,
+                per_page=20,
+                error_out=False,
+            )
+        )
+
+        articles = pagination.items
 
         return render_template(
             "articles/article_search.html",
@@ -66,6 +86,7 @@ def search_articles():
             query=q,
             code=code,
             articles=articles,
+            pagination=pagination,
         )
 
     except Exception:
@@ -77,6 +98,7 @@ def search_articles():
             query=q,
             code=code,
             articles=[],
+            pagination=None,
         )
 
 
