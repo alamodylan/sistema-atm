@@ -11,6 +11,7 @@ from app.models.work_order_request_line import WorkOrderRequestLine
 from app.services.audit_service import log_action
 from app.services.inventory_service import InventoryServiceError, subtract_stock
 from app.services.work_order_task_service import create_task_line
+from app.models.work_order_task_line import WorkOrderTaskLine
 
 
 class WorkOrderServiceError(Exception):
@@ -254,13 +255,16 @@ def finalize_work_order(
     # VALIDAR TRABAJOS PENDIENTES
     # =====================================================
 
-    pending_tasks = [
-        task_line
-        for task_line in work_order.task_lines
-        if task_line.status not in ("FINALIZADA", "CANCELADA")
-    ]
+    pending_tasks_count = (
+        db.session.query(WorkOrderTaskLine.id)
+        .filter(
+            WorkOrderTaskLine.work_order_id == work_order_id,
+            WorkOrderTaskLine.status.notin_(("FINALIZADA", "CANCELADA")),
+        )
+        .count()
+    )
 
-    if pending_tasks:
+    if pending_tasks_count > 0:
         raise WorkOrderServiceError(
             "No se puede finalizar la OT porque tiene trabajos pendientes."
         )
