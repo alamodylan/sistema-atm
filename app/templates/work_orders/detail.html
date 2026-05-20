@@ -433,5 +433,36 @@
 
     });
 
+    document.addEventListener("DOMContentLoaded", function () {
+
+        const requestsContainer =
+            document.getElementById("work-order-requests-container");
+
+        if (!requestsContainer) {
+            return;
+        }
+
+        fetch("{{ url_for('work_orders.get_work_order_requests_partial', work_order_id=work_order.id, source=source) }}")
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error("No se pudo cargar el parcial de solicitudes.");
+                }
+
+                return response.text();
+            })
+            .then(function (html) {
+                requestsContainer.innerHTML = html;
+            })
+            .catch(function (error) {
+                console.error(error);
+
+                requestsContainer.innerHTML = `
+                    <div class="alert alert-danger rounded-4">
+                        No se pudieron cargar las solicitudes de artículos.
+                    </div>
+                `;
+            });
+
+    });
 </script>
 {% endblock %}
