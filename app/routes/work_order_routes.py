@@ -117,6 +117,8 @@ def _build_repair_type_mechanics_map(site_id: int):
 @permission_required("ot")
 def list_work_orders():
     status = (request.args.get("status") or "").strip()
+    ot_number = (request.args.get("ot_number") or "").strip()
+    page = request.args.get("page", 1, type=int)
 
     try:
         query = WorkOrder.query
@@ -124,22 +126,41 @@ def list_work_orders():
         if status:
             query = query.filter(WorkOrder.status == status)
 
-        work_orders = query.order_by(WorkOrder.created_at.desc()).all()
+        if ot_number:
+            query = query.filter(WorkOrder.number.ilike(f"%{ot_number}%"))
+
+        pagination = (
+            query
+            .order_by(WorkOrder.created_at.desc())
+            .paginate(
+                page=page,
+                per_page=20,
+                error_out=False,
+            )
+        )
+
+        work_orders = pagination.items
 
         return render_template(
             "work_orders/index.html",
             title="Órdenes de trabajo",
-            subtitle="Consulte órdenes de trabajo por estado.",
+            subtitle="Consulte órdenes de trabajo por estado o número de OT.",
             work_orders=work_orders,
+            pagination=pagination,
             status=status,
+            ot_number=ot_number,
         )
 
     except Exception:
         flash("Error al cargar órdenes de trabajo.", "danger")
         return render_template(
             "work_orders/index.html",
+            title="Órdenes de trabajo",
+            subtitle="Consulte órdenes de trabajo por estado o número de OT.",
             work_orders=[],
+            pagination=None,
             status=status,
+            ot_number=ot_number,
         )
 
 
