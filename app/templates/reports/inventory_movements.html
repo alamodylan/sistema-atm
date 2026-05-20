@@ -10,7 +10,8 @@
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body">
         <form method="GET" action="{{ url_for('reports.inventory_movements_report') }}" class="row g-3">
-            <div class="col-12 col-md-3">
+
+            <div class="col-12 col-md-2">
                 <label class="form-label fw-semibold">Fecha inicial</label>
                 <input
                     type="date"
@@ -20,7 +21,7 @@
                 >
             </div>
 
-            <div class="col-12 col-md-3">
+            <div class="col-12 col-md-2">
                 <label class="form-label fw-semibold">Fecha final</label>
                 <input
                     type="date"
@@ -30,8 +31,8 @@
                 >
             </div>
 
-            <div class="col-12 col-md-3">
-                <label class="form-label fw-semibold">Código de artículo</label>
+            <div class="col-12 col-md-2">
+                <label class="form-label fw-semibold">Código artículo</label>
                 <input
                     type="text"
                     class="form-control"
@@ -43,11 +44,16 @@
 
             <div class="col-12 col-md-3">
                 <label class="form-label fw-semibold">Bodega</label>
+
                 <select class="form-select" name="warehouse_id">
                     <option value="">Todas</option>
+
                     {% if warehouses %}
                         {% for warehouse in warehouses %}
-                            <option value="{{ warehouse.id }}" {% if warehouse_id|string == warehouse.id|string %}selected{% endif %}>
+                            <option
+                                value="{{ warehouse.id }}"
+                                {% if warehouse_id|string == warehouse.id|string %}selected{% endif %}
+                            >
                                 {{ warehouse.name }}
                             </option>
                         {% endfor %}
@@ -55,9 +61,34 @@
                 </select>
             </div>
 
-            <div class="col-12 d-flex justify-content-end mt-2">
-                <button type="submit" class="btn btn-primary">Consultar</button>
+            <div class="col-12 col-md-2">
+                <label class="form-label fw-semibold">Tipo</label>
+
+                <select class="form-select" name="movement_direction">
+                    <option value="">Entradas y salidas</option>
+
+                    <option
+                        value="IN"
+                        {% if movement_direction == "IN" %}selected{% endif %}
+                    >
+                        Solo entradas
+                    </option>
+
+                    <option
+                        value="OUT"
+                        {% if movement_direction == "OUT" %}selected{% endif %}
+                    >
+                        Solo salidas
+                    </option>
+                </select>
             </div>
+
+            <div class="col-12 col-md-1 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    OK
+                </button>
+            </div>
+
         </form>
     </div>
 </div>
@@ -75,6 +106,7 @@
 
         <div class="table-responsive">
             <table class="table align-middle table-hover">
+
                 <thead class="table-light">
                     <tr>
                         <th>Fecha</th>
@@ -82,61 +114,120 @@
                         <th>Código</th>
                         <th>Artículo</th>
                         <th>Bodega</th>
+                        <th>Equipo</th>
                         <th>Cantidad</th>
+                        <th>Costo unitario</th>
+                        <th>Costo total</th>
                         <th>Referencia</th>
                         <th>Usuario</th>
                     </tr>
                 </thead>
+
                 <tbody>
+
                     {% if movements %}
+
                         {% for movement in movements %}
+
                             <tr>
-                                <td>{{ movement.created_at|cr_datetime if movement.created_at else "-" }}</td>
+
+                                <td>
+                                    {{ movement.created_at|cr_datetime if movement.created_at else "-" }}
+                                </td>
 
                                 <td>
                                     {% if movement.quantity_change > 0 %}
-                                        <span class="badge text-bg-success">{{ movement.movement_type }}</span>
+                                        <span class="badge text-bg-success">
+                                            {{ movement.movement_type }}
+                                        </span>
+
                                     {% elif movement.quantity_change < 0 %}
-                                        <span class="badge text-bg-danger">{{ movement.movement_type }}</span>
+                                        <span class="badge text-bg-danger">
+                                            {{ movement.movement_type }}
+                                        </span>
+
                                     {% else %}
-                                        <span class="badge text-bg-secondary">{{ movement.movement_type }}</span>
+                                        <span class="badge text-bg-secondary">
+                                            {{ movement.movement_type }}
+                                        </span>
                                     {% endif %}
                                 </td>
 
-                                <td>{{ movement.article.code if movement.article else "-" }}</td>
-
-                                <td>{{ movement.article.name if movement.article else "-" }}</td>
-
-                                <td>{{ movement.warehouse.name if movement.warehouse else "-" }}</td>
-
-                                <td>{{ movement.quantity_change }}</td>
+                                <td>
+                                    {{ movement.article.code if movement.article else "-" }}
+                                </td>
 
                                 <td>
-                                    {% if movement.reference_number %}
-                                        {{ movement.reference_number }}
-                                    {% elif movement.reference_type %}
-                                        {{ movement.reference_type }}
+                                    {{ movement.article.name if movement.article else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ movement.warehouse.name if movement.warehouse else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ movement.equipment_code_report or "-" }}
+                                </td>
+
+                                <td>
+                                    {{ movement.quantity_change }}
+                                </td>
+
+                                <td>
+                                    {% if movement.unit_cost is not none %}
+                                        {{ "%.2f"|format(movement.unit_cost) }}
                                     {% else %}
                                         -
                                     {% endif %}
                                 </td>
 
-                                <td>{{ movement.performed_by_user.full_name if movement.performed_by_user else "-" }}</td>
+                                <td>
+                                    {% if movement.total_cost is not none %}
+                                        {{ "%.2f"|format(movement.total_cost) }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if movement.reference_number %}
+                                        {{ movement.reference_number }}
+
+                                    {% elif movement.reference_type %}
+                                        {{ movement.reference_type }}
+
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ movement.performed_by_user.full_name if movement.performed_by_user else "-" }}
+                                </td>
+
                             </tr>
+
                         {% endfor %}
+
                     {% else %}
+
                         <tr>
-                            <td colspan="8" class="text-center text-muted py-4">
+                            <td colspan="11" class="text-center text-muted py-4">
                                 No hay movimientos de inventario para mostrar.
                             </td>
                         </tr>
+
                     {% endif %}
+
                 </tbody>
+
             </table>
         </div>
 
         {% if pagination and pagination.pages > 1 %}
+
             <nav class="mt-4">
+
                 <ul class="pagination justify-content-center flex-wrap gap-1">
 
                     {% if pagination.has_prev %}
@@ -149,21 +240,28 @@
                                     date_from=date_from,
                                     date_to=date_to,
                                     article_code=article_code,
-                                    warehouse_id=warehouse_id
+                                    warehouse_id=warehouse_id,
+                                    movement_direction=movement_direction
                                 ) }}"
                             >
                                 Anterior
                             </a>
                         </li>
+
                     {% else %}
+
                         <li class="page-item disabled">
                             <span class="page-link">Anterior</span>
                         </li>
+
                     {% endif %}
 
                     {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+
                         {% if p %}
+
                             <li class="page-item {% if p == pagination.page %}active{% endif %}">
+
                                 <a
                                     class="page-link"
                                     href="{{ url_for(
@@ -172,20 +270,27 @@
                                         date_from=date_from,
                                         date_to=date_to,
                                         article_code=article_code,
-                                        warehouse_id=warehouse_id
+                                        warehouse_id=warehouse_id,
+                                        movement_direction=movement_direction
                                     ) }}"
                                 >
                                     {{ p }}
                                 </a>
+
                             </li>
+
                         {% else %}
+
                             <li class="page-item disabled">
                                 <span class="page-link">…</span>
                             </li>
+
                         {% endif %}
+
                     {% endfor %}
 
                     {% if pagination.has_next %}
+
                         <li class="page-item">
                             <a
                                 class="page-link"
@@ -195,22 +300,29 @@
                                     date_from=date_from,
                                     date_to=date_to,
                                     article_code=article_code,
-                                    warehouse_id=warehouse_id
+                                    warehouse_id=warehouse_id,
+                                    movement_direction=movement_direction
                                 ) }}"
                             >
                                 Siguiente
                             </a>
                         </li>
+
                     {% else %}
+
                         <li class="page-item disabled">
                             <span class="page-link">Siguiente</span>
                         </li>
+
                     {% endif %}
 
                 </ul>
+
             </nav>
+
         {% endif %}
 
     </div>
 </div>
+
 {% endblock %}

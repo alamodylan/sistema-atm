@@ -37,6 +37,7 @@ def inventory_movements_report():
     date_to = (request.args.get("date_to") or "").strip()
     article_code = (request.args.get("article_code") or "").strip()
     warehouse_id = (request.args.get("warehouse_id") or "").strip()
+    movement_direction = (request.args.get("movement_direction") or "").strip()
     page = request.args.get("page", 1, type=int)
 
     try:
@@ -51,30 +52,26 @@ def inventory_movements_report():
                 datetime.strptime(date_from, "%Y-%m-%d").date(),
                 time.min,
             )
-
-            query = query.filter(
-                InventoryLedger.created_at >= parsed_date_from
-            )
+            query = query.filter(InventoryLedger.created_at >= parsed_date_from)
 
         if date_to:
             parsed_date_to = datetime.combine(
                 datetime.strptime(date_to, "%Y-%m-%d").date(),
                 time.max,
             )
-
-            query = query.filter(
-                InventoryLedger.created_at <= parsed_date_to
-            )
+            query = query.filter(InventoryLedger.created_at <= parsed_date_to)
 
         if article_code:
-            query = query.filter(
-                Article.code.ilike(f"%{article_code}%")
-            )
+            query = query.filter(Article.code.ilike(f"%{article_code}%"))
 
         if warehouse_id:
-            query = query.filter(
-                InventoryLedger.warehouse_id == int(warehouse_id)
-            )
+            query = query.filter(InventoryLedger.warehouse_id == int(warehouse_id))
+
+        if movement_direction == "IN":
+            query = query.filter(InventoryLedger.quantity_change > 0)
+
+        if movement_direction == "OUT":
+            query = query.filter(InventoryLedger.quantity_change < 0)
 
         pagination = (
             query
@@ -87,6 +84,43 @@ def inventory_movements_report():
         )
 
         movements = pagination.items
+
+        work_order_ids = [
+            movement.reference_id
+            for movement in movements
+            if movement.reference_id
+            and movement.reference_type
+            and "WORK_ORDER" in movement.reference_type.upper()
+        ]
+
+        work_orders_map = {}
+
+        if work_order_ids:
+            work_orders = (
+                WorkOrder.query
+                .filter(WorkOrder.id.in_(work_order_ids))
+                .all()
+            )
+
+            work_orders_map = {
+                work_order.id: work_order
+                for work_order in work_orders
+            }
+
+        for movement in movements:
+            movement.equipment_code_report = "-"
+
+            if (
+                movement.reference_id
+                and movement.reference_type
+                and "WORK_ORDER" in movement.reference_type.upper()
+            ):
+                work_order = work_orders_map.get(movement.reference_id)
+
+                if work_order:
+                    movement.equipment_code_report = (
+                        work_order.equipment_code_snapshot or "-"
+                    )
 
         warehouses = (
             Warehouse.query
@@ -105,6 +139,7 @@ def inventory_movements_report():
             date_to=date_to,
             article_code=article_code,
             warehouse_id=warehouse_id,
+            movement_direction=movement_direction,
         )
 
     except Exception:
@@ -123,6 +158,7 @@ def inventory_movements_report():
             date_to=date_to,
             article_code=article_code,
             warehouse_id=warehouse_id,
+            movement_direction=movement_direction,
         )
 
 
