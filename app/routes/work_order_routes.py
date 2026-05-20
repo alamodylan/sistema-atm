@@ -730,6 +730,46 @@ def get_work_order_requests_partial(work_order_id: int):
         print(f"[OT REQUESTS PARTIAL ERROR] {exc}")
         return "<div class='alert alert-danger'>Error al cargar solicitudes de artículos.</div>", 500
 
+@work_order_bp.route("/<int:work_order_id>/partial/tasks", methods=["GET"])
+@login_required
+@permission_required("ot")
+def get_work_order_tasks_partial(work_order_id: int):
+    try:
+        work_order = (
+            WorkOrder.query
+            .filter(WorkOrder.id == work_order_id)
+            .first()
+        )
+
+        if not work_order:
+            return "<div class='alert alert-danger'>Orden de trabajo no encontrada.</div>", 404
+
+        repair_types, repair_type_mechanics_map = _build_repair_type_mechanics_map(
+            site_id=work_order.site_id
+        )
+
+        task_lines = (
+            WorkOrderTaskLine.query
+            .options(
+                selectinload(WorkOrderTaskLine.assigned_mechanic),
+                selectinload(WorkOrderTaskLine.repair_type),
+            )
+            .filter(WorkOrderTaskLine.work_order_id == work_order.id)
+            .order_by(WorkOrderTaskLine.created_at.asc())
+            .all()
+        )
+
+        return render_template(
+            "work_orders/partials/_tasks.html",
+            work_order=work_order,
+            repair_types=repair_types,
+            repair_type_mechanics_map=repair_type_mechanics_map,
+            task_lines=task_lines,
+        )
+
+    except Exception as exc:
+        print(f"[OT TASKS PARTIAL ERROR] {exc}")
+        return "<div class='alert alert-danger'>Error al cargar trabajos de la OT.</div>", 500
 # =========================================================
 # CREAR LÍNEA DE TRABAJO EN OT
 # =========================================================

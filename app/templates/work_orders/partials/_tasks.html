@@ -1,0 +1,164 @@
+        {% if current_user.has_permission("ot_trabajos") %}
+        <!-- ===================== TRABAJOS OT ===================== -->
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+                    <h5 class="fw-bold mb-0">Trabajos de la OT</h5>
+                </div>
+
+                {% if work_order.status == "EN_PROCESO" and current_user.has_permission("ot_trabajos") %}
+                <div class="border rounded-4 p-3 bg-light-subtle mb-4">
+                    <form method="POST" action="{{ url_for('work_orders.create_task_line_action', work_order_id=work_order.id) }}" class="row g-3">
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Tipo de reparación</label>
+                            <select name="repair_type_id" id="repairTypeSelect" class="form-select" required>
+                                <option value="">Seleccione...</option>
+                                {% for rt in repair_types %}
+                                    <option value="{{ rt.id }}">{{ rt.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Mecánico</label>
+                            <select name="mechanic_id" id="mechanicSelect" class="form-select">
+                                <option value="">Seleccione tipo primero...</option>
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Observaciones generales (opcional)</label>
+                            <textarea name="description" class="form-control" rows="2"></textarea>
+                        </div>
+
+                        <div class="col-12 text-end">
+                            <button class="btn btn-primary">Agregar trabajo</button>
+                        </div>
+                    </form>
+                </div>
+                {% endif %}
+
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Trabajo</th>
+                                <th>Tipo de reparación</th>
+                                <th>Mecánico</th>
+                                <th>Inicio</th>
+                                <th>Estado</th>
+                                <th style="min-width: 260px;">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in task_lines %}
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold">{{ t.title }}</div>
+                                    {% if t.description %}
+                                        <div class="small text-muted">{{ t.description }}</div>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ t.repair_type.name if t.repair_type else '-' }}
+                                </td>
+
+                                <td>
+                                    {% if t.assigned_mechanic %}
+                                        {{ t.assigned_mechanic.name }}
+                                    {% else %}
+                                        <span class="text-muted">Sin asignar</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>{{ t.started_at|cr_datetime or '-' }}</td>
+
+                                <td>
+                                    {% if t.status == "PENDIENTE" %}
+                                        <span class="badge text-bg-secondary">PENDIENTE</span>
+                                    {% elif t.status == "EN_PROCESO" %}
+                                        <span class="badge text-bg-warning text-dark">EN PROCESO</span>
+                                    {% elif t.status == "PAUSADA" %}
+                                        <span class="badge text-bg-dark">PAUSADA</span>
+                                    {% elif t.status == "FINALIZACION_SOLICITADA" %}
+                                        <span class="badge text-bg-primary">PENDIENTE JEFATURA</span>
+                                    {% elif t.status == "FINALIZADA" %}
+                                        <span class="badge text-bg-success">FINALIZADA</span>
+                                    {% elif t.status == "CANCELADA" %}
+                                        <span class="badge text-bg-danger">CANCELADA</span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">{{ t.status }}</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if work_order.status == "EN_PROCESO" and t.status == "EN_PROCESO" and current_user.has_permission("ot_trabajos") %}
+                                        <div class="d-flex flex-column gap-2">
+                                            <form method="POST" action="{{ url_for('work_orders.pause_task_line_action', task_id=t.id) }}">
+                                                <button class="btn btn-sm btn-warning w-100">
+                                                    Pausar
+                                                </button>
+                                            </form>
+
+                                            <form method="POST" action="{{ url_for('work_orders.replace_task_line_mechanic_action', task_id=t.id) }}" class="d-flex flex-column gap-1">
+                                                <select name="mechanic_id" class="form-select form-select-sm">
+                                                    {% for m in repair_type_mechanics_map[t.repair_type_id|string] %}
+                                                        <option value="{{ m.id }}" {% if t.assigned_mechanic_id == m.id %}selected{% endif %}>
+                                                            {{ m.name }}
+                                                        </option>
+                                                    {% endfor %}
+                                                </select>
+                                                <button class="btn btn-sm btn-outline-primary w-100">
+                                                    Reemplazar mecánico
+                                                </button>
+                                            </form>
+                                        </div>
+
+                                    {% elif work_order.status == "EN_PROCESO" and t.status == "PAUSADA" %}
+                                        <div class="d-flex flex-column gap-2">
+                                            <form method="POST" action="{{ url_for('work_orders.resume_task_line_action', task_id=t.id) }}">
+                                                <button class="btn btn-sm btn-success w-100">
+                                                    Reanudar
+                                                </button>
+                                            </form>
+
+                                            <form method="POST" action="{{ url_for('work_orders.replace_task_line_mechanic_action', task_id=t.id) }}" class="d-flex flex-column gap-1">
+                                                <select name="mechanic_id" class="form-select form-select-sm">
+                                                    {% for m in repair_type_mechanics_map[t.repair_type_id|string] %}
+                                                        <option value="{{ m.id }}" {% if t.assigned_mechanic_id == m.id %}selected{% endif %}>
+                                                            {{ m.name }}
+                                                        </option>
+                                                    {% endfor %}
+                                                </select>
+                                                <button class="btn btn-sm btn-outline-primary w-100">
+                                                    Reemplazar mecánico
+                                                </button>
+                                            </form>
+                                        </div>
+
+                                    {% elif t.status == "FINALIZACION_SOLICITADA" %}
+                                        <span class="text-muted small">Pendiente de jefatura</span>
+
+                                    {% elif t.status == "FINALIZADA" %}
+                                        <span class="text-muted small">Trabajo finalizado</span>
+
+                                    {% else %}
+                                        <span class="text-muted small">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    No hay trabajos registrados para esta OT.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
