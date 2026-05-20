@@ -9,6 +9,9 @@ from app.models.work_order import WorkOrder
 from app.models.waste_act import WasteAct
 from app.models.article import Article
 from app.models.warehouse import Warehouse
+from io import BytesIO
+from sqlalchemy import func
+from flask import send_file
 
 
 report_bp = Blueprint("reports", __name__)
@@ -242,3 +245,198 @@ def waste_acts_report():
             waste_acts=[],
             status=status,
         )
+    
+
+# =========================================================
+# HELPER - CONSULTA STOCK HISTÓRICO POR FECHA
+# =========================================================
+def _build_stock_at_date_query(cutoff_datetime, article_code="", warehouse_id=""):
+    quantity_expr = func.coalesce(
+        func.sum(InventoryLedger.quantity_change),
+        0,
+    )
+
+    total_cost_expr = func.coalesce(
+        func.sum(
+            InventoryLedger.quantity_change *
+            func.coalesce(InventoryLedger.unit_cost, 0)
+        ),
+        0,
+    )
+
+    unit_cost_expr = total_cost_expr / func.nullif(quantity_expr, 0)
+
+    query = (
+        db.session.query(
+            Article.code.label("article_code"),
+            Article.name.label("article_name"),
+            Warehouse.name.label("warehouse_name"),
+            quantity_expr.label("quantity"),
+            unit_cost_expr.label("unit_cost"),
+            total_cost_expr.label("total_cost"),
+        )
+        .join(Article, Article.id == InventoryLedger.article_id)
+        .join(Warehouse, Warehouse.id == InventoryLedger.warehouse_id)
+        .filter(InventoryLedger.created_at <= cutoff_datetime)
+        .group_by(
+            Article.id,
+            Article.code,
+            Article.name,
+            Warehouse.id,
+            Warehouse.name,
+        )
+        .having(quantity_expr != 0)
+    )
+
+    if article_code:
+        query = query.filter(Article.code.ilike(f"%{article_code}%"))
+
+    if warehouse_id:
+        query = query.filter(InventoryLedger.warehouse_id == int(warehouse_id))
+
+    return query.order_by(Article.code.asc(), Warehouse.name.asc())
+
+
+# =========================================================
+# REPORTE STOCK HISTÓRICO POR FECHA
+# =========================================================
+@report_bp.route("/stock-at-date", methods=["GET"])
+@login_required
+def stock_at_date_report():
+    cutoff_date = (request.args.get("cutoff_date") or "").strip()
+    article_code = (request.args.get("article_code") or "").strip()
+    warehouse_id = (request.args.get("warehouse_id") or "").strip()
+    page = request.args.get("page", 1, type=int)
+
+    rows = []
+    pagination = None
+
+    try:
+        warehouses = Warehouse.query.order_by(Warehouse.name.asc()).all()
+
+        if cutoff_date:
+            cutoff_datetime = datetime.combine(
+                datetime.strptime(cutoff_date, "%Y-%m-%d").date(),
+                time.max,
+            )
+
+            query = _build_stock_at_date_query(
+                cutoff_datetime=cutoff_datetime,
+                article_code=article_code,
+                warehouse_id=warehouse_id,
+            )
+
+            pagination = query.paginate(
+                page=page,
+                per_page=20,
+                error_out=False,
+            )
+
+            rows = pagination.items
+
+        return render_template(
+            "reports/stock_at_date.html",
+            title="Stock histórico por fecha",
+            subtitle="Consulte el inventario existente a una fecha específica.",
+            rows=rows,
+            pagination=pagination,
+            warehouses=warehouses,
+            cutoff_date=cutoff_date,
+            article_code=article_code,
+            warehouse_id=warehouse_id,
+        )
+
+    except Exception:
+        db.session.rollback()
+
+        flash("Error al cargar el reporte de stock histórico.", "danger")
+
+        return render_template(
+            "reports/stock_at_date.html",
+            title="Stock histórico por fecha",
+            subtitle="Consulte el inventario existente a una fecha específica.",
+            rows=[],
+            pagination=None,
+            warehouses=[],
+            cutoff_date=cutoff_date,
+            article_code=article_code,
+            warehouse_id=warehouse_id,
+        )
+
+
+# =========================================================
+# EXPORTAR STOCK HISTÓRICO POR FECHA
+# =========================================================
+@report_bp.route("/stock-at-date/export", methods=["GET"])
+@login_required
+def export_stock_at_date_report():
+    from openpyxl import Workbook
+
+    cutoff_date = (request.args.get("cutoff_date") or "").strip()
+    article_code = (request.args.get("article_code") or "").strip()
+    warehouse_id = (request.args.get("warehouse_id") or "").strip()
+
+    try:
+        if not cutoff_date:
+            flash("Debe seleccionar una fecha para exportar.", "warning")
+            return stock_at_date_report()
+
+        cutoff_datetime = datetime.combine(
+            datetime.strptime(cutoff_date, "%Y-%m-%d").date(),
+            time.max,
+        )
+
+        rows = (
+            _build_stock_at_date_query(
+                cutoff_datetime=cutoff_datetime,
+                article_code=article_code,
+                warehouse_id=warehouse_id,
+            )
+            .all()
+        )
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Stock histórico"
+
+        ws.append([
+            "Código artículo",
+            "Nombre artículo",
+            "Bodega",
+            "Cantidad",
+            "Costo unitario",
+            "Costo total",
+            "Fecha consultada",
+        ])
+
+        for row in rows:
+            quantity = float(row.quantity or 0)
+            unit_cost = float(row.unit_cost or 0)
+            total_cost = float(row.total_cost or 0)
+
+            ws.append([
+                row.article_code,
+                row.article_name,
+                row.warehouse_name,
+                quantity,
+                unit_cost,
+                total_cost,
+                cutoff_date,
+            ])
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=f"stock_historico_{cutoff_date}.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    except Exception:
+        db.session.rollback()
+
+        flash("Error al exportar el reporte de stock histórico.", "danger")
+        return stock_at_date_report()

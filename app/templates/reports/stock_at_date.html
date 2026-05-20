@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+
+{% block title %}Stock histórico por fecha | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% set title = "Stock histórico por fecha" %}
+{% set subtitle = "Consulte el inventario existente a una fecha específica." %}
+{% include 'components/page_header.html' with context %}
+
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('reports.stock_at_date_report') }}" class="row g-3">
+
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-semibold">Fecha consultada</label>
+                <input
+                    type="date"
+                    class="form-control"
+                    name="cutoff_date"
+                    value="{{ cutoff_date or '' }}"
+                    required
+                >
+            </div>
+
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-semibold">Código artículo</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    name="article_code"
+                    placeholder="Opcional"
+                    value="{{ article_code or '' }}"
+                >
+            </div>
+
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-semibold">Bodega</label>
+                <select class="form-select" name="warehouse_id">
+                    <option value="">Todas</option>
+
+                    {% if warehouses %}
+                        {% for warehouse in warehouses %}
+                            <option
+                                value="{{ warehouse.id }}"
+                                {% if warehouse_id|string == warehouse.id|string %}selected{% endif %}
+                            >
+                                {{ warehouse.name }}
+                            </option>
+                        {% endfor %}
+                    {% endif %}
+                </select>
+            </div>
+
+            <div class="col-12 col-md-3 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    Consultar
+                </button>
+
+                {% if rows %}
+                    <a
+                        href="{{ url_for(
+                            'reports.export_stock_at_date_report',
+                            cutoff_date=cutoff_date,
+                            article_code=article_code,
+                            warehouse_id=warehouse_id
+                        ) }}"
+                        class="btn btn-success w-100"
+                    >
+                        Excel
+                    </a>
+                {% endif %}
+            </div>
+
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body">
+
+        {% if pagination %}
+            <div class="d-flex justify-content-end mb-3">
+                <span class="badge bg-light text-dark border">
+                    Página {{ pagination.page }} de {{ pagination.pages }}
+                </span>
+            </div>
+        {% endif %}
+
+        <div class="table-responsive">
+            <table class="table align-middle table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Código artículo</th>
+                        <th>Nombre artículo</th>
+                        <th>Bodega</th>
+                        <th>Cantidad</th>
+                        <th>Costo unitario</th>
+                        <th>Costo total</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% if rows %}
+                        {% for row in rows %}
+                            <tr>
+                                <td>{{ row.article_code }}</td>
+                                <td>{{ row.article_name }}</td>
+                                <td>{{ row.warehouse_name }}</td>
+
+                                <td>
+                                    {{ "%.2f"|format(row.quantity or 0) }}
+                                </td>
+
+                                <td>
+                                    {{ "%.2f"|format(row.unit_cost or 0) }}
+                                </td>
+
+                                <td>
+                                    {{ "%.2f"|format(row.total_cost or 0) }}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                Seleccione una fecha para consultar el stock histórico.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if pagination and pagination.pages > 1 %}
+            <nav class="mt-4">
+                <ul class="pagination justify-content-center flex-wrap gap-1">
+
+                    {% if pagination.has_prev %}
+                        <li class="page-item">
+                            <a
+                                class="page-link"
+                                href="{{ url_for(
+                                    'reports.stock_at_date_report',
+                                    page=pagination.prev_num,
+                                    cutoff_date=cutoff_date,
+                                    article_code=article_code,
+                                    warehouse_id=warehouse_id
+                                ) }}"
+                            >
+                                Anterior
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Anterior</span>
+                        </li>
+                    {% endif %}
+
+                    {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if p %}
+                            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                                <a
+                                    class="page-link"
+                                    href="{{ url_for(
+                                        'reports.stock_at_date_report',
+                                        page=p,
+                                        cutoff_date=cutoff_date,
+                                        article_code=article_code,
+                                        warehouse_id=warehouse_id
+                                    ) }}"
+                                >
+                                    {{ p }}
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">…</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if pagination.has_next %}
+                        <li class="page-item">
+                            <a
+                                class="page-link"
+                                href="{{ url_for(
+                                    'reports.stock_at_date_report',
+                                    page=pagination.next_num,
+                                    cutoff_date=cutoff_date,
+                                    article_code=article_code,
+                                    warehouse_id=warehouse_id
+                                ) }}"
+                            >
+                                Siguiente
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Siguiente</span>
+                        </li>
+                    {% endif %}
+
+                </ul>
+            </nav>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

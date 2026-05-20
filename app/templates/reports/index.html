@@ -25,6 +25,24 @@
     </div>
     {% endif %}
 
+    {% if current_user.has_permission("reportes") or current_user.has_permission("reportes_entradas_salidas") %}
+    <div class="col-12 col-md-6 col-xl-4">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body d-flex flex-column">
+                <h5 class="fw-bold">Stock histórico por fecha</h5>
+                <p class="text-secondary">
+                    Consulte el stock de artículos existente a una fecha específica, por código o inventario completo.
+                </p>
+                <div class="mt-auto">
+                    <a href="{{ url_for('reports.stock_at_date_report') }}" class="btn btn-outline-primary">
+                        Abrir reporte
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if current_user.has_permission("reportes") %}
     <div class="col-12 col-md-6 col-xl-4">
         <div class="card border-0 shadow-sm rounded-4 h-100">
