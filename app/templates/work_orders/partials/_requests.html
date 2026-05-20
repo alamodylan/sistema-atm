@@ -264,6 +264,15 @@
                     </div>
                 </div>
                 {% endfor %}
-            </div>
-        </div>
-        {% endif %}
+                            </div>
+                        </div>
+
+                {% else %}
+
+                <div class="card border-0 shadow-sm rounded-4 mb-4">
+                    <div class="card-body p-4 text-muted">
+                        No hay solicitudes de artículos pendientes para esta OT.
+                    </div>
+                </div>
+
+                {% endif %}

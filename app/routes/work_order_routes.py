@@ -597,22 +597,6 @@ def get_work_order_requests_partial(work_order_id: int):
 
         work_order = (
             WorkOrder.query
-            .options(
-                selectinload(WorkOrder.requests)
-                    .selectinload(WorkOrderRequest.lines)
-                    .selectinload(WorkOrderRequestLine.article),
-
-                selectinload(WorkOrder.requests)
-                    .selectinload(WorkOrderRequest.requested_by_user),
-
-                selectinload(WorkOrder.requests)
-                    .selectinload(WorkOrderRequest.approved_by_user),
-
-                selectinload(WorkOrder.requests)
-                    .selectinload(WorkOrderRequest.sent_to_warehouse_by_user),
-
-                selectinload(WorkOrder.lines),
-            )
             .filter(WorkOrder.id == work_order_id)
             .first()
         )
@@ -621,10 +605,33 @@ def get_work_order_requests_partial(work_order_id: int):
             return "<div class='alert alert-danger'>Orden de trabajo no encontrada.</div>", 404
 
         existing_request_line_ids = {
-            line.request_line_id
-            for line in work_order.lines
-            if line.request_line_id
+            row[0]
+            for row in (
+                db.session.query(WorkOrderLine.request_line_id)
+                .filter(
+                    WorkOrderLine.work_order_id == work_order_id,
+                    WorkOrderLine.request_line_id.isnot(None),
+                )
+                .all()
+            )
         }
+
+        requests = (
+            WorkOrderRequest.query
+            .options(
+                selectinload(WorkOrderRequest.lines)
+                    .selectinload(WorkOrderRequestLine.article),
+                selectinload(WorkOrderRequest.requested_by_user),
+                selectinload(WorkOrderRequest.approved_by_user),
+                selectinload(WorkOrderRequest.sent_to_warehouse_by_user),
+            )
+            .filter(
+                WorkOrderRequest.work_order_id == work_order_id,
+                WorkOrderRequest.sent_to_warehouse_at.isnot(None),
+            )
+            .order_by(WorkOrderRequest.created_at.desc())
+            .all()
+        )
 
         visible_requests = []
         stock_by_article_id = {}
@@ -632,10 +639,7 @@ def get_work_order_requests_partial(work_order_id: int):
         if source == "dashboard":
             article_ids = set()
 
-            for req in work_order.requests:
-                if not req.sent_to_warehouse_at:
-                    continue
-
+            for req in requests:
                 for line in req.lines:
                     if line.line_status == "CANCELADA":
                         continue
@@ -667,10 +671,7 @@ def get_work_order_requests_partial(work_order_id: int):
                     for stock in stocks
                 }
 
-        for req in work_order.requests:
-            if not req.sent_to_warehouse_at:
-                continue
-
+        for req in requests:
             request_lines_for_view = []
 
             for line in req.lines:
@@ -696,8 +697,8 @@ def get_work_order_requests_partial(work_order_id: int):
                     )
 
                     remaining = (
-                        Decimal(str(line.quantity_requested))
-                        - Decimal(str(line.quantity_attended))
+                        Decimal(str(line.quantity_requested or 0))
+                        - Decimal(str(line.quantity_attended or 0))
                     )
 
                     line.stock_available = available_qty
