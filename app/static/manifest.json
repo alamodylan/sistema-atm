@@ -2,7 +2,7 @@
   "name": "Sistema ATM - Bodega y Taller",
   "short_name": "ATM",
   "description": "Sistema corporativo de bodega, taller, inventario y mantenimiento",
-  "start_url": "/",
+  "start_url": "/inicio",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
