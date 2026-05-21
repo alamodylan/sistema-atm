@@ -128,15 +128,25 @@
 
 <script>
 (function () {
+
     let scanBuffer = "";
     let scanTimer = null;
     let lastSyncTime = null;
+
+    // =====================================================
+    // NORMALIZAR CÓDIGO
+    // =====================================================
 
     function normalizeCode(value) {
         return String(value || "").trim().toUpperCase();
     }
 
+    // =====================================================
+    // LIMPIAR BUFFER
+    // =====================================================
+
     function clearScanBuffer() {
+
         scanBuffer = "";
 
         if (scanTimer) {
@@ -145,20 +155,43 @@
         }
     }
 
+    // =====================================================
+    // BUSCAR FILA
+    // =====================================================
+
     function findRowByScannedCode(code) {
+
         const scanned = normalizeCode(code);
 
-        if (!scanned) return null;
+        if (!scanned) {
+            return null;
+        }
 
-        return Array.from(document.querySelectorAll("tr[data-barcode], tr[data-code]")).find(row => {
-            const barcode = normalizeCode(row.dataset.barcode);
-            const articleCode = normalizeCode(row.dataset.code);
+        return Array.from(
+            document.querySelectorAll(
+                "tr[data-barcode], tr[data-code]"
+            )
+        ).find(row => {
 
-            return barcode === scanned || articleCode === scanned;
+            const barcode =
+                normalizeCode(row.dataset.barcode);
+
+            const articleCode =
+                normalizeCode(row.dataset.code);
+
+            return (
+                barcode === scanned
+                || articleCode === scanned
+            );
         });
     }
 
+    // =====================================================
+    // RESALTAR FILA
+    // =====================================================
+
     function markRow(row) {
+
         row.scrollIntoView({
             behavior: "smooth",
             block: "center"
@@ -171,19 +204,32 @@
         }, 1200);
     }
 
+    // =====================================================
+    // PROCESAR SCAN
+    // =====================================================
+
     async function processScannedCode(code) {
+
         const cleanCode = normalizeCode(code);
 
-        if (!cleanCode) return;
+        if (!cleanCode) {
+            return;
+        }
 
         const row = findRowByScannedCode(cleanCode);
 
+        // =============================================
+        // ENCONTRADO EN PÁGINA ACTUAL
+        // =============================================
+
         if (row) {
+
             markRow(row);
 
             const input = row.querySelector(".qty-input");
 
             if (input && !input.disabled) {
+
                 clearScanBuffer();
 
                 input.focus();
@@ -198,41 +244,75 @@
             return;
         }
 
+        // =============================================
+        // BUSCAR EN OTRA PÁGINA
+        // =============================================
+
         try {
+
             const response = await fetch(
-                "{{ url_for('physical_inventory.find_line', inventory_id=inventory.id) }}?code=" +
-                encodeURIComponent(cleanCode)
+                "{{ url_for('physical_inventory.find_line', inventory_id=inventory.id) }}?code="
+                + encodeURIComponent(cleanCode)
             );
 
             const result = await response.json();
 
             if (!result.ok) {
-                alert(result.message || "Artículo no encontrado.");
+
+                alert(
+                    result.message
+                    || "Artículo no encontrado."
+                );
+
                 clearScanBuffer();
+
                 return;
             }
 
             const url = new URL(window.location.href);
-            url.searchParams.set("page", result.page);
-            url.searchParams.set("focus_code", cleanCode);
+
+            url.searchParams.set(
+                "page",
+                result.page
+            );
+
+            url.searchParams.set(
+                "focus_code",
+                cleanCode
+            );
 
             window.location.href = url.toString();
 
         } catch (error) {
+
             alert("Error buscando el artículo.");
+
             clearScanBuffer();
         }
     }
 
+    // =====================================================
+    // ACTUALIZAR DIFERENCIA
+    // =====================================================
+
     function updateDifferenceVisual(input) {
+
         const row = input.closest("tr");
-        const system = parseFloat(row.dataset.system || "0");
-        const physical = parseFloat(input.value || "0");
+
+        const system =
+            parseFloat(row.dataset.system || "0");
+
+        const physical =
+            parseFloat(input.value || "0");
+
         const diff = physical - system;
 
         const cell = row.querySelector(".diff");
 
-        cell.innerText = Number.isFinite(diff) ? diff.toFixed(2) : "";
+        cell.innerText =
+            Number.isFinite(diff)
+                ? diff.toFixed(2)
+                : "";
 
         cell.classList.remove(
             "text-success",
@@ -241,222 +321,446 @@
             "fw-bold"
         );
 
-        if (!Number.isFinite(diff)) return;
+        if (!Number.isFinite(diff)) {
+            return;
+        }
 
         if (diff === 0) {
-            cell.classList.add("text-success", "fw-bold");
+
+            cell.classList.add(
+                "text-success",
+                "fw-bold"
+            );
+
         } else if (diff > 0) {
-            cell.classList.add("text-warning", "fw-bold");
+
+            cell.classList.add(
+                "text-warning",
+                "fw-bold"
+            );
+
         } else {
-            cell.classList.add("text-danger", "fw-bold");
+
+            cell.classList.add(
+                "text-danger",
+                "fw-bold"
+            );
         }
     }
 
+    // =====================================================
+    // GUARDAR CANTIDAD
+    // =====================================================
+
     async function saveQuantity(input) {
-        let value = String(input.value || "").trim().replace(",", ".");
+
+        let value =
+            String(input.value || "")
+                .trim()
+                .replace(",", ".");
 
         if (value === "") {
             return;
         }
 
         if (Number(value) < 0) {
-            alert("La cantidad física no puede ser negativa.");
+
+            alert(
+                "La cantidad física no puede ser negativa."
+            );
+
             input.value = "";
+
             return;
         }
+
+        // =============================================
+        // EVITAR DOBLE SAVE
+        // =============================================
 
         if (input.dataset.saving === "1") {
             return;
         }
 
         input.dataset.saving = "1";
+
         input.value = value;
 
         updateDifferenceVisual(input);
 
         try {
-            const response = await fetch("{{ url_for('physical_inventory.update_line') }}", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    line_id: input.dataset.lineId,
-                    physical_quantity: input.value
-                })
-            });
+
+            const response = await fetch(
+                "{{ url_for('physical_inventory.update_line') }}",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        line_id: input.dataset.lineId,
+                        physical_quantity: input.value
+                    })
+                }
+            );
 
             const result = await response.json();
 
             input.dataset.saving = "0";
 
             if (!result.ok) {
-                alert(result.message || "No se pudo guardar la cantidad.");
+
+                alert(
+                    result.message
+                    || "No se pudo guardar la cantidad."
+                );
+
                 input.classList.remove("border-success");
                 input.classList.add("border-danger");
+
                 return;
             }
 
-            if (result.difference_quantity !== undefined) {
-                const row = input.closest("tr");
-                const cell = row.querySelector(".diff");
-                const diff = parseFloat(result.difference_quantity);
+            if (
+                result.difference_quantity !== undefined
+            ) {
 
-                cell.innerText = Number.isFinite(diff)
-                    ? diff.toFixed(2)
-                    : result.difference_quantity;
+                const row = input.closest("tr");
+
+                const cell = row.querySelector(".diff");
+
+                const diff =
+                    parseFloat(result.difference_quantity);
+
+                cell.innerText =
+                    Number.isFinite(diff)
+                        ? diff.toFixed(2)
+                        : result.difference_quantity;
             }
 
-            input.classList.remove("border-danger", "border-success");
+            input.classList.remove(
+                "border-danger",
+                "border-success"
+            );
 
             void input.offsetWidth;
 
             input.classList.add("border-success");
 
         } catch (error) {
+
             input.dataset.saving = "0";
+
             input.classList.remove("border-success");
+
             input.classList.add("border-danger");
+
             alert("Error guardando la cantidad.");
         }
     }
 
-    function triggerAutosave(inputElement, immediate = false) {
+    // =====================================================
+    // AUTOSAVE
+    // =====================================================
+
+    function triggerAutosave(
+        inputElement,
+        immediate = false
+    ) {
+
         if (inputElement._autosaveTimer) {
-            clearTimeout(inputElement._autosaveTimer);
+
+            clearTimeout(
+                inputElement._autosaveTimer
+            );
         }
 
         const executeSave = () => {
-            saveQuantity(inputElement).then(() => {
-                clearScanBuffer();
-            });
+
+            saveQuantity(inputElement)
+                .then(() => {
+                    clearScanBuffer();
+                });
         };
 
         if (immediate) {
+
             executeSave();
+
             return;
         }
 
-        inputElement._autosaveTimer = setTimeout(() => {
-            executeSave();
-        }, 250);
+        inputElement._autosaveTimer =
+            setTimeout(() => {
+                executeSave();
+            }, 250);
     }
 
-    document.addEventListener("keydown", function (event) {
-        const active = document.activeElement;
-        const isCountingInput =
-            active &&
-            active.classList &&
-            active.classList.contains("qty-input");
+    // =====================================================
+    // LISTENER GLOBAL SCANNER
+    // =====================================================
 
-        if (isCountingInput) {
-            return;
-        }
+    document.addEventListener(
+        "keydown",
+        function (event) {
 
-        if (event.key === "Enter") {
-            event.preventDefault();
+            const active =
+                document.activeElement;
 
-            const code = scanBuffer.trim();
-            clearScanBuffer();
+            const isTypingInsideInput =
+                active &&
+                (
+                    active.tagName === "INPUT"
+                    || active.tagName === "TEXTAREA"
+                    || active.isContentEditable
+                );
 
-            if (code) {
-                processScannedCode(code);
+            // =====================================
+            // SI ESTÁ ESCRIBIENDO EN INPUT
+            // NO INTERPRETAR COMO SCANNER
+            // =====================================
+
+            if (isTypingInsideInput) {
+                return;
             }
 
-            return;
-        }
-
-        if (event.key.length === 1) {
-            scanBuffer += event.key;
-
-            if (scanTimer) {
-                clearTimeout(scanTimer);
-            }
-
-            scanTimer = setTimeout(() => {
-                clearScanBuffer();
-            }, 700);
-        }
-    });
-
-    document.querySelectorAll(".qty-input").forEach(input => {
-        input.setAttribute("inputmode", "decimal");
-        input.setAttribute("autocomplete", "off");
-        input.setAttribute("min", "0");
-
-        updateDifferenceVisual(input);
-
-        input.addEventListener("keydown", function (event) {
-            const allowedControlKeys = [
-                "Backspace",
-                "Delete",
-                "ArrowLeft",
-                "ArrowRight",
-                "Tab",
-                "Home",
-                "End"
-            ];
+            // =====================================
+            // ENTER
+            // =====================================
 
             if (event.key === "Enter") {
+
                 event.preventDefault();
 
-                triggerAutosave(this, true);
+                const code =
+                    scanBuffer.trim();
 
-                setTimeout(() => {
-                    this.blur();
-                    clearScanBuffer();
-                }, 50);
+                clearScanBuffer();
 
-                return;
-            }
-
-            if (event.key === "-") {
-                event.preventDefault();
-                return;
-            }
-
-            if (allowedControlKeys.includes(event.key)) {
-                return;
-            }
-
-            if (event.key === "." || event.key === ",") {
-                const currentValue = this.value || "";
-
-                if (currentValue.includes(".") || currentValue.includes(",")) {
-                    event.preventDefault();
+                if (code) {
+                    processScannedCode(code);
                 }
 
                 return;
             }
 
-            if (event.key.length === 1 && !/[0-9]/.test(event.key)) {
-                event.preventDefault();
+            // =====================================
+            // ACUMULAR BUFFER
+            // =====================================
+
+            if (event.key.length === 1) {
+
+                scanBuffer += event.key;
+
+                if (scanTimer) {
+                    clearTimeout(scanTimer);
+                }
+
+                scanTimer = setTimeout(() => {
+                    clearScanBuffer();
+                }, 700);
             }
+        }
+    );
+
+    // =====================================================
+    // INPUTS
+    // =====================================================
+
+    document
+        .querySelectorAll(".qty-input")
+        .forEach(input => {
+
+            input.setAttribute(
+                "inputmode",
+                "decimal"
+            );
+
+            input.setAttribute(
+                "autocomplete",
+                "off"
+            );
+
+            input.setAttribute(
+                "min",
+                "0"
+            );
+
+            updateDifferenceVisual(input);
+
+            // =====================================
+            // KEYDOWN INPUT
+            // =====================================
+
+            input.addEventListener(
+                "keydown",
+                function (event) {
+
+                    const allowedControlKeys = [
+                        "Backspace",
+                        "Delete",
+                        "ArrowLeft",
+                        "ArrowRight",
+                        "Tab",
+                        "Home",
+                        "End"
+                    ];
+
+                    // =============================
+                    // ENTER
+                    // =============================
+
+                    if (event.key === "Enter") {
+
+                        event.preventDefault();
+
+                        triggerAutosave(
+                            this,
+                            true
+                        );
+
+                        setTimeout(() => {
+
+                            this.blur();
+
+                            clearScanBuffer();
+
+                        }, 50);
+
+                        return;
+                    }
+
+                    // =============================
+                    // NEGATIVOS
+                    // =============================
+
+                    if (event.key === "-") {
+
+                        event.preventDefault();
+
+                        return;
+                    }
+
+                    // =============================
+                    // TECLAS CONTROL
+                    // =============================
+
+                    if (
+                        allowedControlKeys.includes(
+                            event.key
+                        )
+                    ) {
+                        return;
+                    }
+
+                    // =============================
+                    // DECIMALES
+                    // =============================
+
+                    if (
+                        event.key === "."
+                        || event.key === ","
+                    ) {
+
+                        const currentValue =
+                            this.value || "";
+
+                        if (
+                            currentValue.includes(".")
+                            || currentValue.includes(",")
+                        ) {
+
+                            event.preventDefault();
+                        }
+
+                        return;
+                    }
+
+                    // =============================
+                    // SOLO NÚMEROS
+                    // =============================
+
+                    if (
+                        event.key.length === 1
+                        && !/[0-9]/.test(event.key)
+                    ) {
+
+                        event.preventDefault();
+                    }
+                }
+            );
+
+            // =====================================
+            // CHANGE
+            // =====================================
+
+            input.addEventListener(
+                "change",
+                function () {
+                    triggerAutosave(
+                        this,
+                        true
+                    );
+                }
+            );
+
+            // =====================================
+            // INPUT
+            // =====================================
+
+            input.addEventListener(
+                "input",
+                function () {
+                    triggerAutosave(this);
+                }
+            );
+
+            // =====================================
+            // BLUR
+            // =====================================
+
+            input.addEventListener(
+                "blur",
+                function () {
+                    triggerAutosave(
+                        this,
+                        true
+                    );
+                }
+            );
+
+            // =====================================
+            // TOUCH
+            // =====================================
+
+            input.addEventListener(
+                "touchend",
+                function () {
+                    triggerAutosave(this);
+                }
+            );
+
+            // =====================================
+            // FOCUS
+            // =====================================
+
+            input.addEventListener(
+                "focus",
+                function () {
+
+                    clearScanBuffer();
+
+                    this.select();
+                }
+            );
         });
 
-        input.addEventListener("change", function () {
-            triggerAutosave(this, true);
-        });
-
-        input.addEventListener("input", function () {
-            triggerAutosave(this);
-        });
-
-        input.addEventListener("blur", function () {
-            triggerAutosave(this, true);
-        });
-
-        input.addEventListener("touchend", function () {
-            triggerAutosave(this);
-        });
-
-        input.addEventListener("focus", function () {
-            clearScanBuffer();
-            this.select();
-        });
-    });
+    // =====================================================
+    // ACTUALIZAR DESDE SERVER
+    // =====================================================
 
     function updateLineFromServer(serverLine) {
+
         const input = document.querySelector(
             `.qty-input[data-line-id="${serverLine.line_id}"]`
         );
@@ -465,11 +769,16 @@
             return;
         }
 
+        // =============================================
+        // NO TOCAR INPUT ACTIVO
+        // =============================================
+
         if (document.activeElement === input) {
             return;
         }
 
-        input.value = serverLine.physical_quantity || "";
+        input.value =
+            serverLine.physical_quantity || "";
 
         updateDifferenceVisual(input);
 
@@ -479,7 +788,10 @@
             return;
         }
 
-        row.classList.remove("table-success", "table-info");
+        row.classList.remove(
+            "table-success",
+            "table-info"
+        );
 
         void row.offsetWidth;
 
@@ -490,59 +802,105 @@
         }, 2000);
     }
 
+    // =====================================================
+    // SINCRONIZAR CAMBIOS
+    // =====================================================
+
     async function syncChanges() {
+
         try {
+
             let url =
                 "{{ url_for('physical_inventory.get_changes', inventory_id=inventory.id) }}";
 
             if (lastSyncTime) {
-                url += "?since=" + encodeURIComponent(lastSyncTime);
+
+                url +=
+                    "?since="
+                    + encodeURIComponent(
+                        lastSyncTime
+                    );
             }
 
-            const response = await fetch(url);
-            const result = await response.json();
+            const response =
+                await fetch(url);
+
+            const result =
+                await response.json();
 
             if (!result.ok) {
                 return;
             }
 
-            if (result.lines && result.lines.length > 0) {
+            if (
+                result.lines
+                && result.lines.length > 0
+            ) {
+
                 result.lines.forEach((line) => {
                     updateLineFromServer(line);
                 });
             }
 
             if (result.server_time) {
-                lastSyncTime = result.server_time;
+                lastSyncTime =
+                    result.server_time;
             }
 
         } catch (error) {
-            console.error("SYNC ERROR", error);
+
+            console.error(
+                "SYNC ERROR",
+                error
+            );
         }
     }
 
-    const focusCode = new URLSearchParams(window.location.search).get("focus_code");
+    // =====================================================
+    // FOCUS CODE
+    // =====================================================
+
+    const focusCode =
+        new URLSearchParams(
+            window.location.search
+        ).get("focus_code");
 
     if (focusCode) {
-        setTimeout(() => {
-            const row = findRowByScannedCode(focusCode);
 
-            if (!row) return;
+        setTimeout(() => {
+
+            const row =
+                findRowByScannedCode(
+                    focusCode
+                );
+
+            if (!row) {
+                return;
+            }
 
             markRow(row);
 
-            const input = row.querySelector(".qty-input");
+            const input =
+                row.querySelector(".qty-input");
 
             if (input && !input.disabled) {
+
                 input.focus();
+
                 input.select();
             }
+
         }, 400);
     }
+
+    // =====================================================
+    // POLLING
+    // =====================================================
 
     setInterval(() => {
         syncChanges();
     }, 7000);
+
 })();
 </script>
 
