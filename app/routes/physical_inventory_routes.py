@@ -77,11 +77,15 @@ def index():
 @physical_inventory_bp.route("/create", methods=["POST"])
 @login_required
 def create():
+
     active_site_id = session.get("active_site_id")
     warehouse_id = request.form.get("warehouse_id")
 
     if not active_site_id:
-        flash("Debe seleccionar un predio activo antes de crear un inventario físico.", "danger")
+        flash(
+            "Debe seleccionar un predio activo antes de crear un inventario físico.",
+            "danger",
+        )
         return redirect(url_for("physical_inventory.index"))
 
     if not warehouse_id:
@@ -95,8 +99,15 @@ def create():
     ).first()
 
     if not warehouse:
-        flash("La bodega seleccionada no pertenece al predio activo o no está activa.", "danger")
+        flash(
+            "La bodega seleccionada no pertenece al predio activo o no está activa.",
+            "danger",
+        )
         return redirect(url_for("physical_inventory.index"))
+
+    # =====================================================
+    # VALIDAR INVENTARIO ABIERTO
+    # =====================================================
 
     existing_open = PhysicalInventory.query.filter(
         PhysicalInventory.warehouse_id == warehouse.id,
@@ -108,20 +119,34 @@ def create():
             f"Ya existe un inventario físico abierto para esta bodega: {existing_open.number}.",
             "warning",
         )
+
         return redirect(
-            url_for("physical_inventory.detail", inventory_id=existing_open.id)
+            url_for(
+                "physical_inventory.detail",
+                inventory_id=existing_open.id,
+            )
         )
 
-    stock_items = (
-        WarehouseStock.query
+    # =====================================================
+    # VALIDAR STOCK EXISTENTE
+    # =====================================================
+
+    stock_exists = (
+        db.session.query(WarehouseStock.id)
         .filter(WarehouseStock.warehouse_id == warehouse.id)
-        .order_by(WarehouseStock.article_id.asc())
-        .all()
+        .first()
     )
 
-    if not stock_items:
-        flash("La bodega seleccionada no tiene stock registrado.", "warning")
+    if not stock_exists:
+        flash(
+            "La bodega seleccionada no tiene stock registrado.",
+            "warning",
+        )
         return redirect(url_for("physical_inventory.index"))
+
+    # =====================================================
+    # CREAR CABECERA INVENTARIO
+    # =====================================================
 
     inventory = PhysicalInventory(
         number=_generate_inventory_number(),
@@ -136,28 +161,50 @@ def create():
     db.session.add(inventory)
     db.session.flush()
 
-    lines_to_insert = []
+    # =====================================================
+    # INSERT MASIVO DIRECTO POSTGRESQL
+    # =====================================================
 
-    for stock in stock_items:
-        quantity_on_hand = getattr(stock, "quantity_on_hand", None)
+    sql = """
+    INSERT INTO atm.physical_inventory_lines (
+        physical_inventory_id,
+        article_id,
+        system_quantity,
+        physical_quantity,
+        difference_quantity
+    )
+    SELECT
+        :inventory_id,
+        ws.article_id,
+        COALESCE(ws.quantity_on_hand, 0),
+        NULL,
+        NULL
+    FROM atm.warehouse_stock ws
+    WHERE ws.warehouse_id = :warehouse_id
+    ORDER BY ws.article_id ASC
+    """
 
-        if quantity_on_hand is None:
-            quantity_on_hand = getattr(stock, "quantity", Decimal("0"))
+    db.session.execute(
+        db.text(sql),
+        {
+            "inventory_id": inventory.id,
+            "warehouse_id": warehouse.id,
+        }
+    )
 
-        lines_to_insert.append(
-            PhysicalInventoryLine(
-                physical_inventory_id=inventory.id,
-                article_id=stock.article_id,
-                system_quantity=quantity_on_hand or Decimal("0"),
-                physical_quantity=None,
-                difference_quantity=None,
-            )
-        )
-
-    db.session.bulk_save_objects(lines_to_insert)
     db.session.commit()
-    flash("Inventario físico creado correctamente.", "success")
-    return redirect(url_for("physical_inventory.detail", inventory_id=inventory.id))
+
+    flash(
+        "Inventario físico creado correctamente.",
+        "success",
+    )
+
+    return redirect(
+        url_for(
+            "physical_inventory.detail",
+            inventory_id=inventory.id,
+        )
+    )
 
 
 @physical_inventory_bp.route("/<int:inventory_id>")
