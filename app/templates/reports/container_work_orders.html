@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+
+{% block title %}Reporte de Contenedores | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% set title = "Reporte de órdenes por contenedor" %}
+{% set subtitle = "Consulte las OT asociadas a contenedores por rango de fechas." %}
+{% include 'components/page_header.html' with context %}
+
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body p-4">
+        <form method="GET" action="{{ url_for('reports.container_work_orders_report') }}">
+            <div class="row g-3 align-items-end">
+
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Fecha desde</label>
+                    <input
+                        type="date"
+                        class="form-control"
+                        name="date_from"
+                        value="{{ date_from or '' }}"
+                    >
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Fecha hasta</label>
+                    <input
+                        type="date"
+                        class="form-control"
+                        name="date_to"
+                        value="{{ date_to or '' }}"
+                    >
+                </div>
+
+                <div class="col-12 col-md-4 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        Consultar
+                    </button>
+
+                    <a
+                        href="{{ url_for('reports.container_work_orders_report') }}"
+                        class="btn btn-light border"
+                    >
+                        Limpiar
+                    </a>
+                </div>
+
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+
+        {% if rows %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Equipo</th>
+                            <th>Número de contenedor</th>
+                            <th>Número OT</th>
+                            <th>Usuario</th>
+                            <th class="text-end">Costo total</th>
+                            <th>Estado OT</th>
+                            <th>Bodega</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for row in rows %}
+                            {% set work_order = row.WorkOrder %}
+
+                            <tr>
+                                <td>
+                                    {% if work_order.created_at %}
+                                        {{ work_order.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    <span class="badge text-bg-info">
+                                        CONTENEDOR
+                                    </span>
+                                </td>
+
+                                <td class="fw-semibold">
+                                    {{ work_order.equipment_code_snapshot or '-' }}
+                                </td>
+
+                                <td>
+                                    <a href="{{ url_for('work_orders.get_work_order', work_order_id=work_order.id) }}">
+                                        {{ work_order.number or '-' }}
+                                    </a>
+                                </td>
+
+                                <td>
+                                    {% if work_order.responsible_user %}
+                                        {{ work_order.responsible_user.full_name or work_order.responsible_user.username }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-end">
+                                    ₡{{ "{:,.2f}".format(row.total_cost or 0) }}
+                                </td>
+
+                                <td>
+                                    {% if work_order.status == 'EN_PROCESO' %}
+                                        <span class="badge text-bg-warning">EN PROCESO</span>
+                                    {% elif work_order.status == 'FINALIZADA' %}
+                                        <span class="badge text-bg-primary">FINALIZADA</span>
+                                    {% elif work_order.status == 'CERRADA' %}
+                                        <span class="badge text-bg-success">CERRADA</span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">
+                                            {{ work_order.status or '-' }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if work_order.warehouse %}
+                                        {{ work_order.warehouse.name }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if pagination %}
+                <nav class="mt-4">
+                    <ul class="pagination justify-content-center">
+
+                        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                            <a
+                                class="page-link"
+                                href="{% if pagination.has_prev %}{{ url_for('reports.container_work_orders_report', page=pagination.prev_num, date_from=date_from, date_to=date_to) }}{% else %}#{% endif %}"
+                            >
+                                Anterior
+                            </a>
+                        </li>
+
+                        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if page_num %}
+                                <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                                    <a
+                                        class="page-link"
+                                        href="{{ url_for('reports.container_work_orders_report', page=page_num, date_from=date_from, date_to=date_to) }}"
+                                    >
+                                        {{ page_num }}
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">…</span>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                            <a
+                                class="page-link"
+                                href="{% if pagination.has_next %}{{ url_for('reports.container_work_orders_report', page=pagination.next_num, date_from=date_from, date_to=date_to) }}{% else %}#{% endif %}"
+                            >
+                                Siguiente
+                            </a>
+                        </li>
+
+                    </ul>
+                </nav>
+            {% endif %}
+
+        {% else %}
+            <div class="text-center py-5">
+                <div class="text-muted mb-2">
+                    No hay resultados para mostrar.
+                </div>
+                <small class="text-muted">
+                    Seleccione un rango de fechas para consultar las OT asociadas a contenedores.
+                </small>
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+
+{% endblock %}

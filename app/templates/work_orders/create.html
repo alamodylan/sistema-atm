@@ -40,7 +40,7 @@
                     >
                 </div>
 
-                <!-- 🔥 TIPO REPARACIÓN -->
+                <!-- TIPO REPARACIÓN -->
                 <div class="col-12">
                     <label class="form-label fw-semibold">Trabajos</label>
 
@@ -95,6 +95,29 @@
                             {% endfor %}
                         {% endif %}
                     </datalist>
+
+                    <div class="mt-3 d-none" id="containerInputWrapper">
+                        <label class="form-label fw-semibold">
+                            Número de contenedor
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="container_number"
+                            placeholder="MSCU-123456-7"
+                            maxlength="13"
+                            autocomplete="off"
+                        >
+
+                        <div class="form-text">
+                            Formato requerido: ABCD-123456-7
+                        </div>
+
+                        <div class="text-danger small mt-1 d-none" id="containerError">
+                            Ingrese un contenedor con formato correcto.
+                        </div>
+                    </div>
                 </div>
 
                 <!-- OBSERVACIONES -->
@@ -124,8 +147,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const equipmentIdInput = document.getElementById("equipment_id");
     const equipmentOptions = document.querySelectorAll("#equipment_list option");
 
-    const repairTypeSelect = document.getElementById("repair_type_select");
-    const mechanicSelect = document.getElementById("mechanic_select");
+    const containerInputWrapper = document.getElementById("containerInputWrapper");
+    const containerInput = document.getElementById("container_number");
+    const containerError = document.getElementById("containerError");
 
     const repairTypeMechanicsMap = JSON.parse(
         '{{ repair_type_mechanics_map | default({}) | tojson | safe }}'
@@ -142,63 +166,120 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         equipmentIdInput.value = selectedId;
+        toggleContainerInput();
+    }
+
+    function isContainerSelected() {
+        const value = equipmentInput.value.trim().toUpperCase();
+        return value.includes("CONTENEDOR");
+    }
+
+    function toggleContainerInput() {
+        if (isContainerSelected()) {
+            containerInputWrapper.classList.remove("d-none");
+        } else {
+            containerInputWrapper.classList.add("d-none");
+            containerInput.value = "";
+            containerError.classList.add("d-none");
+        }
+    }
+
+    function formatContainer(value) {
+        value = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+        let letters = value.substring(0, 4).replace(/[^A-Z]/g, "");
+        let numbers = value.substring(4).replace(/[^0-9]/g, "").substring(0, 7);
+
+        let formatted = letters;
+
+        if (letters.length === 4) {
+            formatted += "-";
+        }
+
+        if (numbers.length > 0) {
+            if (numbers.length <= 6) {
+                formatted += numbers;
+            } else {
+                formatted += numbers.substring(0, 6) + "-" + numbers.substring(6, 7);
+            }
+        }
+
+        return formatted;
+    }
+
+    function isValidContainer(value) {
+        return /^[A-Z]{4}-\d{6}-\d{1}$/.test(value);
     }
 
     equipmentInput.addEventListener("input", syncEquipmentSelection);
     equipmentInput.addEventListener("change", syncEquipmentSelection);
 
-function bindRepairTypeChange(row) {
-    const repairSelect = row.querySelector(".repair-type-select");
-    const mechanicSelect = row.querySelector(".mechanic-select");
+    containerInput.addEventListener("input", function () {
+        const formatted = formatContainer(this.value);
+        this.value = formatted;
+        equipmentInput.value = formatted;
 
-    repairSelect.addEventListener("change", function () {
-        const repairTypeId = this.value;
-
-        mechanicSelect.innerHTML = "";
-
-        if (!repairTypeId || !repairTypeMechanicsMap[repairTypeId]) {
-            mechanicSelect.innerHTML = '<option value="">Sin mecánicos</option>';
-            mechanicSelect.disabled = true;
-            return;
+        if (formatted.length === 13 && !isValidContainer(formatted)) {
+            containerError.classList.remove("d-none");
+        } else {
+            containerError.classList.add("d-none");
         }
+    });
 
-        const mechanics = repairTypeMechanicsMap[repairTypeId];
+    function bindRepairTypeChange(row) {
+        const repairSelect = row.querySelector(".repair-type-select");
+        const mechanicSelect = row.querySelector(".mechanic-select");
 
-        mechanicSelect.disabled = false;
-        mechanicSelect.innerHTML = '<option value="">Seleccione...</option>';
+        repairSelect.addEventListener("change", function () {
+            const repairTypeId = this.value;
 
-        mechanics.forEach(function (m) {
-            const option = document.createElement("option");
-            option.value = m.id;
-            option.textContent = m.name + " (" + m.code + ")";
-            mechanicSelect.appendChild(option);
+            mechanicSelect.innerHTML = "";
+
+            if (!repairTypeId || !repairTypeMechanicsMap[repairTypeId]) {
+                mechanicSelect.innerHTML = '<option value="">Sin mecánicos</option>';
+                mechanicSelect.disabled = true;
+                return;
+            }
+
+            const mechanics = repairTypeMechanicsMap[repairTypeId];
+
+            mechanicSelect.disabled = false;
+            mechanicSelect.innerHTML = '<option value="">Seleccione...</option>';
+
+            mechanics.forEach(function (m) {
+                const option = document.createElement("option");
+                option.value = m.id;
+                option.textContent = m.name + " (" + m.code + ")";
+                mechanicSelect.appendChild(option);
+            });
         });
+    }
+
+    function addTaskRow() {
+        const container = document.getElementById("tasks-container");
+        const firstRow = document.querySelector(".task-row");
+        const newRow = firstRow.cloneNode(true);
+
+        newRow.querySelectorAll("select").forEach(s => {
+            s.value = "";
+            if (s.classList.contains("mechanic-select")) {
+                s.innerHTML = '<option value="">Seleccione tipo primero</option>';
+                s.disabled = true;
+            }
+        });
+
+        container.appendChild(newRow);
+
+        bindRepairTypeChange(newRow);
+    }
+
+    document.querySelectorAll(".task-row").forEach(row => {
+        bindRepairTypeChange(row);
     });
-}
 
-function addTaskRow() {
-    const container = document.getElementById("tasks-container");
-    const firstRow = document.querySelector(".task-row");
-    const newRow = firstRow.cloneNode(true);
+    document.getElementById("addTaskRowBtn").addEventListener("click", addTaskRow);
 
-    newRow.querySelectorAll("select").forEach(s => {
-        s.value = "";
-        if (s.classList.contains("mechanic-select")) {
-            s.innerHTML = '<option value="">Seleccione tipo primero</option>';
-            s.disabled = true;
-        }
-    });
-
-    container.appendChild(newRow);
-
-    bindRepairTypeChange(newRow);
-}
-
-// Inicializar primera fila
-document.querySelectorAll(".task-row").forEach(row => {
-    bindRepairTypeChange(row);
-});
-document.getElementById("addTaskRowBtn").addEventListener("click", addTaskRow);
+    toggleContainerInput();
 });
 </script>
 

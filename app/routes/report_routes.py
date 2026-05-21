@@ -673,3 +673,112 @@ def export_equipment_work_orders_report():
 
         flash("Error al exportar el reporte de órdenes por equipo.", "danger")
         return equipment_work_orders_report()
+
+# =========================================================
+# HELPER - REPORTE DE OT POR CONTENEDOR
+# =========================================================
+def _build_container_work_orders_query(date_from="", date_to=""):
+    total_cost_subquery = (
+        db.session.query(
+            InventoryLedger.reference_id.label("work_order_id"),
+            func.coalesce(
+                func.sum(func.abs(InventoryLedger.total_cost)),
+                0,
+            ).label("total_cost"),
+        )
+        .filter(InventoryLedger.reference_id.isnot(None))
+        .filter(InventoryLedger.reference_type == "WORK_ORDER")
+        .group_by(InventoryLedger.reference_id)
+        .subquery()
+    )
+
+    query = (
+        db.session.query(
+            WorkOrder,
+            func.coalesce(total_cost_subquery.c.total_cost, 0).label("total_cost"),
+        )
+        .outerjoin(
+            total_cost_subquery,
+            total_cost_subquery.c.work_order_id == WorkOrder.id,
+        )
+        .options(
+            selectinload(WorkOrder.warehouse),
+            selectinload(WorkOrder.responsible_user),
+        )
+        .filter(
+            WorkOrder.equipment_code_snapshot.op("~")(
+                r"^[A-Z]{4}-[0-9]{6}-[0-9]{1}$"
+            )
+        )
+    )
+
+    if date_from:
+        parsed_date_from = datetime.combine(
+            datetime.strptime(date_from, "%Y-%m-%d").date(),
+            time.min,
+        )
+        query = query.filter(WorkOrder.created_at >= parsed_date_from)
+
+    if date_to:
+        parsed_date_to = datetime.combine(
+            datetime.strptime(date_to, "%Y-%m-%d").date(),
+            time.max,
+        )
+        query = query.filter(WorkOrder.created_at <= parsed_date_to)
+
+    return query.order_by(WorkOrder.created_at.desc())
+
+
+# =========================================================
+# REPORTE DE ÓRDENES POR CONTENEDOR
+# =========================================================
+@report_bp.route("/container-work-orders", methods=["GET"])
+@login_required
+def container_work_orders_report():
+    date_from = (request.args.get("date_from") or "").strip()
+    date_to = (request.args.get("date_to") or "").strip()
+    page = request.args.get("page", 1, type=int)
+
+    try:
+        rows = []
+        pagination = None
+
+        if date_from or date_to:
+            query = _build_container_work_orders_query(
+                date_from=date_from,
+                date_to=date_to,
+            )
+
+            pagination = query.paginate(
+                page=page,
+                per_page=20,
+                error_out=False,
+            )
+
+            rows = pagination.items
+
+        return render_template(
+            "reports/container_work_orders.html",
+            title="Reporte de órdenes por contenedor",
+            subtitle="Consulte las OT asociadas a contenedores por rango de fechas.",
+            rows=rows,
+            pagination=pagination,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
+    except Exception as exc:
+        db.session.rollback()
+        print(f"[CONTAINER WORK ORDERS REPORT ERROR] {exc}")
+
+        flash("Error al cargar el reporte de órdenes por contenedor.", "danger")
+
+        return render_template(
+            "reports/container_work_orders.html",
+            title="Reporte de órdenes por contenedor",
+            subtitle="Consulte las OT asociadas a contenedores por rango de fechas.",
+            rows=[],
+            pagination=None,
+            date_from=date_from,
+            date_to=date_to,
+        )
