@@ -98,35 +98,30 @@
                         {% endif %}
                     </select>
 
-                    <!-- SELECT EQUIPOS -->
+                    <!-- BUSCADOR EQUIPOS -->
                     <div id="equipmentSelectWrapper" class="d-none">
 
                         <label class="form-label fw-semibold">
                             Equipo
                         </label>
 
-                        <select
-                            class="form-select"
+                        <input
+                            type="hidden"
                             name="equipment_id"
                             id="equipment_id"
+                            value=""
                         >
-                            <option value="">Seleccione equipo...</option>
 
-                            {% if equipments %}
-                                {% for equipment in equipments %}
-                                    <option
-                                        value="{{ equipment.id }}"
-                                        data-type-id="{{ equipment.equipment_type_id or '' }}"
-                                        data-code="{{ equipment.code }}"
-                                    >
-                                        {{ equipment.code }}
-                                        {% if equipment.description %}
-                                            - {{ equipment.description }}
-                                        {% endif %}
-                                    </option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="equipment_search"
+                            list="filtered_equipment_list"
+                            placeholder="Digite código del equipo..."
+                            autocomplete="off"
+                        >
+
+                        <datalist id="filtered_equipment_list"></datalist>
 
                     </div>
 
@@ -190,6 +185,21 @@
     </div>
 </div>
 
+<script type="application/json" id="equipmentData">
+[
+    {% if equipments %}
+        {% for equipment in equipments %}
+            {
+                "id": "{{ equipment.id }}",
+                "typeId": "{{ equipment.equipment_type_id or '' }}",
+                "code": "{{ equipment.code }}",
+                "label": "{{ equipment.code }}{% if equipment.description %} - {{ equipment.description }}{% endif %}"
+            }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    {% endif %}
+]
+</script>
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -199,8 +209,14 @@ document.addEventListener("DOMContentLoaded", function () {
     const equipmentSelectWrapper =
         document.getElementById("equipmentSelectWrapper");
 
-    const equipmentSelect =
+    const equipmentIdInput =
         document.getElementById("equipment_id");
+
+    const equipmentSearchInput =
+        document.getElementById("equipment_search");
+
+    const equipmentDatalist =
+        document.getElementById("filtered_equipment_list");
 
     const equipmentCodeSnapshotInput =
         document.getElementById("equipment_code_snapshot");
@@ -214,9 +230,15 @@ document.addEventListener("DOMContentLoaded", function () {
     const containerError =
         document.getElementById("containerError");
 
-    const allEquipmentOptions = Array.from(
-        equipmentSelect.querySelectorAll("option")
-    );
+    const equipmentDataElement =
+        document.getElementById("equipmentData");
+
+    const allEquipments =
+        equipmentDataElement
+            ? JSON.parse(equipmentDataElement.textContent || "[]")
+            : [];
+
+    let filteredEquipments = [];
 
     const repairTypeMechanicsMap = JSON.parse(
         '{{ repair_type_mechanics_map | default({}) | tojson | safe }}'
@@ -242,18 +264,43 @@ document.addEventListener("DOMContentLoaded", function () {
         return getSelectedEquipmentTypeCode() === "CONTENEDOR";
     }
 
-    function resetEquipmentSelect() {
+    function resetEquipmentSearch() {
+        equipmentIdInput.value = "";
+        equipmentSearchInput.value = "";
+        equipmentDatalist.innerHTML = "";
+        filteredEquipments = [];
+    }
 
-        equipmentSelect.innerHTML = "";
+    function renderEquipmentOptions(searchText = "") {
+        equipmentDatalist.innerHTML = "";
 
-        const defaultOption =
-            document.createElement("option");
+        const cleanSearch =
+            searchText.trim().toUpperCase();
 
-        defaultOption.value = "";
-        defaultOption.textContent =
-            "Seleccione equipo...";
+        let visibleEquipments =
+            filteredEquipments;
 
-        equipmentSelect.appendChild(defaultOption);
+        if (cleanSearch) {
+            visibleEquipments =
+                filteredEquipments.filter(function (equipment) {
+                    return (
+                        equipment.code.toUpperCase().includes(cleanSearch)
+                        || equipment.label.toUpperCase().includes(cleanSearch)
+                    );
+                });
+        }
+
+        visibleEquipments
+            .slice(0, 50)
+            .forEach(function (equipment) {
+                const option =
+                    document.createElement("option");
+
+                option.value =
+                    equipment.label;
+
+                equipmentDatalist.appendChild(option);
+            });
     }
 
     function filterEquipmentByType() {
@@ -261,22 +308,14 @@ document.addEventListener("DOMContentLoaded", function () {
         const selectedTypeId =
             equipmentTypeSelect.value;
 
-        resetEquipmentSelect();
+        resetEquipmentSearch();
 
-        allEquipmentOptions.forEach(function(option) {
+        filteredEquipments =
+            allEquipments.filter(function (equipment) {
+                return equipment.typeId === selectedTypeId;
+            });
 
-            if (!option.value) {
-                return;
-            }
-
-            if (
-                option.dataset.typeId === selectedTypeId
-            ) {
-                equipmentSelect.appendChild(
-                    option.cloneNode(true)
-                );
-            }
-        });
+        renderEquipmentOptions();
     }
 
     function toggleEquipmentFields() {
@@ -293,7 +332,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
             containerInputWrapper.classList.add("d-none");
 
-            resetEquipmentSelect();
+            resetEquipmentSearch();
 
             return;
         }
@@ -304,7 +343,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
             containerInputWrapper.classList.remove("d-none");
 
-            resetEquipmentSelect();
+            resetEquipmentSearch();
 
             return;
         }
@@ -364,20 +403,37 @@ document.addEventListener("DOMContentLoaded", function () {
         toggleEquipmentFields
     );
 
-    equipmentSelect.addEventListener(
-        "change",
+    equipmentSearchInput.addEventListener(
+        "input",
         function () {
 
-            const selectedOption =
-                equipmentSelect.options[
-                    equipmentSelect.selectedIndex
-                ];
+            const value =
+                this.value.trim();
 
-            equipmentCodeSnapshotInput.value =
-                selectedOption &&
-                selectedOption.dataset.code
-                    ? selectedOption.dataset.code
-                    : "";
+            renderEquipmentOptions(value);
+
+            const selectedEquipment =
+                filteredEquipments.find(function (equipment) {
+                    return (
+                        equipment.label === value
+                        || equipment.code === value
+                    );
+                });
+
+            if (selectedEquipment) {
+
+                equipmentIdInput.value =
+                    selectedEquipment.id;
+
+                equipmentCodeSnapshotInput.value =
+                    selectedEquipment.code;
+
+            } else {
+
+                equipmentIdInput.value = "";
+
+                equipmentCodeSnapshotInput.value = "";
+            }
         }
     );
 
