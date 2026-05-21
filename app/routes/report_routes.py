@@ -13,7 +13,7 @@ from io import BytesIO
 from sqlalchemy import func
 from flask import send_file
 from sqlalchemy.orm import selectinload
-
+from app.models.inventory_entry import InventoryEntry
 
 report_bp = Blueprint("reports", __name__)
 
@@ -56,26 +56,40 @@ def inventory_movements_report():
                 datetime.strptime(date_from, "%Y-%m-%d").date(),
                 time.min,
             )
-            query = query.filter(InventoryLedger.created_at >= parsed_date_from)
+
+            query = query.filter(
+                InventoryLedger.created_at >= parsed_date_from
+            )
 
         if date_to:
             parsed_date_to = datetime.combine(
                 datetime.strptime(date_to, "%Y-%m-%d").date(),
                 time.max,
             )
-            query = query.filter(InventoryLedger.created_at <= parsed_date_to)
+
+            query = query.filter(
+                InventoryLedger.created_at <= parsed_date_to
+            )
 
         if article_code:
-            query = query.filter(Article.code.ilike(f"%{article_code}%"))
+            query = query.filter(
+                Article.code.ilike(f"%{article_code}%")
+            )
 
         if warehouse_id:
-            query = query.filter(InventoryLedger.warehouse_id == int(warehouse_id))
+            query = query.filter(
+                InventoryLedger.warehouse_id == int(warehouse_id)
+            )
 
         if movement_direction == "IN":
-            query = query.filter(InventoryLedger.quantity_change > 0)
+            query = query.filter(
+                InventoryLedger.quantity_change > 0
+            )
 
         if movement_direction == "OUT":
-            query = query.filter(InventoryLedger.quantity_change < 0)
+            query = query.filter(
+                InventoryLedger.quantity_change < 0
+            )
 
         pagination = (
             query
@@ -89,17 +103,21 @@ def inventory_movements_report():
 
         movements = pagination.items
 
+        # =====================================================
+        # MAPA DE OTs
+        # =====================================================
+
         work_order_ids = [
             movement.reference_id
             for movement in movements
             if movement.reference_id
-            and movement.reference_type
-            and "WORK_ORDER" in movement.reference_type.upper()
+            and movement.reference_type == "WORK_ORDER"
         ]
 
         work_orders_map = {}
 
         if work_order_ids:
+
             work_orders = (
                 WorkOrder.query
                 .filter(WorkOrder.id.in_(work_order_ids))
@@ -111,19 +129,83 @@ def inventory_movements_report():
                 for work_order in work_orders
             }
 
+        # =====================================================
+        # MAPA DE ENTRADAS INVENTARIO
+        # =====================================================
+
+        inventory_entry_ids = [
+            movement.reference_id
+            for movement in movements
+            if movement.reference_id
+            and movement.reference_type == "INVENTORY_ENTRY"
+        ]
+
+        inventory_entries_map = {}
+
+        if inventory_entry_ids:
+
+            inventory_entries = (
+                InventoryEntry.query
+                .filter(InventoryEntry.id.in_(inventory_entry_ids))
+                .all()
+            )
+
+            inventory_entries_map = {
+                entry.id: entry
+                for entry in inventory_entries
+            }
+
+        # =====================================================
+        # DATOS EXTRA PARA REPORTE
+        # =====================================================
+
         for movement in movements:
+
             movement.equipment_code_report = "-"
+            movement.supplier_name_report = "-"
+            movement.invoice_number_report = "-"
+
+            # ==============================================
+            # EQUIPO OT
+            # ==============================================
 
             if (
                 movement.reference_id
-                and movement.reference_type
-                and "WORK_ORDER" in movement.reference_type.upper()
+                and movement.reference_type == "WORK_ORDER"
             ):
-                work_order = work_orders_map.get(movement.reference_id)
+
+                work_order = work_orders_map.get(
+                    movement.reference_id
+                )
 
                 if work_order:
+
                     movement.equipment_code_report = (
                         work_order.equipment_code_snapshot or "-"
+                    )
+
+            # ==============================================
+            # ENTRADA INVENTARIO
+            # ==============================================
+
+            if (
+                movement.reference_id
+                and movement.reference_type == "INVENTORY_ENTRY"
+            ):
+
+                entry = inventory_entries_map.get(
+                    movement.reference_id
+                )
+
+                if entry:
+
+                    movement.invoice_number_report = (
+                        entry.invoice_number or "-"
+                    )
+
+                    movement.supplier_name_report = (
+                        entry.supplier.name
+                        if entry.supplier else "-"
                     )
 
         warehouses = (
@@ -149,7 +231,10 @@ def inventory_movements_report():
     except Exception:
         db.session.rollback()
 
-        flash("Error al cargar el reporte de movimientos.", "danger")
+        flash(
+            "Error al cargar el reporte de movimientos.",
+            "danger",
+        )
 
         return render_template(
             "reports/inventory_movements.html",

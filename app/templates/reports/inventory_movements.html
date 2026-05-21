@@ -114,6 +114,8 @@
                         <th>Código</th>
                         <th>Artículo</th>
                         <th>Bodega</th>
+                        <th>Proveedor</th>
+                        <th>Factura</th>
                         <th>Equipo</th>
                         <th>Cantidad</th>
                         <th>Costo unitario</th>
@@ -166,6 +168,14 @@
                                 </td>
 
                                 <td>
+                                    {{ movement.supplier_name_report or "-" }}
+                                </td>
+
+                                <td>
+                                    {{ movement.invoice_number_report or "-" }}
+                                </td>
+
+                                <td>
                                     {{ movement.equipment_code_report or "-" }}
                                 </td>
 
@@ -212,7 +222,7 @@
                     {% else %}
 
                         <tr>
-                            <td colspan="11" class="text-center text-muted py-4">
+                            <td colspan="13" class="text-center text-muted py-4">
                                 No hay movimientos de inventario para mostrar.
                             </td>
                         </tr>
