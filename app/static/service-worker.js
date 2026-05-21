@@ -1,7 +1,7 @@
-const CACHE_NAME = "atm-pwa-v2";
+const CACHE_NAME = "atm-pwa-v3";
 
 const STATIC_ASSETS = [
-    "/",
+    "/inicio",
     "/static/manifest.json",
     "/static/img/icon-192.png",
     "/static/img/icon-512.png"
@@ -12,7 +12,6 @@ const STATIC_ASSETS = [
 // =====================================================
 
 self.addEventListener("install", (event) => {
-
     self.skipWaiting();
 
     event.waitUntil(
@@ -27,13 +26,10 @@ self.addEventListener("install", (event) => {
 // =====================================================
 
 self.addEventListener("activate", (event) => {
-
     event.waitUntil(
         caches.keys().then((cacheNames) => {
-
             return Promise.all(
                 cacheNames.map((cacheName) => {
-
                     if (cacheName !== CACHE_NAME) {
                         return caches.delete(cacheName);
                     }
@@ -50,71 +46,33 @@ self.addEventListener("activate", (event) => {
 // =====================================================
 
 self.addEventListener("fetch", (event) => {
-
-    // =============================================
-    // SOLO GET
-    // =============================================
-
     if (event.request.method !== "GET") {
         return;
     }
 
     event.respondWith(
-
-        caches.match(event.request).then((cachedResponse) => {
-
-            // =====================================
-            // CACHE HIT
-            // =====================================
-
-            if (cachedResponse) {
-                return cachedResponse;
-            }
-
-            // =====================================
-            // NETWORK FIRST
-            // =====================================
-
-            return fetch(event.request)
-                .then((networkResponse) => {
-
-                    // =================================
-                    // RESPUESTA INVÁLIDA
-                    // =================================
-
-                    if (
-                        !networkResponse
-                        || networkResponse.status !== 200
-                        || networkResponse.type !== "basic"
-                    ) {
-                        return networkResponse;
-                    }
-
-                    // =================================
-                    // CLONAR Y CACHEAR
-                    // =================================
-
-                    const responseClone =
-                        networkResponse.clone();
-
-                    caches.open(CACHE_NAME)
-                        .then((cache) => {
-                            cache.put(
-                                event.request,
-                                responseClone
-                            );
-                        });
-
+        fetch(event.request)
+            .then((networkResponse) => {
+                if (
+                    !networkResponse ||
+                    networkResponse.status !== 200 ||
+                    networkResponse.type !== "basic"
+                ) {
                     return networkResponse;
-                })
-                .catch(() => {
+                }
 
-                    // =================================
-                    // FALLBACK OFFLINE
-                    // =================================
+                const responseClone = networkResponse.clone();
 
-                    return caches.match("/");
+                caches.open(CACHE_NAME).then((cache) => {
+                    cache.put(event.request, responseClone);
                 });
-        })
+
+                return networkResponse;
+            })
+            .catch(() => {
+                return caches.match(event.request).then((cachedResponse) => {
+                    return cachedResponse || caches.match("/inicio");
+                });
+            })
     );
 });
