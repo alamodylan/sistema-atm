@@ -126,7 +126,12 @@ def inventory_movements_report():
                 db.session.query(
                     InventoryEntry.id.label("entry_id"),
                     InventoryEntry.invoice_number.label("invoice_number"),
-                    Supplier.name.label("supplier_name"),
+                    func.coalesce(
+                        Supplier.commercial_name,
+                        Supplier.legal_name,
+                        Supplier.code,
+                        "-"
+                    ).label("supplier_name"),
                 )
                 .outerjoin(Supplier, Supplier.id == InventoryEntry.supplier_id)
                 .filter(InventoryEntry.id.in_(inventory_entry_ids))
