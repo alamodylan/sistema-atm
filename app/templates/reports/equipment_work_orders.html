@@ -1,0 +1,313 @@
+{% extends 'base.html' %}
+
+{% block title %}Reporte de órdenes por equipo | Sistema de Bodega{% endblock %}
+
+{% block content %}
+{% set title = "Reporte de órdenes por equipo" %}
+{% set subtitle = "Consulte las órdenes de trabajo creadas a un equipo específico." %}
+{% include 'components/page_header.html' with context %}
+
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body">
+
+        <form
+            method="GET"
+            action="{{ url_for('reports.equipment_work_orders_report') }}"
+            class="row g-3"
+        >
+
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-semibold">
+                    Equipo
+                </label>
+
+                <input
+                    type="text"
+                    class="form-control"
+                    name="equipment_code"
+                    placeholder="Ej: CH-1023"
+                    value="{{ equipment_code or '' }}"
+                >
+            </div>
+
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-semibold">
+                    Fecha inicial
+                </label>
+
+                <input
+                    type="date"
+                    class="form-control"
+                    name="date_from"
+                    value="{{ date_from or '' }}"
+                >
+            </div>
+
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-semibold">
+                    Fecha final
+                </label>
+
+                <input
+                    type="date"
+                    class="form-control"
+                    name="date_to"
+                    value="{{ date_to or '' }}"
+                >
+            </div>
+
+            <div class="col-12 col-md-2 d-flex align-items-end gap-2">
+
+                <button
+                    type="submit"
+                    class="btn btn-primary w-100"
+                >
+                    Consultar
+                </button>
+
+                {% if rows %}
+                    <a
+                        href="{{ url_for(
+                            'reports.export_equipment_work_orders_report',
+                            equipment_code=equipment_code,
+                            date_from=date_from,
+                            date_to=date_to
+                        ) }}"
+                        class="btn btn-success w-100"
+                    >
+                        Excel
+                    </a>
+                {% endif %}
+
+            </div>
+
+        </form>
+
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body">
+
+        {% if pagination %}
+            <div class="d-flex justify-content-end mb-3">
+                <span class="badge bg-light text-dark border">
+                    Página {{ pagination.page }} de {{ pagination.pages }}
+                </span>
+            </div>
+        {% endif %}
+
+        <div class="table-responsive">
+
+            <table class="table align-middle table-hover">
+
+                <thead class="table-light">
+                    <tr>
+                        <th>Fecha creación</th>
+                        <th>Número OT</th>
+                        <th>Estado</th>
+                        <th>Tipo reparación</th>
+                        <th>Usuario responsable</th>
+                        <th>Costo total OT</th>
+                        <th>Bodega</th>
+                        <th>Equipo</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% if rows %}
+
+                        {% for row in rows %}
+
+                            {% set work_order = row.WorkOrder %}
+
+                            <tr>
+
+                                <td>
+                                    {{ work_order.created_at|cr_datetime if work_order.created_at else "-" }}
+                                </td>
+
+                                <td>
+                                    <a
+                                        href="{{ url_for(
+                                            'work_orders.get_work_order',
+                                            work_order_id=work_order.id
+                                        ) }}"
+                                        class="text-decoration-none fw-semibold"
+                                    >
+                                        {{ work_order.number }}
+                                    </a>
+                                </td>
+
+                                <td>
+
+                                    {% if work_order.status == "EN_PROCESO" %}
+
+                                        <span class="badge text-bg-warning">
+                                            {{ work_order.status }}
+                                        </span>
+
+                                    {% elif work_order.status == "FINALIZADA" %}
+
+                                        <span class="badge text-bg-info">
+                                            {{ work_order.status }}
+                                        </span>
+
+                                    {% elif work_order.status == "CERRADA" %}
+
+                                        <span class="badge text-bg-dark">
+                                            {{ work_order.status }}
+                                        </span>
+
+                                    {% else %}
+
+                                        <span class="badge text-bg-secondary">
+                                            {{ work_order.status }}
+                                        </span>
+
+                                    {% endif %}
+
+                                </td>
+
+                                <td>
+                                    {{ work_order.repair_type.name if work_order.repair_type else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ work_order.responsible_user.full_name if work_order.responsible_user else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ "%.2f"|format(row.total_cost or 0) }}
+                                </td>
+
+                                <td>
+                                    {{ work_order.warehouse.name if work_order.warehouse else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ work_order.equipment_code_snapshot or "-" }}
+                                </td>
+
+                            </tr>
+
+                        {% endfor %}
+
+                    {% else %}
+
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                No hay órdenes de trabajo para mostrar.
+                            </td>
+                        </tr>
+
+                    {% endif %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        {% if pagination and pagination.pages > 1 %}
+
+            <nav class="mt-4">
+
+                <ul class="pagination justify-content-center flex-wrap gap-1">
+
+                    {% if pagination.has_prev %}
+
+                        <li class="page-item">
+
+                            <a
+                                class="page-link"
+                                href="{{ url_for(
+                                    'reports.equipment_work_orders_report',
+                                    page=pagination.prev_num,
+                                    equipment_code=equipment_code,
+                                    date_from=date_from,
+                                    date_to=date_to
+                                ) }}"
+                            >
+                                Anterior
+                            </a>
+
+                        </li>
+
+                    {% else %}
+
+                        <li class="page-item disabled">
+                            <span class="page-link">Anterior</span>
+                        </li>
+
+                    {% endif %}
+
+                    {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+
+                        {% if p %}
+
+                            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+
+                                <a
+                                    class="page-link"
+                                    href="{{ url_for(
+                                        'reports.equipment_work_orders_report',
+                                        page=p,
+                                        equipment_code=equipment_code,
+                                        date_from=date_from,
+                                        date_to=date_to
+                                    ) }}"
+                                >
+                                    {{ p }}
+                                </a>
+
+                            </li>
+
+                        {% else %}
+
+                            <li class="page-item disabled">
+                                <span class="page-link">…</span>
+                            </li>
+
+                        {% endif %}
+
+                    {% endfor %}
+
+                    {% if pagination.has_next %}
+
+                        <li class="page-item">
+
+                            <a
+                                class="page-link"
+                                href="{{ url_for(
+                                    'reports.equipment_work_orders_report',
+                                    page=pagination.next_num,
+                                    equipment_code=equipment_code,
+                                    date_from=date_from,
+                                    date_to=date_to
+                                ) }}"
+                            >
+                                Siguiente
+                            </a>
+
+                        </li>
+
+                    {% else %}
+
+                        <li class="page-item disabled">
+                            <span class="page-link">Siguiente</span>
+                        </li>
+
+                    {% endif %}
+
+                </ul>
+
+            </nav>
+
+        {% endif %}
+
+    </div>
+</div>
+
+{% endblock %}
