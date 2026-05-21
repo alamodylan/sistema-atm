@@ -130,6 +130,7 @@
 (function () {
     let scanBuffer = "";
     let scanTimer = null;
+    let autosaveTimer = null;
 
     function normalizeCode(value) {
         return String(value || "").trim().toUpperCase();
@@ -263,35 +264,70 @@
             return;
         }
 
+        if (input.dataset.saving === "1") {
+            return;
+        }
+
+        input.dataset.saving = "1";
+
         input.value = value;
 
         updateDifferenceVisual(input);
 
-        const response = await fetch("{{ url_for('physical_inventory.update_line') }}", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                line_id: input.dataset.lineId,
-                physical_quantity: input.value
-            })
-        });
+        try {
+            const response = await fetch("{{ url_for('physical_inventory.update_line') }}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    line_id: input.dataset.lineId,
+                    physical_quantity: input.value
+                })
+            });
 
-        const result = await response.json();
+            const result = await response.json();
 
-        if (!result.ok) {
-            alert(result.message || "No se pudo guardar la cantidad.");
-            return;
+            input.dataset.saving = "0";
+
+            if (!result.ok) {
+                alert(result.message || "No se pudo guardar la cantidad.");
+                return;
+            }
+
+            if (result.difference_quantity !== undefined) {
+                const row = input.closest("tr");
+                const cell = row.querySelector(".diff");
+                const diff = parseFloat(result.difference_quantity);
+
+                cell.innerText = Number.isFinite(diff) ? diff.toFixed(2) : result.difference_quantity;
+            }
+
+        } catch (error) {
+            input.dataset.saving = "0";
+            alert("Error guardando la cantidad.");
+        }
+    }
+
+    function triggerAutosave(inputElement) {
+
+        if (autosaveTimer) {
+            clearTimeout(autosaveTimer);
         }
 
-        if (result.difference_quantity !== undefined) {
-            const row = input.closest("tr");
-            const cell = row.querySelector(".diff");
-            const diff = parseFloat(result.difference_quantity);
+        autosaveTimer = setTimeout(() => {
 
-            cell.innerText = Number.isFinite(diff) ? diff.toFixed(2) : result.difference_quantity;
-        }
+            saveQuantity(inputElement).then(() => {
+                clearScanBuffer();
+
+                inputElement.classList.remove("border-success");
+
+                void inputElement.offsetWidth;
+
+                inputElement.classList.add("border-success");
+            });
+
+        }, 350);
     }
 
     document.addEventListener("keydown", function (event) {
@@ -380,9 +416,19 @@
         });
 
         input.addEventListener("change", function () {
-            saveQuantity(this).then(() => {
-                clearScanBuffer();
-            });
+            triggerAutosave(this);
+        });
+
+        input.addEventListener("input", function () {
+            triggerAutosave(this);
+        });
+
+        input.addEventListener("blur", function () {
+            triggerAutosave(this);
+        });
+
+        input.addEventListener("touchend", function () {
+            triggerAutosave(this);
         });
 
         input.addEventListener("focus", function () {
