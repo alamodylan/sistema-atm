@@ -24,6 +24,8 @@ from app.models.work_order_request import WorkOrderRequest
 from app.models.work_order_request_line import WorkOrderRequestLine
 from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 from app.utils.permissions import permission_required
+import re
+from app.models.equipment_type import EquipmentType
 from app.services.work_order_service import (
     WorkOrderServiceError,
     close_work_order,
@@ -164,9 +166,6 @@ def list_work_orders():
         )
 
 
-# =========================================================
-# PANTALLA CREAR OT
-# =========================================================
 @work_order_bp.route("/create", methods=["GET"])
 @login_required
 @permission_required("ot")
@@ -185,6 +184,13 @@ def create_work_order_page():
         warehouses_query = warehouses_query.filter(Warehouse.site_id == int(active_site_id))
 
     warehouses = warehouses_query.all()
+
+    equipment_types = (
+        EquipmentType.query
+        .filter(EquipmentType.is_active.is_(True))
+        .order_by(EquipmentType.name.asc())
+        .all()
+    )
 
     equipments = (
         Equipment.query
@@ -208,6 +214,7 @@ def create_work_order_page():
         sites=sites,
         warehouses=warehouses,
         equipments=equipments,
+        equipment_types=equipment_types,
         repair_types=repair_types,
         repair_type_mechanics_map=repair_type_mechanics_map,
     )
@@ -226,11 +233,11 @@ def create_work_order_action():
         repair_type_ids = request.form.getlist("repair_type_id[]")
         mechanic_ids = request.form.getlist("mechanic_id[]")
         description = request.form.get("description")
+
+        equipment_type_id = request.form.get("equipment_type_id")
         equipment_id = request.form.get("equipment_id")
-        equipment_code_snapshot = request.form.get("equipment_code_snapshot")
-        first_repair_type = RepairType.query.get(int(repair_type_ids[0]))
-        task_title = first_repair_type.name if first_repair_type else "Trabajo"
-        task_description = None
+        equipment_code_snapshot = (request.form.get("equipment_code_snapshot") or "").strip()
+        container_number = (request.form.get("container_number") or "").strip().upper()
 
         if not site_id:
             raise ValueError("No hay un predio activo seleccionado.")
@@ -244,8 +251,21 @@ def create_work_order_action():
         if not mechanic_ids:
             raise ValueError("Debe asignar mecánicos a los trabajos.")
 
+        first_repair_type = RepairType.query.get(int(repair_type_ids[0]))
+        task_title = first_repair_type.name if first_repair_type else "Trabajo"
+
         if not task_title:
             raise ValueError("Debe indicar el trabajo a realizar.")
+
+        if equipment_type_id:
+            equipment_type = EquipmentType.query.get(int(equipment_type_id))
+
+            if equipment_type and equipment_type.code == "CONTENEDOR":
+                if not re.match(r"^[A-Z]{4}-\d{6}-\d{1}$", container_number):
+                    raise ValueError("Ingrese un contenedor con formato correcto.")
+
+                equipment_id = None
+                equipment_code_snapshot = container_number
 
         work_order = create_work_order(
             number="",
@@ -263,7 +283,6 @@ def create_work_order_action():
             commit=True,
         )
 
-        # Crear trabajos adicionales desde la segunda línea en adelante
         for i in range(1, len(repair_type_ids)):
             rt_id = repair_type_ids[i]
             mech_id = mechanic_ids[i] if i < len(mechanic_ids) else None

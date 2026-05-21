@@ -74,29 +74,65 @@
 
                 <!-- EQUIPO -->
                 <div class="col-12 col-md-6">
-                    <label class="form-label fw-semibold">Equipo (opcional)</label>
-                    <input type="hidden" name="equipment_id" id="equipment_id" value="">
-                    <input
-                        type="text"
-                        class="form-control"
-                        name="equipment_code_snapshot"
-                        id="equipment_search"
-                        list="equipment_list"
-                        placeholder="Busque por código o descripción del equipo"
-                        autocomplete="off"
+
+                    <label class="form-label fw-semibold">
+                        Tipo de equipo (opcional)
+                    </label>
+
+                    <select
+                        class="form-select mb-3"
+                        name="equipment_type_id"
+                        id="equipment_type_id"
                     >
-                    <datalist id="equipment_list">
-                        {% if equipments %}
-                            {% for equipment in equipments %}
+                        <option value="">Seleccione tipo...</option>
+
+                        {% if equipment_types %}
+                            {% for equipment_type in equipment_types %}
                                 <option
-                                    value="{{ equipment.code }} - {{ equipment.description or equipment.equipment_type or equipment.size_label or '' }}"
-                                    data-id="{{ equipment.id }}"
-                                ></option>
+                                    value="{{ equipment_type.id }}"
+                                    data-code="{{ equipment_type.code }}"
+                                >
+                                    {{ equipment_type.name }}
+                                </option>
                             {% endfor %}
                         {% endif %}
-                    </datalist>
+                    </select>
 
+                    <!-- SELECT EQUIPOS -->
+                    <div id="equipmentSelectWrapper" class="d-none">
+
+                        <label class="form-label fw-semibold">
+                            Equipo
+                        </label>
+
+                        <select
+                            class="form-select"
+                            name="equipment_id"
+                            id="equipment_id"
+                        >
+                            <option value="">Seleccione equipo...</option>
+
+                            {% if equipments %}
+                                {% for equipment in equipments %}
+                                    <option
+                                        value="{{ equipment.id }}"
+                                        data-type-id="{{ equipment.equipment_type_id or '' }}"
+                                        data-code="{{ equipment.code }}"
+                                    >
+                                        {{ equipment.code }}
+                                        {% if equipment.description %}
+                                            - {{ equipment.description }}
+                                        {% endif %}
+                                    </option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+
+                    </div>
+
+                    <!-- INPUT CONTENEDOR -->
                     <div class="mt-3 d-none" id="containerInputWrapper">
+
                         <label class="form-label fw-semibold">
                             Número de contenedor
                         </label>
@@ -105,6 +141,7 @@
                             type="text"
                             class="form-control"
                             id="container_number"
+                            name="container_number"
                             placeholder="MSCU-123456-7"
                             maxlength="13"
                             autocomplete="off"
@@ -114,10 +151,23 @@
                             Formato requerido: ABCD-123456-7
                         </div>
 
-                        <div class="text-danger small mt-1 d-none" id="containerError">
+                        <div
+                            class="text-danger small mt-1 d-none"
+                            id="containerError"
+                        >
                             Ingrese un contenedor con formato correcto.
                         </div>
+
                     </div>
+
+                    <!-- SNAPSHOT -->
+                    <input
+                        type="hidden"
+                        name="equipment_code_snapshot"
+                        id="equipment_code_snapshot"
+                        value=""
+                    >
+
                 </div>
 
                 <!-- OBSERVACIONES -->
@@ -143,52 +193,143 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
 
-    const equipmentInput = document.getElementById("equipment_search");
-    const equipmentIdInput = document.getElementById("equipment_id");
-    const equipmentOptions = document.querySelectorAll("#equipment_list option");
+    const equipmentTypeSelect =
+        document.getElementById("equipment_type_id");
 
-    const containerInputWrapper = document.getElementById("containerInputWrapper");
-    const containerInput = document.getElementById("container_number");
-    const containerError = document.getElementById("containerError");
+    const equipmentSelectWrapper =
+        document.getElementById("equipmentSelectWrapper");
+
+    const equipmentSelect =
+        document.getElementById("equipment_id");
+
+    const equipmentCodeSnapshotInput =
+        document.getElementById("equipment_code_snapshot");
+
+    const containerInputWrapper =
+        document.getElementById("containerInputWrapper");
+
+    const containerInput =
+        document.getElementById("container_number");
+
+    const containerError =
+        document.getElementById("containerError");
+
+    const allEquipmentOptions = Array.from(
+        equipmentSelect.querySelectorAll("option")
+    );
 
     const repairTypeMechanicsMap = JSON.parse(
         '{{ repair_type_mechanics_map | default({}) | tojson | safe }}'
     );
 
-    function syncEquipmentSelection() {
-        const selectedValue = equipmentInput.value.trim();
-        let selectedId = "";
+    function getSelectedEquipmentTypeCode() {
 
-        equipmentOptions.forEach(function (option) {
-            if (option.value === selectedValue) {
-                selectedId = option.dataset.id || "";
+        const selectedOption =
+            equipmentTypeSelect.options[
+                equipmentTypeSelect.selectedIndex
+            ];
+
+        if (!selectedOption) {
+            return "";
+        }
+
+        return (
+            selectedOption.dataset.code || ""
+        ).toUpperCase();
+    }
+
+    function isContainerTypeSelected() {
+        return getSelectedEquipmentTypeCode() === "CONTENEDOR";
+    }
+
+    function resetEquipmentSelect() {
+
+        equipmentSelect.innerHTML = "";
+
+        const defaultOption =
+            document.createElement("option");
+
+        defaultOption.value = "";
+        defaultOption.textContent =
+            "Seleccione equipo...";
+
+        equipmentSelect.appendChild(defaultOption);
+    }
+
+    function filterEquipmentByType() {
+
+        const selectedTypeId =
+            equipmentTypeSelect.value;
+
+        resetEquipmentSelect();
+
+        allEquipmentOptions.forEach(function(option) {
+
+            if (!option.value) {
+                return;
+            }
+
+            if (
+                option.dataset.typeId === selectedTypeId
+            ) {
+                equipmentSelect.appendChild(
+                    option.cloneNode(true)
+                );
             }
         });
-
-        equipmentIdInput.value = selectedId;
-        toggleContainerInput();
     }
 
-    function isContainerSelected() {
-        const value = equipmentInput.value.trim().toUpperCase();
-        return value.includes("CONTENEDOR");
-    }
+    function toggleEquipmentFields() {
 
-    function toggleContainerInput() {
-        if (isContainerSelected()) {
-            containerInputWrapper.classList.remove("d-none");
-        } else {
+        equipmentCodeSnapshotInput.value = "";
+
+        containerInput.value = "";
+
+        containerError.classList.add("d-none");
+
+        if (!equipmentTypeSelect.value) {
+
+            equipmentSelectWrapper.classList.add("d-none");
+
             containerInputWrapper.classList.add("d-none");
-            containerInput.value = "";
-            containerError.classList.add("d-none");
+
+            resetEquipmentSelect();
+
+            return;
         }
+
+        if (isContainerTypeSelected()) {
+
+            equipmentSelectWrapper.classList.add("d-none");
+
+            containerInputWrapper.classList.remove("d-none");
+
+            resetEquipmentSelect();
+
+            return;
+        }
+
+        containerInputWrapper.classList.add("d-none");
+
+        equipmentSelectWrapper.classList.remove("d-none");
+
+        filterEquipmentByType();
     }
 
     function formatContainer(value) {
-        value = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-        let letters = value.substring(0, 4).replace(/[^A-Z]/g, "");
-        let numbers = value.substring(4).replace(/[^0-9]/g, "").substring(0, 7);
+        value = value
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, "");
+
+        let letters =
+            value.substring(0, 4)
+            .replace(/[^A-Z]/g, "");
+
+        let numbers =
+            value.substring(4)
+            .replace(/[^0-9]/g, "")
+            .substring(0, 7);
 
         let formatted = letters;
 
@@ -197,10 +338,17 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         if (numbers.length > 0) {
+
             if (numbers.length <= 6) {
+
                 formatted += numbers;
+
             } else {
-                formatted += numbers.substring(0, 6) + "-" + numbers.substring(6, 7);
+
+                formatted +=
+                    numbers.substring(0, 6)
+                    + "-"
+                    + numbers.substring(6, 7);
             }
         }
 
@@ -211,20 +359,53 @@ document.addEventListener("DOMContentLoaded", function () {
         return /^[A-Z]{4}-\d{6}-\d{1}$/.test(value);
     }
 
-    equipmentInput.addEventListener("input", syncEquipmentSelection);
-    equipmentInput.addEventListener("change", syncEquipmentSelection);
+    equipmentTypeSelect.addEventListener(
+        "change",
+        toggleEquipmentFields
+    );
 
-    containerInput.addEventListener("input", function () {
-        const formatted = formatContainer(this.value);
-        this.value = formatted;
-        equipmentInput.value = formatted;
+    equipmentSelect.addEventListener(
+        "change",
+        function () {
 
-        if (formatted.length === 13 && !isValidContainer(formatted)) {
-            containerError.classList.remove("d-none");
-        } else {
-            containerError.classList.add("d-none");
+            const selectedOption =
+                equipmentSelect.options[
+                    equipmentSelect.selectedIndex
+                ];
+
+            equipmentCodeSnapshotInput.value =
+                selectedOption &&
+                selectedOption.dataset.code
+                    ? selectedOption.dataset.code
+                    : "";
         }
-    });
+    );
+
+    containerInput.addEventListener(
+        "input",
+        function () {
+
+            const formatted =
+                formatContainer(this.value);
+
+            this.value = formatted;
+
+            equipmentCodeSnapshotInput.value =
+                formatted;
+
+            if (
+                formatted.length === 13
+                && !isValidContainer(formatted)
+            ) {
+
+                containerError.classList.remove("d-none");
+
+            } else {
+
+                containerError.classList.add("d-none");
+            }
+        }
+    );
 
     function bindRepairTypeChange(row) {
         const repairSelect = row.querySelector(".repair-type-select");
@@ -279,7 +460,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     document.getElementById("addTaskRowBtn").addEventListener("click", addTaskRow);
 
-    toggleContainerInput();
+    toggleEquipmentFields();
 });
 </script>
 
