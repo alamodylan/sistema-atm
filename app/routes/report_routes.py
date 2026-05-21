@@ -455,8 +455,7 @@ def _build_equipment_work_orders_query(equipment_code="", date_from="", date_to=
             ).label("total_cost"),
         )
         .filter(InventoryLedger.reference_id.isnot(None))
-        .filter(InventoryLedger.reference_type.isnot(None))
-        .filter(func.upper(InventoryLedger.reference_type).like("%WORK_ORDER%"))
+        .filter(InventoryLedger.reference_type == "WORK_ORDER")
         .group_by(InventoryLedger.reference_id)
         .subquery()
     )
@@ -473,7 +472,6 @@ def _build_equipment_work_orders_query(equipment_code="", date_from="", date_to=
         .options(
             selectinload(WorkOrder.warehouse),
             selectinload(WorkOrder.responsible_user),
-            selectinload(WorkOrder.repair_type),
         )
     )
 
@@ -601,7 +599,7 @@ def export_equipment_work_orders_report():
                 work_order.created_at.strftime("%Y-%m-%d %H:%M") if work_order.created_at else "",
                 work_order.number or "",
                 work_order.status or "",
-                work_order.repair_type.name if work_order.repair_type else "",
+                "",
                 work_order.responsible_user.full_name if work_order.responsible_user else "",
                 float(row.total_cost or 0),
                 work_order.warehouse.name if work_order.warehouse else "",
