@@ -130,7 +130,7 @@
 (function () {
     let scanBuffer = "";
     let scanTimer = null;
-    let autosaveTimer = null;
+    let lastSyncTime = null;
 
     function normalizeCode(value) {
         return String(value || "").trim().toUpperCase();
@@ -138,6 +138,7 @@
 
     function clearScanBuffer() {
         scanBuffer = "";
+
         if (scanTimer) {
             clearTimeout(scanTimer);
             scanTimer = null;
@@ -269,7 +270,6 @@
         }
 
         input.dataset.saving = "1";
-
         input.value = value;
 
         updateDifferenceVisual(input);
@@ -292,6 +292,8 @@
 
             if (!result.ok) {
                 alert(result.message || "No se pudo guardar la cantidad.");
+                input.classList.remove("border-success");
+                input.classList.add("border-danger");
                 return;
             }
 
@@ -300,39 +302,52 @@
                 const cell = row.querySelector(".diff");
                 const diff = parseFloat(result.difference_quantity);
 
-                cell.innerText = Number.isFinite(diff) ? diff.toFixed(2) : result.difference_quantity;
+                cell.innerText = Number.isFinite(diff)
+                    ? diff.toFixed(2)
+                    : result.difference_quantity;
             }
+
+            input.classList.remove("border-danger", "border-success");
+
+            void input.offsetWidth;
+
+            input.classList.add("border-success");
 
         } catch (error) {
             input.dataset.saving = "0";
+            input.classList.remove("border-success");
+            input.classList.add("border-danger");
             alert("Error guardando la cantidad.");
         }
     }
 
-    function triggerAutosave(inputElement) {
-
-        if (autosaveTimer) {
-            clearTimeout(autosaveTimer);
+    function triggerAutosave(inputElement, immediate = false) {
+        if (inputElement._autosaveTimer) {
+            clearTimeout(inputElement._autosaveTimer);
         }
 
-        autosaveTimer = setTimeout(() => {
-
+        const executeSave = () => {
             saveQuantity(inputElement).then(() => {
                 clearScanBuffer();
-
-                inputElement.classList.remove("border-success");
-
-                void inputElement.offsetWidth;
-
-                inputElement.classList.add("border-success");
             });
+        };
 
-        }, 350);
+        if (immediate) {
+            executeSave();
+            return;
+        }
+
+        inputElement._autosaveTimer = setTimeout(() => {
+            executeSave();
+        }, 250);
     }
 
     document.addEventListener("keydown", function (event) {
         const active = document.activeElement;
-        const isCountingInput = active && active.classList && active.classList.contains("qty-input");
+        const isCountingInput =
+            active &&
+            active.classList &&
+            active.classList.contains("qty-input");
 
         if (isCountingInput) {
             return;
@@ -385,10 +400,12 @@
             if (event.key === "Enter") {
                 event.preventDefault();
 
-                saveQuantity(this).then(() => {
+                triggerAutosave(this, true);
+
+                setTimeout(() => {
                     this.blur();
                     clearScanBuffer();
-                });
+                }, 50);
 
                 return;
             }
@@ -404,9 +421,11 @@
 
             if (event.key === "." || event.key === ",") {
                 const currentValue = this.value || "";
+
                 if (currentValue.includes(".") || currentValue.includes(",")) {
                     event.preventDefault();
                 }
+
                 return;
             }
 
@@ -416,7 +435,7 @@
         });
 
         input.addEventListener("change", function () {
-            triggerAutosave(this);
+            triggerAutosave(this, true);
         });
 
         input.addEventListener("input", function () {
@@ -424,7 +443,7 @@
         });
 
         input.addEventListener("blur", function () {
-            triggerAutosave(this);
+            triggerAutosave(this, true);
         });
 
         input.addEventListener("touchend", function () {
@@ -436,6 +455,71 @@
             this.select();
         });
     });
+
+    function updateLineFromServer(serverLine) {
+        const input = document.querySelector(
+            `.qty-input[data-line-id="${serverLine.line_id}"]`
+        );
+
+        if (!input) {
+            return;
+        }
+
+        if (document.activeElement === input) {
+            return;
+        }
+
+        input.value = serverLine.physical_quantity || "";
+
+        updateDifferenceVisual(input);
+
+        const row = input.closest("tr");
+
+        if (!row) {
+            return;
+        }
+
+        row.classList.remove("table-success", "table-info");
+
+        void row.offsetWidth;
+
+        row.classList.add("table-success");
+
+        setTimeout(() => {
+            row.classList.remove("table-success");
+        }, 2000);
+    }
+
+    async function syncChanges() {
+        try {
+            let url =
+                "{{ url_for('physical_inventory.get_changes', inventory_id=inventory.id) }}";
+
+            if (lastSyncTime) {
+                url += "?since=" + encodeURIComponent(lastSyncTime);
+            }
+
+            const response = await fetch(url);
+            const result = await response.json();
+
+            if (!result.ok) {
+                return;
+            }
+
+            if (result.lines && result.lines.length > 0) {
+                result.lines.forEach((line) => {
+                    updateLineFromServer(line);
+                });
+            }
+
+            if (result.server_time) {
+                lastSyncTime = result.server_time;
+            }
+
+        } catch (error) {
+            console.error("SYNC ERROR", error);
+        }
+    }
 
     const focusCode = new URLSearchParams(window.location.search).get("focus_code");
 
@@ -455,6 +539,10 @@
             }
         }, 400);
     }
+
+    setInterval(() => {
+        syncChanges();
+    }, 7000);
 })();
 </script>
 

@@ -203,7 +203,7 @@ def find_line(inventory_id: int):
     if not code:
         return jsonify({"ok": False, "message": "Código vacío."}), 400
 
-    per_page = 100
+    per_page = 5000
 
     query = (
         PhysicalInventoryLine.query
@@ -300,6 +300,66 @@ def update_line():
         "difference_quantity": str(difference_quantity),
     }
 
+@physical_inventory_bp.route("/<int:inventory_id>/changes")
+@login_required
+def get_changes(inventory_id: int):
+
+    inventory = PhysicalInventory.query.get_or_404(inventory_id)
+
+    since = request.args.get("since")
+
+    query = (
+        PhysicalInventoryLine.query
+        .filter(
+            PhysicalInventoryLine.physical_inventory_id == inventory.id,
+            PhysicalInventoryLine.counted_at.isnot(None),
+        )
+    )
+
+    # =============================================
+    # SOLO CAMBIOS NUEVOS
+    # =============================================
+
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since)
+            query = query.filter(
+                PhysicalInventoryLine.counted_at > since_dt
+            )
+        except Exception:
+            pass
+
+    lines = (
+        query
+        .order_by(PhysicalInventoryLine.counted_at.asc())
+        .all()
+    )
+
+    return jsonify({
+        "ok": True,
+        "server_time": datetime.now(UTC).isoformat(),
+        "lines": [
+            {
+                "line_id": line.id,
+                "physical_quantity": (
+                    str(line.physical_quantity)
+                    if line.physical_quantity is not None
+                    else ""
+                ),
+                "difference_quantity": (
+                    str(line.difference_quantity)
+                    if line.difference_quantity is not None
+                    else ""
+                ),
+                "counted_at": (
+                    line.counted_at.isoformat()
+                    if line.counted_at
+                    else None
+                ),
+            }
+            for line in lines
+        ]
+    })
 
 @physical_inventory_bp.route("/<int:inventory_id>/close", methods=["POST"])
 @login_required
