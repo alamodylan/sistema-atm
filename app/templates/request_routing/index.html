@@ -320,19 +320,13 @@ Configuración de solicitudes
 
                                     <button
                                         type="button"
-                                        class="btn btn-sm btn-outline-primary"
-                                        onclick='editRoutingRule(
-                                            {{ rule.id }},
-                                            {{ rule.origin_site_id }},
-                                            "{{ rule.request_type }}",
-                                            "{{ rule.routing_mode }}",
-                                            {% if rule.target_site_id %}
-                                                {{ rule.target_site_id }}
-                                            {% else %}
-                                                null
-                                            {% endif %},
-                                            {{ "true" if rule.is_active else "false" }}
-                                        )'
+                                        class="btn btn-sm btn-outline-primary btn-edit-routing"
+                                        data-id="{{ rule.id }}"
+                                        data-origin-site-id="{{ rule.origin_site_id }}"
+                                        data-request-type="{{ rule.request_type }}"
+                                        data-routing-mode="{{ rule.routing_mode }}"
+                                        data-target-site-id="{{ rule.target_site_id or '' }}"
+                                        data-is-active="{{ 'true' if rule.is_active else 'false' }}"
                                     >
                                         Editar
                                     </button>
@@ -440,31 +434,38 @@ function resetRoutingForm() {
 }
 
 
-function editRoutingRule(
-    id,
-    originSiteId,
-    requestType,
-    routingMode,
-    targetSiteId,
-    isActive
-) {
+document.querySelectorAll(".btn-edit-routing").forEach((button) => {
 
-    document.getElementById("rule_id").value = id;
+    button.addEventListener("click", () => {
 
-    document.getElementById("origin_site_id").value = originSiteId;
+        document.getElementById("rule_id").value =
+            button.dataset.id;
 
-    document.getElementById("request_type").value = requestType;
+        document.getElementById("origin_site_id").value =
+            button.dataset.originSiteId;
 
-    document.getElementById("routing_mode").value = routingMode;
+        document.getElementById("request_type").value =
+            button.dataset.requestType;
 
-    toggleTargetSite();
+        document.getElementById("routing_mode").value =
+            button.dataset.routingMode;
 
-    if (targetSiteId) {
-        document.getElementById("target_site_id").value = targetSiteId;
-    }
+        toggleTargetSite();
 
-    document.getElementById("is_active").checked = isActive;
-}
+        document.getElementById("target_site_id").value =
+            button.dataset.targetSiteId || "";
+
+        document.getElementById("is_active").checked =
+            button.dataset.isActive === "true";
+
+        window.scrollTo({
+            top: 0,
+            behavior: "smooth"
+        });
+
+    });
+
+});
 
 </script>
 

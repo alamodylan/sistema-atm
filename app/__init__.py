@@ -1,4 +1,4 @@
-from flask import Flask, app, render_template, session
+from flask import Flask, render_template, session, send_from_directory, make_response
 from flask_login import current_user
 
 from .config import Config
@@ -6,7 +6,6 @@ from .extensions import db, jwt, login_manager, migrate
 from .models.user import User
 from .models.site import Site
 from app.routes.bulk_routes import bulk_bp
-from .routes.purchases_routes import purchases_bp
 from app.models.user_site_access import UserSiteAccess
 
 
@@ -53,14 +52,6 @@ def create_app():
     from app.routes.tool_loans_routes import tool_loans_bp
     from app.routes.request_routing_routes import request_routing_bp
 
-
-
-
-
-
-
-
-
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(dashboard_bp, url_prefix="/")
     app.register_blueprint(articles_bp, url_prefix="/articles")
@@ -79,7 +70,9 @@ def create_app():
     app.register_blueprint(physical_inventory_bp)
     app.register_blueprint(inventory_adjustments_bp)
     app.register_blueprint(kardex_bp)
-    app.jinja_env.filters["cr_datetime"] = format_costa_rica_datetime  
+
+    app.jinja_env.filters["cr_datetime"] = format_costa_rica_datetime
+
     app.register_blueprint(audit_bp)
     app.register_blueprint(stats_bp)
     app.register_blueprint(equipment_stats_bp)
@@ -90,8 +83,16 @@ def create_app():
     app.register_blueprint(tool_loans_bp)
     app.register_blueprint(request_routing_bp)
 
+    @app.route("/service-worker.js")
+    def service_worker():
+        response = make_response(
+            send_from_directory("static", "service-worker.js")
+        )
 
+        response.headers["Content-Type"] = "application/javascript"
+        response.headers["Service-Worker-Allowed"] = "/"
 
+        return response
 
     @app.errorhandler(403)
     def forbidden_error(error):
