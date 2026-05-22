@@ -1259,14 +1259,11 @@ def import_location_stock(
 
 def import_article_suppliers(rows: list[dict]):
     created = 0
-    existing = 0
-    articles_created = 0
     suppliers_created = 0
     skipped = 0
 
-    article_codes = set()
+    links = set()
     supplier_names = set()
-    normalized_links = []
 
     for row in rows:
         codigo = _clean(row.get("codigo_articulo"))
@@ -1275,22 +1272,20 @@ def import_article_suppliers(rows: list[dict]):
             skipped += 1
             continue
 
-        article_codes.add(codigo)
-
         for i in range(1, 11):
-            proveedor_nombre = _clean(row.get(f"proveedor_{i}"))
+            proveedor = _clean(row.get(f"proveedor_{i}"))
 
-            if not proveedor_nombre:
+            if not proveedor:
                 continue
 
-            supplier_names.add(proveedor_nombre)
+            if len(proveedor) > 200:
+                skipped += 1
+                continue
 
-            normalized_links.append({
-                "article_code": codigo,
-                "supplier_name": proveedor_nombre,
-            })
+            links.add((codigo, proveedor))
+            supplier_names.add(proveedor)
 
-    if not normalized_links:
+    if not links:
         return {
             "created": 0,
             "existing": 0,
@@ -1299,109 +1294,136 @@ def import_article_suppliers(rows: list[dict]):
             "skipped": skipped,
         }
 
-    articles_map = {
-        article.code: article.id
-        for article in Article.query
-        .filter(Article.code.in_(article_codes))
-        .all()
-    }
+    try:
+        # =====================================================
+        # TABLA TEMPORAL
+        # =====================================================
+        db.session.execute(db.text("""
+            CREATE TEMP TABLE tmp_article_suppliers_import (
+                article_code VARCHAR(100),
+                supplier_name VARCHAR(200)
+            ) ON COMMIT DROP
+        """))
 
-    suppliers_map = {
-        supplier.commercial_name: supplier.id
-        for supplier in Supplier.query
-        .filter(Supplier.commercial_name.in_(supplier_names))
-        .all()
-    }
+        # =====================================================
+        # INSERTAR DATOS DEL EXCEL A TEMP
+        # =====================================================
+        rows_to_temp = [
+            {
+                "article_code": article_code,
+                "supplier_name": supplier_name,
+            }
+            for article_code, supplier_name in links
+        ]
 
-    missing_suppliers = [
-        Supplier(commercial_name=name)
-        for name in supplier_names
-        if name not in suppliers_map
-    ]
+        BATCH_SIZE = 1000
 
-    if missing_suppliers:
-        db.session.bulk_save_objects(missing_suppliers)
+        for start in range(0, len(rows_to_temp), BATCH_SIZE):
+            batch = rows_to_temp[start:start + BATCH_SIZE]
+
+            db.session.execute(
+                db.text("""
+                    INSERT INTO tmp_article_suppliers_import (
+                        article_code,
+                        supplier_name
+                    )
+                    VALUES (
+                        :article_code,
+                        :supplier_name
+                    )
+                """),
+                batch,
+            )
+
+        # =====================================================
+        # CREAR PROVEEDORES FALTANTES
+        # =====================================================
+        result = db.session.execute(db.text("""
+            INSERT INTO atm.suppliers (
+                commercial_name,
+                is_active,
+                created_at
+            )
+            SELECT DISTINCT
+                t.supplier_name,
+                TRUE,
+                NOW()
+            FROM tmp_article_suppliers_import t
+            LEFT JOIN atm.suppliers s
+                ON s.commercial_name = t.supplier_name
+            WHERE s.id IS NULL
+            RETURNING id
+        """))
+
+        suppliers_created = len(result.fetchall())
+
+        # =====================================================
+        # CONTAR RELACIONES EXISTENTES
+        # =====================================================
+        existing_result = db.session.execute(db.text("""
+            SELECT COUNT(*)
+            FROM tmp_article_suppliers_import t
+            JOIN atm.articles a
+                ON a.code = t.article_code
+            JOIN atm.suppliers s
+                ON s.commercial_name = t.supplier_name
+            JOIN atm.article_suppliers aps
+                ON aps.article_id = a.id
+               AND aps.supplier_id = s.id
+        """))
+
+        existing = existing_result.scalar() or 0
+
+        # =====================================================
+        # INSERTAR RELACIONES NUEVAS
+        # =====================================================
+        insert_result = db.session.execute(db.text("""
+            INSERT INTO atm.article_suppliers (
+                article_id,
+                supplier_id
+            )
+            SELECT DISTINCT
+                a.id,
+                s.id
+            FROM tmp_article_suppliers_import t
+            JOIN atm.articles a
+                ON a.code = t.article_code
+            JOIN atm.suppliers s
+                ON s.commercial_name = t.supplier_name
+            LEFT JOIN atm.article_suppliers aps
+                ON aps.article_id = a.id
+               AND aps.supplier_id = s.id
+            WHERE aps.id IS NULL
+        """))
+
+        created = insert_result.rowcount or 0
+
+        # =====================================================
+        # CONTAR OMITIDOS POR ARTÍCULO NO EXISTENTE
+        # =====================================================
+        skipped_result = db.session.execute(db.text("""
+            SELECT COUNT(*)
+            FROM tmp_article_suppliers_import t
+            LEFT JOIN atm.articles a
+                ON a.code = t.article_code
+            WHERE a.id IS NULL
+        """))
+
+        skipped += skipped_result.scalar() or 0
+
         db.session.commit()
 
-        suppliers_map = {
-            supplier.commercial_name: supplier.id
-            for supplier in Supplier.query
-            .filter(Supplier.commercial_name.in_(supplier_names))
-            .all()
-        }
-
-        suppliers_created = len(missing_suppliers)
-
-    relation_keys = set()
-
-    for link in normalized_links:
-        article_id = articles_map.get(link["article_code"])
-        supplier_id = suppliers_map.get(link["supplier_name"])
-
-        if not article_id or not supplier_id:
-            skipped += 1
-            continue
-
-        relation_keys.add((article_id, supplier_id))
-
-    if not relation_keys:
         return {
-            "created": 0,
-            "existing": 0,
+            "created": created,
+            "existing": existing,
             "articles_created": 0,
             "suppliers_created": suppliers_created,
             "skipped": skipped,
         }
 
-    article_ids = {key[0] for key in relation_keys}
-    supplier_ids = {key[1] for key in relation_keys}
-
-    existing_relation_keys = set(
-        db.session.query(
-            ArticleSupplier.article_id,
-            ArticleSupplier.supplier_id,
-        )
-        .filter(
-            ArticleSupplier.article_id.in_(article_ids),
-            ArticleSupplier.supplier_id.in_(supplier_ids),
-        )
-        .all()
-    )
-
-    rows_to_insert = []
-
-    for article_id, supplier_id in relation_keys:
-        if (article_id, supplier_id) in existing_relation_keys:
-            existing += 1
-            continue
-
-        rows_to_insert.append({
-            "article_id": article_id,
-            "supplier_id": supplier_id,
-        })
-
-    if rows_to_insert:
-        BATCH_SIZE = 1000
-
-        for start in range(0, len(rows_to_insert), BATCH_SIZE):
-            batch = rows_to_insert[start:start + BATCH_SIZE]
-
-            db.session.execute(
-                ArticleSupplier.__table__.insert(),
-                batch,
-            )
-
-            db.session.commit()
-
-            created += len(batch)
-
-    return {
-        "created": created,
-        "existing": existing,
-        "articles_created": articles_created,
-        "suppliers_created": suppliers_created,
-        "skipped": skipped,
-    }
+    except Exception:
+        db.session.rollback()
+        raise
 
 # =========================================================
 # ARTÍCULOS - ACTUALIZAR SOLO CATEGORÍA / SUBCATEGORÍA
