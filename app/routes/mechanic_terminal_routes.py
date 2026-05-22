@@ -949,7 +949,7 @@ def search_articles(warehouse_id):
     try:
         q = (request.args.get("q") or "").strip().upper()
 
-        if not q:
+        if not q or len(q) < 2:
             return jsonify({"items": []})
 
         items = get_inventory_by_warehouse(warehouse_id)
@@ -966,7 +966,8 @@ def search_articles(warehouse_id):
             code = str(i["code"] or "").upper()
             name = str(i["name"] or "").upper()
 
-            if q in code or q in name:
+            # Prioridad: que el código empiece igual
+            if code.startswith(q):
                 results.append({
                     "article_id": i["article_id"],
                     "code": i["code"],
@@ -974,8 +975,30 @@ def search_articles(warehouse_id):
                     "stock": i["quantity_on_hand"],
                 })
 
-            if len(results) >= 30:
+            if len(results) >= 20:
                 break
+
+        # Si no encontró por código, busca por nombre
+        if not results and len(q) >= 3:
+            for i in items:
+                if float(i["quantity_on_hand"]) <= 0:
+                    continue
+
+                if _is_tool_article_code(i["code"]):
+                    continue
+
+                name = str(i["name"] or "").upper()
+
+                if q in name:
+                    results.append({
+                        "article_id": i["article_id"],
+                        "code": i["code"],
+                        "name": i["name"],
+                        "stock": i["quantity_on_hand"],
+                    })
+
+                if len(results) >= 20:
+                    break
 
         return jsonify({"items": results})
 
