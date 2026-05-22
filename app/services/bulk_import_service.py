@@ -1360,22 +1360,9 @@ def import_article_suppliers(rows: list[dict]):
         article = articles_map.get(codigo)
 
         if not article:
-
-            if not nombre:
-                continue
-
-            article = Article(
-                code=codigo,
-                name=nombre,
-                unit_id=default_unit.id,
-            )
-
-            db.session.add(article)
-            db.session.flush()
-
-            articles_map[codigo] = article
-
-            articles_created += 1
+            # En esta carga NO se crean artículos.
+            # Solo se relacionan proveedores con artículos existentes.
+            continue
 
         # =================================================
         # PROVEEDORES
