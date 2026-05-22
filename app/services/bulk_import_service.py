@@ -1258,29 +1258,109 @@ def import_location_stock(
     return {"created": created, "updated": updated, "skipped": skipped}
 
 def import_article_suppliers(rows: list[dict]):
+
     created = 0
     existing = 0
     articles_created = 0
     suppliers_created = 0
 
-    # ⚠️ unidad por defecto (VALIDAR QUE EXISTA EN BD)
+    # =====================================================
+    # UNIDAD DEFAULT
+    # =====================================================
+
     default_unit = Unit.query.filter_by(code="UND").first()
+
     if not default_unit:
         raise Exception("No existe unidad 'UND' en la BD.")
 
+    # =====================================================
+    # PRECARGAR ARTÍCULOS
+    # =====================================================
+
+    article_codes = set()
+
+    supplier_names = set()
+
     for row in rows:
-        codigo = str(row.get("codigo_articulo", "")).strip()
-        nombre = str(row.get("nombre_articulo", "")).strip()
+
+        codigo = str(
+            row.get("codigo_articulo", "")
+        ).strip()
+
+        if codigo:
+            article_codes.add(codigo)
+
+        for i in range(1, 11):
+
+            proveedor = str(
+                row.get(f"proveedor_{i}", "")
+            ).strip()
+
+            if proveedor:
+                supplier_names.add(proveedor)
+
+    existing_articles = (
+        Article.query
+        .filter(Article.code.in_(article_codes))
+        .all()
+    )
+
+    articles_map = {
+        a.code: a
+        for a in existing_articles
+    }
+
+    existing_suppliers = (
+        Supplier.query
+        .filter(
+            Supplier.commercial_name.in_(supplier_names)
+        )
+        .all()
+    )
+
+    suppliers_map = {
+        s.commercial_name: s
+        for s in existing_suppliers
+    }
+
+    # =====================================================
+    # PRECARGAR RELACIONES
+    # =====================================================
+
+    existing_relations = set(
+        db.session.query(
+            ArticleSupplier.article_id,
+            ArticleSupplier.supplier_id,
+        ).all()
+    )
+
+    # =====================================================
+    # CREAR NUEVAS RELACIONES EN MEMORIA
+    # =====================================================
+
+    new_relations = []
+
+    for row in rows:
+
+        codigo = str(
+            row.get("codigo_articulo", "")
+        ).strip()
+
+        nombre = str(
+            row.get("nombre_articulo", "")
+        ).strip()
 
         if not codigo:
             continue
 
-        # =========================
+        # =================================================
         # ARTÍCULO
-        # =========================
-        article = Article.query.filter_by(code=codigo).first()
+        # =================================================
+
+        article = articles_map.get(codigo)
 
         if not article:
+
             if not nombre:
                 continue
 
@@ -1289,49 +1369,84 @@ def import_article_suppliers(rows: list[dict]):
                 name=nombre,
                 unit_id=default_unit.id,
             )
+
             db.session.add(article)
             db.session.flush()
+
+            articles_map[codigo] = article
+
             articles_created += 1
 
-        # =========================
+        # =================================================
         # PROVEEDORES
-        # =========================
+        # =================================================
+
         for i in range(1, 11):
-            proveedor_nombre = str(row.get(f"proveedor_{i}", "")).strip()
+
+            proveedor_nombre = str(
+                row.get(f"proveedor_{i}", "")
+            ).strip()
 
             if not proveedor_nombre:
                 continue
 
-            supplier = Supplier.query.filter_by(
-                commercial_name=proveedor_nombre
-            ).first()
+            supplier = suppliers_map.get(
+                proveedor_nombre
+            )
+
+            # =============================================
+            # CREAR PROVEEDOR
+            # =============================================
 
             if not supplier:
+
                 supplier = Supplier(
                     commercial_name=proveedor_nombre,
                 )
+
                 db.session.add(supplier)
                 db.session.flush()
+
+                suppliers_map[
+                    proveedor_nombre
+                ] = supplier
+
                 suppliers_created += 1
 
-            # =========================
-            # RELACIÓN
-            # =========================
-            relation = ArticleSupplier.query.filter_by(
-                article_id=article.id,
-                supplier_id=supplier.id,
-            ).first()
+            # =============================================
+            # VALIDAR RELACIÓN EXISTENTE
+            # =============================================
 
-            if relation:
+            relation_key = (
+                article.id,
+                supplier.id,
+            )
+
+            if relation_key in existing_relations:
                 existing += 1
                 continue
 
-            relation = ArticleSupplier(
-                article_id=article.id,
-                supplier_id=supplier.id,
+            new_relations.append(
+                ArticleSupplier(
+                    article_id=article.id,
+                    supplier_id=supplier.id,
+                )
             )
-            db.session.add(relation)
+
+            existing_relations.add(
+                relation_key
+            )
+
             created += 1
+
+    # =====================================================
+    # BULK INSERT
+    # =====================================================
+
+    if new_relations:
+        db.session.bulk_save_objects(
+            new_relations
+        )
 
     db.session.commit()
 
