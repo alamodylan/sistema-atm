@@ -1258,190 +1258,149 @@ def import_location_stock(
     return {"created": created, "updated": updated, "skipped": skipped}
 
 def import_article_suppliers(rows: list[dict]):
-
     created = 0
     existing = 0
     articles_created = 0
     suppliers_created = 0
-
-    # =====================================================
-    # UNIDAD DEFAULT
-    # =====================================================
-
-    default_unit = Unit.query.filter_by(code="UND").first()
-
-    if not default_unit:
-        raise Exception("No existe unidad 'UND' en la BD.")
-
-    # =====================================================
-    # PRECARGAR ARTÍCULOS
-    # =====================================================
+    skipped = 0
 
     article_codes = set()
-
     supplier_names = set()
+    normalized_links = []
 
     for row in rows:
-
-        codigo = str(
-            row.get("codigo_articulo", "")
-        ).strip()
-
-        if codigo:
-            article_codes.add(codigo)
-
-        for i in range(1, 11):
-
-            proveedor = str(
-                row.get(f"proveedor_{i}", "")
-            ).strip()
-
-            if proveedor:
-                supplier_names.add(proveedor)
-
-    existing_articles = (
-        Article.query
-        .filter(Article.code.in_(article_codes))
-        .all()
-    )
-
-    articles_map = {
-        a.code: a
-        for a in existing_articles
-    }
-
-    existing_suppliers = (
-        Supplier.query
-        .filter(
-            Supplier.commercial_name.in_(supplier_names)
-        )
-        .all()
-    )
-
-    suppliers_map = {
-        s.commercial_name: s
-        for s in existing_suppliers
-    }
-
-    # =====================================================
-    # PRECARGAR RELACIONES
-    # =====================================================
-
-    existing_relations = set(
-        db.session.query(
-            ArticleSupplier.article_id,
-            ArticleSupplier.supplier_id,
-        ).all()
-    )
-
-    # =====================================================
-    # CREAR NUEVAS RELACIONES EN MEMORIA
-    # =====================================================
-
-    new_relations = []
-
-    for row in rows:
-
-        codigo = str(
-            row.get("codigo_articulo", "")
-        ).strip()
-
-        nombre = str(
-            row.get("nombre_articulo", "")
-        ).strip()
+        codigo = _clean(row.get("codigo_articulo"))
 
         if not codigo:
+            skipped += 1
             continue
 
-        # =================================================
-        # ARTÍCULO
-        # =================================================
-
-        article = articles_map.get(codigo)
-
-        if not article:
-            # En esta carga NO se crean artículos.
-            # Solo se relacionan proveedores con artículos existentes.
-            continue
-
-        # =================================================
-        # PROVEEDORES
-        # =================================================
+        article_codes.add(codigo)
 
         for i in range(1, 11):
-
-            proveedor_nombre = str(
-                row.get(f"proveedor_{i}", "")
-            ).strip()
+            proveedor_nombre = _clean(row.get(f"proveedor_{i}"))
 
             if not proveedor_nombre:
                 continue
 
-            supplier = suppliers_map.get(
-                proveedor_nombre
-            )
+            supplier_names.add(proveedor_nombre)
 
-            # =============================================
-            # CREAR PROVEEDOR
-            # =============================================
+            normalized_links.append({
+                "article_code": codigo,
+                "supplier_name": proveedor_nombre,
+            })
 
-            if not supplier:
+    if not normalized_links:
+        return {
+            "created": 0,
+            "existing": 0,
+            "articles_created": 0,
+            "suppliers_created": 0,
+            "skipped": skipped,
+        }
 
-                supplier = Supplier(
-                    commercial_name=proveedor_nombre,
-                )
+    articles_map = {
+        article.code: article.id
+        for article in Article.query
+        .filter(Article.code.in_(article_codes))
+        .all()
+    }
 
-                db.session.add(supplier)
-                db.session.flush()
+    suppliers_map = {
+        supplier.commercial_name: supplier.id
+        for supplier in Supplier.query
+        .filter(Supplier.commercial_name.in_(supplier_names))
+        .all()
+    }
 
-                suppliers_map[
-                    proveedor_nombre
-                ] = supplier
+    missing_suppliers = [
+        Supplier(commercial_name=name)
+        for name in supplier_names
+        if name not in suppliers_map
+    ]
 
-                suppliers_created += 1
+    if missing_suppliers:
+        db.session.bulk_save_objects(missing_suppliers)
+        db.session.commit()
 
-            # =============================================
-            # VALIDAR RELACIÓN EXISTENTE
-            # =============================================
+        suppliers_map = {
+            supplier.commercial_name: supplier.id
+            for supplier in Supplier.query
+            .filter(Supplier.commercial_name.in_(supplier_names))
+            .all()
+        }
 
-            relation_key = (
-                article.id,
-                supplier.id,
-            )
+        suppliers_created = len(missing_suppliers)
 
-            if relation_key in existing_relations:
-                existing += 1
-                continue
+    relation_keys = set()
 
-            new_relations.append(
-                ArticleSupplier(
-                    article_id=article.id,
-                    supplier_id=supplier.id,
-                )
-            )
+    for link in normalized_links:
+        article_id = articles_map.get(link["article_code"])
+        supplier_id = suppliers_map.get(link["supplier_name"])
 
-            existing_relations.add(
-                relation_key
-            )
+        if not article_id or not supplier_id:
+            skipped += 1
+            continue
 
-            created += 1
+        relation_keys.add((article_id, supplier_id))
 
-    # =====================================================
-    # BULK INSERT
-    # =====================================================
+    if not relation_keys:
+        return {
+            "created": 0,
+            "existing": 0,
+            "articles_created": 0,
+            "suppliers_created": suppliers_created,
+            "skipped": skipped,
+        }
 
-    if new_relations:
-        db.session.bulk_save_objects(
-            new_relations
+    article_ids = {key[0] for key in relation_keys}
+    supplier_ids = {key[1] for key in relation_keys}
+
+    existing_relation_keys = set(
+        db.session.query(
+            ArticleSupplier.article_id,
+            ArticleSupplier.supplier_id,
         )
+        .filter(
+            ArticleSupplier.article_id.in_(article_ids),
+            ArticleSupplier.supplier_id.in_(supplier_ids),
+        )
+        .all()
+    )
 
-    db.session.commit()
+    rows_to_insert = []
+
+    for article_id, supplier_id in relation_keys:
+        if (article_id, supplier_id) in existing_relation_keys:
+            existing += 1
+            continue
+
+        rows_to_insert.append({
+            "article_id": article_id,
+            "supplier_id": supplier_id,
+        })
+
+    if rows_to_insert:
+        BATCH_SIZE = 1000
+
+        for start in range(0, len(rows_to_insert), BATCH_SIZE):
+            batch = rows_to_insert[start:start + BATCH_SIZE]
+
+            db.session.execute(
+                ArticleSupplier.__table__.insert(),
+                batch,
+            )
+
+            db.session.commit()
+
+            created += len(batch)
 
     return {
         "created": created,
         "existing": existing,
         "articles_created": articles_created,
         "suppliers_created": suppliers_created,
+        "skipped": skipped,
     }
 
 # =========================================================
