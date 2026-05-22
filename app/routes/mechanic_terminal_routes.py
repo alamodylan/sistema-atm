@@ -942,3 +942,42 @@ def get_articles_tree(warehouse_id):
 
     except InventoryServiceError as exc:
         return jsonify({"error": str(exc)}), 400
+
+@terminal_bp.route("/articles-search/<int:warehouse_id>")
+@login_required
+def search_articles(warehouse_id):
+    try:
+        q = (request.args.get("q") or "").strip().upper()
+
+        if not q:
+            return jsonify({"items": []})
+
+        items = get_inventory_by_warehouse(warehouse_id)
+
+        results = []
+
+        for i in items:
+            if float(i["quantity_on_hand"]) <= 0:
+                continue
+
+            if _is_tool_article_code(i["code"]):
+                continue
+
+            code = str(i["code"] or "").upper()
+            name = str(i["name"] or "").upper()
+
+            if q in code or q in name:
+                results.append({
+                    "article_id": i["article_id"],
+                    "code": i["code"],
+                    "name": i["name"],
+                    "stock": i["quantity_on_hand"],
+                })
+
+            if len(results) >= 30:
+                break
+
+        return jsonify({"items": results})
+
+    except InventoryServiceError as exc:
+        return jsonify({"error": str(exc)}), 400
