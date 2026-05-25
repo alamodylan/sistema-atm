@@ -92,10 +92,18 @@
                                                 <div class="fw-semibold">{{ line.item_name }}</div>
                                                 <small class="text-muted">{{ line.item_code or '-' }}</small>
                                             </td>
-                                            <td>{{ line.currency_code }}</td>
-                                            <td>{{ line.unit_price }}</td>
-                                            <td>{{ line.discount_pct }}</td>
-                                            <td>{{ line.tax_pct }}</td>
+                                            <td>
+                                                {{ line.currency_code }}
+                                                {{ "{:,.2f}".format(line.unit_price or 0) }}
+                                            </td>
+
+                                            <td>
+                                                {{ "{:,.2f}".format(line.discount_pct or 0) }}%
+                                            </td>
+
+                                            <td>
+                                                {{ "{:,.2f}".format(line.tax_pct or 0) }}%
+                                            </td>
                                             <td>
                                                 {% if line.lead_time_days is not none %}
                                                     {{ line.lead_time_days }} días
