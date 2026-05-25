@@ -332,53 +332,58 @@ def search_request_articles():
 
     search_like = f"%{term}%"
 
-    rows = (
-        db.session.query(
-            Article.id,
-            Article.code,
-            Article.name,
-            Article.unit_id,
-            Unit.name.label("unit_name"),
-            WarehouseStock.quantity_on_hand,
-            WarehouseStock.available_quantity,
-        )
-        .outerjoin(Unit, Unit.id == Article.unit_id)
-        .outerjoin(
-            WarehouseStock,
-            db.and_(
-                WarehouseStock.article_id == Article.id,
-                WarehouseStock.warehouse_id == warehouse_id,
+    try:
+        rows = (
+            db.session.query(Article, WarehouseStock)
+            .outerjoin(
+                WarehouseStock,
+                db.and_(
+                    WarehouseStock.article_id == Article.id,
+                    WarehouseStock.warehouse_id == warehouse_id,
+                )
             )
-        )
-        .filter(
-            Article.is_active.is_(True),
-            db.or_(
-                Article.code.ilike(search_like),
-                Article.name.ilike(search_like),
+            .filter(
+                Article.is_active.is_(True),
+                db.or_(
+                    Article.code.ilike(search_like),
+                    Article.name.ilike(search_like),
+                )
             )
+            .order_by(Article.code.asc())
+            .limit(30)
+            .all()
         )
-        .order_by(Article.code.asc())
-        .limit(30)
-        .all()
-    )
 
-    items = []
+        items = []
 
-    for row in rows:
-        quantity_on_hand = Decimal(str(row.quantity_on_hand or 0))
-        available_quantity = Decimal(str(row.available_quantity or 0))
+        for article, stock in rows:
+            quantity_on_hand = Decimal(str(stock.quantity_on_hand or 0)) if stock else Decimal("0")
+            available_quantity = Decimal(str(stock.available_quantity or 0)) if stock else Decimal("0")
 
-        items.append({
-            "id": row.id,
-            "code": row.code,
-            "name": row.name,
-            "unit_id": row.unit_id,
-            "unit_name": row.unit_name or "",
-            "quantity_on_hand": str(quantity_on_hand),
-            "available_quantity": str(available_quantity),
-        })
+            unit_name = ""
+            if article.unit:
+                unit_name = (
+                    getattr(article.unit, "name", None)
+                    or getattr(article.unit, "code", None)
+                    or ""
+                )
 
-    return {"items": items}
+            items.append({
+                "id": article.id,
+                "code": article.code,
+                "name": article.name,
+                "unit_id": article.unit_id,
+                "unit_name": unit_name,
+                "quantity_on_hand": str(quantity_on_hand),
+                "available_quantity": str(available_quantity),
+            })
+
+        return {"items": items}
+
+    except Exception as exc:
+        print(f"[SEARCH REQUEST ARTICLES ERROR] {exc}")
+        db.session.rollback()
+        return {"items": []}, 500
 
 @purchases_bp.route("/requests/<int:request_id>")
 @login_required
