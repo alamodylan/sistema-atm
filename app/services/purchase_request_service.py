@@ -13,6 +13,7 @@ from app.models.pending_article import PendingArticle
 from app.models.purchase_request import PurchaseRequest
 from app.models.purchase_request_line import PurchaseRequestLine
 from app.services.request_routing_service import resolve_request_routing
+from sqlalchemy.orm import joinedload
 
 
 class PurchaseRequestServiceError(Exception):
@@ -201,7 +202,47 @@ def create_purchase_request(
 
 
 def get_purchase_request_or_404(request_id: int) -> PurchaseRequest:
-    purchase_request = PurchaseRequest.query.get_or_404(request_id)
+
+    purchase_request = (
+        PurchaseRequest.query
+        .options(
+
+            # =================================================
+            # ENCABEZADO
+            # =================================================
+
+            joinedload(PurchaseRequest.requested_by_user),
+
+            joinedload(PurchaseRequest.site),
+
+            joinedload(PurchaseRequest.warehouse),
+
+            # =================================================
+            # LÍNEAS
+            # =================================================
+
+            joinedload(PurchaseRequest.lines)
+            .joinedload(PurchaseRequestLine.unit),
+
+            # =================================================
+            # COTIZACIONES
+            # =================================================
+
+            joinedload(PurchaseRequest.quotation_batches),
+
+            # =================================================
+            # OC
+            # =================================================
+
+            joinedload(PurchaseRequest.purchase_orders),
+
+        )
+        .filter(
+            PurchaseRequest.id == request_id
+        )
+        .first_or_404()
+    )
+
     return purchase_request
 
 

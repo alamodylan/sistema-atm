@@ -141,15 +141,9 @@ def list_requests():
     priority = request.args.get("priority", type=str)
     search = request.args.get("search", type=str)
 
-    purchase_requests = list_purchase_requests(
-        status=status,
-        priority=priority,
-        search=search,
-    )
-
     return render_template(
         "purchases/requests/index.html",
-        purchase_requests=purchase_requests,
+        purchase_requests=[],
         selected_status=status,
         selected_priority=priority,
         search=search,
@@ -161,23 +155,11 @@ def list_requests():
 def create_request():
     search = (request.args.get("search") or "").strip()
 
-    articles_query = Article.query.filter(Article.is_active.is_(True))
-
-    if search:
-        search_like = f"%{search}%"
-        articles_query = articles_query.filter(
-            db.or_(
-                Article.code.ilike(search_like),
-                Article.name.ilike(search_like),
-            )
-        )
-
-    articles = (
-        articles_query
-        .order_by(Article.code.asc())
-        .limit(200)
-        .all()
-    )
+    # IMPORTANTE:
+    # Ya no cargamos artículos al abrir la pantalla.
+    # Los artículos se buscan por AJAX en:
+    # /requests/articles/search
+    articles = []
 
     units = Unit.query.order_by(Unit.id.asc()).all()
     sites = Site.query.filter_by(is_active=True).order_by(Site.name.asc()).all()
@@ -318,13 +300,22 @@ def search_request_articles():
     if not warehouse_id:
         return {"items": []}
 
-    if len(term) < 1:
+    if len(term) < 2:
         return {"items": []}
 
     search_like = f"%{term}%"
 
     rows = (
-        db.session.query(Article, WarehouseStock)
+        db.session.query(
+            Article.id,
+            Article.code,
+            Article.name,
+            Article.unit_id,
+            Unit.name.label("unit_name"),
+            WarehouseStock.quantity_on_hand,
+            WarehouseStock.available_quantity,
+        )
+        .outerjoin(Unit, Unit.id == Article.unit_id)
         .outerjoin(
             WarehouseStock,
             db.and_(
@@ -346,16 +337,16 @@ def search_request_articles():
 
     items = []
 
-    for article, stock in rows:
-        quantity_on_hand = Decimal(str(stock.quantity_on_hand or 0)) if stock else Decimal("0")
-        available_quantity = Decimal(str(stock.available_quantity or 0)) if stock else Decimal("0")
+    for row in rows:
+        quantity_on_hand = Decimal(str(row.quantity_on_hand or 0))
+        available_quantity = Decimal(str(row.available_quantity or 0))
 
         items.append({
-            "id": article.id,
-            "code": article.code,
-            "name": article.name,
-            "unit_id": article.unit_id,
-            "unit_name": article.unit.name if article.unit else "",
+            "id": row.id,
+            "code": row.code,
+            "name": row.name,
+            "unit_id": row.unit_id,
+            "unit_name": row.unit_name or "",
             "quantity_on_hand": str(quantity_on_hand),
             "available_quantity": str(available_quantity),
         })
@@ -366,11 +357,11 @@ def search_request_articles():
 @login_required
 def request_detail(request_id: int):
     purchase_request = get_purchase_request_or_404(request_id)
+
     return render_template(
         "purchases/requests/detail.html",
         purchase_request=purchase_request,
     )
-
 @purchases_bp.route("/requests/<int:request_id>/send", methods=["POST"])
 @login_required
 def send_request(request_id: int):

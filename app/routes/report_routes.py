@@ -224,29 +224,38 @@ def inventory_movements_report():
 @login_required
 def work_orders_report():
     status = (request.args.get("status") or "").strip()
+    page = request.args.get("page", 1, type=int)
 
     try:
         query = WorkOrder.query
 
         if status:
-            query = query.filter(WorkOrder.status == status)
+            query = query.filter(
+                WorkOrder.status == status
+            )
 
-        work_orders = (
+        pagination = (
             query
             .order_by(WorkOrder.created_at.desc())
-            .limit(200)
-            .all()
+            .paginate(
+                page=page,
+                per_page=15,
+                error_out=False,
+            )
         )
 
         return render_template(
             "reports/work_orders.html",
             title="Reporte de órdenes de trabajo",
             subtitle="Historial, estados, tiempos, responsables y mecánicos.",
-            work_orders=work_orders,
+            work_orders=pagination.items,
+            pagination=pagination,
             status=status,
         )
 
-    except Exception:
+    except Exception as exc:
+        print(f"[WORK ORDERS REPORT ERROR] {exc}")
+
         db.session.rollback()
 
         flash("Error al cargar el reporte de OT.", "danger")
@@ -254,6 +263,7 @@ def work_orders_report():
         return render_template(
             "reports/work_orders.html",
             work_orders=[],
+            pagination=None,
             status=status,
         )
 
