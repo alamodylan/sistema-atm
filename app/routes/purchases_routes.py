@@ -762,6 +762,68 @@ def quotation_detail(batch_id: int):
         quotation_batch=quotation_batch,
     )
 
+@purchases_bp.route(
+    "/quotations/free/article",
+    methods=["GET", "POST"]
+)
+@login_required
+def quotation_free_article():
+
+    suppliers = (
+        Supplier.query
+        .filter(Supplier.is_active.is_(True))
+        .order_by(
+            Supplier.commercial_name.asc()
+        )
+        .limit(300)
+        .all()
+    )
+
+    return render_template(
+        "purchases/quotations/free_article.html",
+        suppliers=suppliers,
+    )
+
+@purchases_bp.route(
+    "/quotations/articles/search"
+)
+@login_required
+def quotation_articles_search():
+
+    q = (
+        request.args.get("q") or ""
+    ).strip()
+
+    if len(q) < 2:
+        return {"items": []}
+
+    rows = (
+        Article.query
+        .filter(
+            Article.is_active.is_(True),
+            db.or_(
+                Article.code.ilike(f"%{q}%"),
+                Article.name.ilike(f"%{q}%"),
+            )
+        )
+        .order_by(
+            Article.code.asc()
+        )
+        .limit(20)
+        .all()
+    )
+
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "code": row.code,
+                "name": row.name,
+            }
+            for row in rows
+        ]
+    }
+
 
 # =========================
 # ORDENES DE COMPRA

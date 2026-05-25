@@ -116,23 +116,29 @@
                     </div>
 
                     <div class="d-grid gap-2">
-                        <button type="button"
-                                class="btn btn-outline-dark rounded-3"
-                                disabled>
+
+                        <a href="{{ url_for('purchases.quotation_free_article') }}"
+                        class="btn btn-outline-dark rounded-3">
+
                             <i class="bi bi-upc-scan me-2"></i>
                             Cotizar por código
-                        </button>
 
-                        <button type="button"
-                                class="btn btn-outline-dark rounded-3"
-                                disabled>
+                        </a>
+
+                        <a href="{{ url_for('purchases.quotation_free_pending') }}"
+                        class="btn btn-outline-dark rounded-3">
+
                             <i class="bi bi-plus-circle me-2"></i>
                             Cotizar artículo nuevo
-                        </button>
+
+                        </a>
+
                     </div>
 
                     <div class="form-text mt-3">
-                        Estos botones quedan visualmente preparados. Para activarlos falta crear las rutas de cotización libre.
+
+                        La cotización libre permite registrar precios aunque no exista una solicitud de compra relacionada.
+
                     </div>
                 </div>
             </div>
