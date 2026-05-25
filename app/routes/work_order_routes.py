@@ -123,17 +123,38 @@ def list_work_orders():
     page = request.args.get("page", 1, type=int)
 
     try:
-        query = WorkOrder.query
+        query = (
+            WorkOrder.query
+            .options(
+                joinedload(WorkOrder.warehouse),
+                joinedload(WorkOrder.equipment),
+                joinedload(WorkOrder.responsible_user),
+            )
+        )
+
+        active_site_id = session.get("active_site_id")
+
+        if active_site_id:
+            query = query.filter(
+                WorkOrder.site_id == int(active_site_id)
+            )
 
         if status:
-            query = query.filter(WorkOrder.status == status)
+            query = query.filter(
+                WorkOrder.status == status
+            )
 
         if ot_number:
-            query = query.filter(WorkOrder.number.ilike(f"%{ot_number}%"))
+            query = query.filter(
+                WorkOrder.number.ilike(f"{ot_number}%")
+            )
 
         pagination = (
             query
-            .order_by(WorkOrder.created_at.desc())
+            .order_by(
+                WorkOrder.created_at.desc(),
+                WorkOrder.id.desc(),
+            )
             .paginate(
                 page=page,
                 per_page=20,
@@ -141,20 +162,21 @@ def list_work_orders():
             )
         )
 
-        work_orders = pagination.items
-
         return render_template(
             "work_orders/index.html",
             title="Órdenes de trabajo",
             subtitle="Consulte órdenes de trabajo por estado o número de OT.",
-            work_orders=work_orders,
+            work_orders=pagination.items,
             pagination=pagination,
             status=status,
             ot_number=ot_number,
         )
 
-    except Exception:
+    except Exception as exc:
+        print(f"[LIST OT ERROR] {exc}")
+
         flash("Error al cargar órdenes de trabajo.", "danger")
+
         return render_template(
             "work_orders/index.html",
             title="Órdenes de trabajo",
