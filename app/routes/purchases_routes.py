@@ -86,6 +86,7 @@ from app.services.quotation_service import (
     list_quotation_line_groups,
     get_comparison_for_purchase_request_line,
     get_last_price_for_supplier,
+    create_minimal_supplier_for_quotation,
 )
 
 purchases_bp = Blueprint("purchases", __name__, template_folder="../templates")
@@ -824,7 +825,108 @@ def quotation_articles_search():
         ]
     }
 
+@purchases_bp.route("/quotations/free", methods=["GET", "POST"])
+@login_required
+def quotation_free():
+    if request.method == "POST":
+        article_id = _to_int(request.form.get("article_id"))
+        new_article_name = (request.form.get("new_article_name") or "").strip()
 
+        supplier_id = _to_int(request.form.get("supplier_id"))
+        new_supplier_name = (request.form.get("new_supplier_name") or "").strip()
+
+        quote_date = request.form.get("quote_date")
+        unit_price = request.form.get("unit_price")
+        currency_code = request.form.get("currency_code") or "CRC"
+        discount_pct = request.form.get("discount_pct") or "0"
+        tax_pct = request.form.get("tax_pct") or "0"
+        tax_included = request.form.get("tax_included") == "1"
+        lead_time_days = request.form.get("lead_time_days")
+        brand_model = request.form.get("brand_model")
+        notes = request.form.get("notes")
+        payment_type = request.form.get("payment_type") or None
+        payment_term_months = request.form.get("payment_term_months")
+        origin_type = request.form.get("origin_type") or None
+
+        pending_article_id = None
+
+        try:
+            if not article_id and not new_article_name:
+                raise QuotationServiceError(
+                    "Debe seleccionar un artículo existente o escribir un artículo nuevo."
+                )
+
+            if article_id and new_article_name:
+                raise QuotationServiceError(
+                    "Debe usar artículo existente o artículo nuevo, no ambos."
+                )
+
+            if new_article_name:
+                pending = create_pending_article(
+                    provisional_name=new_article_name,
+                    description=notes,
+                    category_id=None,
+                    unit_id=None,
+                    requested_by_user_id=current_user.id,
+                )
+                pending_article_id = pending.id
+
+            if new_supplier_name:
+                supplier = create_minimal_supplier_for_quotation(
+                    commercial_name=new_supplier_name,
+                )
+                supplier_id = supplier.id
+
+            if not supplier_id:
+                raise QuotationServiceError("Debe seleccionar o crear un proveedor.")
+
+            line = QuotationLinePayload(
+                purchase_request_line_id=None,
+                supplier_id=supplier_id,
+                quote_date=quote_date,
+                unit_price=_to_decimal(unit_price),
+                currency_code=currency_code,
+                article_id=article_id,
+                pending_article_id=pending_article_id,
+                discount_pct=_to_decimal(discount_pct),
+                tax_pct=_to_decimal(tax_pct),
+                tax_included=tax_included,
+                lead_time_days=_to_int(lead_time_days),
+                brand_model=brand_model,
+                notes=notes,
+                payment_type=payment_type,
+                payment_term_months=_to_int(payment_term_months),
+                origin_type=origin_type,
+                status="COTIZADA",
+            )
+
+            quotation_batch = create_quotation_batch(
+                purchase_request_id=None,
+                created_by_user_id=current_user.id,
+                quote_date=quote_date,
+                notes=notes,
+                lines=[line],
+            )
+
+            flash("Cotización libre creada correctamente.", "success")
+            return redirect(
+                url_for(
+                    "purchases.quotation_detail",
+                    batch_id=quotation_batch.id,
+                )
+            )
+
+        except QuotationServiceError as exc:
+            flash(str(exc), "danger")
+
+        except Exception as exc:
+            print(f"[FREE QUOTATION ERROR] {exc}")
+            db.session.rollback()
+            flash("Error interno al crear la cotización libre.", "danger")
+
+    return render_template(
+        "purchases/quotations/free.html",
+    )
 # =========================
 # ORDENES DE COMPRA
 # =========================

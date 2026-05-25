@@ -7,7 +7,7 @@
         <div>
             <h2 class="fw-bold mb-1">Cotizaciones</h2>
             <p class="text-muted mb-0">
-                Solicitudes con control de cotizaciones por línea.
+                Solicitudes y cotizaciones libres con control por artículo y proveedor.
             </p>
         </div>
 
@@ -27,7 +27,7 @@
                            name="search"
                            value="{{ search or '' }}"
                            class="form-control rounded-3"
-                           placeholder="Buscar por solicitud">
+                           placeholder="Buscar por solicitud, código o artículo">
                 </div>
 
                 <div class="col-12 col-md-2 d-grid align-self-end">
@@ -47,9 +47,10 @@
                     <table class="table align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th class="ps-4">Solicitud</th>
+                                <th class="ps-4">Origen</th>
+                                <th>Artículo</th>
                                 <th>Total líneas</th>
-                                <th>Cotizadas</th>
+                                <th>Cotizaciones</th>
                                 <th>Pendientes</th>
                                 <th>Última cotización</th>
                                 <th class="text-end pe-4">Acciones</th>
@@ -60,7 +61,34 @@
                             {% for item in quotation_requests %}
                                 <tr>
                                     <td class="ps-4 fw-semibold">
-                                        {{ item.purchase_request_number }}
+                                        {% if item.group_type == "REQUEST" %}
+                                            {{ item.purchase_request_number }}
+                                            <div>
+                                                <span class="badge bg-primary-subtle text-primary border">
+                                                    Solicitud
+                                                </span>
+                                            </div>
+                                        {% else %}
+                                            Cotización libre
+                                            <div>
+                                                <span class="badge bg-dark-subtle text-dark border">
+                                                    Libre
+                                                </span>
+                                            </div>
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        {% if item.group_type == "REQUEST" %}
+                                            <span class="text-muted">Por líneas de solicitud</span>
+                                        {% else %}
+                                            <div class="fw-semibold">
+                                                {{ item.item_name or "Sin artículo" }}
+                                            </div>
+                                            <small class="text-muted">
+                                                {{ item.item_code or "-" }}
+                                            </small>
+                                        {% endif %}
                                     </td>
 
                                     <td>{{ item.total_lines }}</td>
@@ -82,10 +110,22 @@
                                     </td>
 
                                     <td class="text-end pe-4">
-                                        <a href="{{ url_for('purchases.quotation_request_lines', request_id=item.purchase_request_id) }}"
-                                           class="btn btn-sm btn-dark rounded-3">
-                                            Ver líneas
-                                        </a>
+                                        {% if item.group_type == "REQUEST" %}
+                                            <a href="{{ url_for('purchases.quotation_request_lines', request_id=item.purchase_request_id) }}"
+                                               class="btn btn-sm btn-dark rounded-3">
+                                                Ver líneas
+                                            </a>
+                                        {% elif item.group_type == "FREE_ARTICLE" %}
+                                            <a href="{{ url_for('purchases.quotation_free', article_id=item.article_id) }}"
+                                               class="btn btn-sm btn-dark rounded-3">
+                                                Agregar cotización
+                                            </a>
+                                        {% elif item.group_type == "FREE_PENDING" %}
+                                            <a href="{{ url_for('purchases.quotation_free', pending_article_id=item.pending_article_id) }}"
+                                               class="btn btn-sm btn-dark rounded-3">
+                                                Agregar cotización
+                                            </a>
+                                        {% endif %}
                                     </td>
                                 </tr>
                             {% endfor %}
@@ -96,9 +136,9 @@
             {% else %}
                 <div class="p-5 text-center">
                     <i class="bi bi-cash-stack fs-1 text-muted"></i>
-                    <h5 class="mt-3 fw-bold">No hay solicitudes con cotización</h5>
+                    <h5 class="mt-3 fw-bold">No hay cotizaciones registradas</h5>
                     <p class="text-muted mb-4">
-                        No se encontraron solicitudes con cotizaciones registradas.
+                        No se encontraron solicitudes ni cotizaciones libres registradas.
                     </p>
                     <a href="{{ url_for('purchases.create_quotation') }}" class="btn btn-dark rounded-3">
                         <i class="bi bi-plus-lg me-2"></i>Crear cotización

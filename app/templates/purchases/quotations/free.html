@@ -1,0 +1,641 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+
+        <div>
+            <h2 class="fw-bold mb-1">
+                Cotización libre
+            </h2>
+
+            <p class="text-muted mb-0">
+                Registra cotizaciones sin necesidad de una solicitud de compra.
+            </p>
+        </div>
+
+        <a href="{{ url_for('purchases.create_quotation') }}"
+           class="btn btn-light rounded-3">
+
+            <i class="bi bi-arrow-left me-2"></i>
+            Volver
+
+        </a>
+
+    </div>
+
+    <form method="POST">
+
+        <div class="row g-4">
+
+            <!-- ===================================================== -->
+            <!-- ARTÍCULO -->
+            <!-- ===================================================== -->
+
+            <div class="col-12 col-xl-6">
+
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+
+                    <div class="card-body p-4">
+
+                        <h5 class="fw-bold mb-3">
+                            Artículo
+                        </h5>
+
+                        <div class="mb-4">
+
+                            <label class="form-label fw-semibold">
+                                Buscar artículo existente
+                            </label>
+
+                            <input
+                                type="text"
+                                id="articleSearch"
+                                class="form-control rounded-3"
+                                placeholder="Código o nombre..."
+                                autocomplete="off"
+                            >
+
+                            <input
+                                type="hidden"
+                                name="article_id"
+                                id="articleId"
+                            >
+
+                            <div
+                                id="articleResults"
+                                class="list-group mt-2 d-none shadow-sm"
+                            ></div>
+
+                        </div>
+
+                        <div class="text-center text-muted fw-semibold mb-4">
+                            — O —
+                        </div>
+
+                        <div>
+
+                            <label class="form-label fw-semibold">
+                                Artículo nuevo
+                            </label>
+
+                            <input
+                                type="text"
+                                name="new_article_name"
+                                class="form-control rounded-3"
+                                placeholder="Nombre provisional del artículo"
+                            >
+
+                            <div class="form-text">
+                                Si el artículo no existe, se registrará como pendiente de codificación.
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- ===================================================== -->
+            <!-- PROVEEDOR -->
+            <!-- ===================================================== -->
+
+            <div class="col-12 col-xl-6">
+
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+
+                    <div class="card-body p-4">
+
+                        <h5 class="fw-bold mb-3">
+                            Proveedor
+                        </h5>
+
+                        <div class="mb-4">
+
+                            <label class="form-label fw-semibold">
+                                Buscar proveedor existente
+                            </label>
+
+                            <input
+                                type="text"
+                                id="supplierSearch"
+                                class="form-control rounded-3"
+                                placeholder="Nombre comercial..."
+                                autocomplete="off"
+                            >
+
+                            <input
+                                type="hidden"
+                                name="supplier_id"
+                                id="supplierId"
+                            >
+
+                            <div
+                                id="supplierResults"
+                                class="list-group mt-2 d-none shadow-sm"
+                            ></div>
+
+                        </div>
+
+                        <div class="text-center text-muted fw-semibold mb-4">
+                            — O —
+                        </div>
+
+                        <div>
+
+                            <label class="form-label fw-semibold">
+                                Proveedor nuevo
+                            </label>
+
+                            <input
+                                type="text"
+                                name="new_supplier_name"
+                                class="form-control rounded-3"
+                                placeholder="Nombre comercial del proveedor"
+                            >
+
+                            <div class="form-text">
+                                Se creará automáticamente un proveedor básico para la cotización.
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- ===================================================== -->
+            <!-- DATOS COTIZACIÓN -->
+            <!-- ===================================================== -->
+
+            <div class="col-12">
+
+                <div class="card border-0 shadow-sm rounded-4">
+
+                    <div class="card-body p-4">
+
+                        <h5 class="fw-bold mb-4">
+                            Datos de cotización
+                        </h5>
+
+                        <div class="row g-4">
+
+                            <div class="col-12 col-md-3">
+
+                                <label class="form-label fw-semibold">
+                                    Fecha cotización
+                                </label>
+
+                                <input
+                                    type="date"
+                                    name="quote_date"
+                                    class="form-control rounded-3"
+                                    value="{{ current_date }}"
+                                    required
+                                >
+
+                            </div>
+
+                            <div class="col-12 col-md-3">
+
+                                <label class="form-label fw-semibold">
+                                    Precio unitario
+                                </label>
+
+                                <input
+                                    type="number"
+                                    step="0.0001"
+                                    min="0"
+                                    name="unit_price"
+                                    class="form-control rounded-3"
+                                    required
+                                >
+
+                            </div>
+
+                            <div class="col-12 col-md-2">
+
+                                <label class="form-label fw-semibold">
+                                    Moneda
+                                </label>
+
+                                <select
+                                    name="currency_code"
+                                    class="form-select rounded-3"
+                                >
+                                    <option value="CRC">CRC</option>
+                                    <option value="USD">USD</option>
+                                </select>
+
+                            </div>
+
+                            <div class="col-12 col-md-2">
+
+                                <label class="form-label fw-semibold">
+                                    Descuento %
+                                </label>
+
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    name="discount_pct"
+                                    value="0"
+                                    class="form-control rounded-3"
+                                >
+
+                            </div>
+
+                            <div class="col-12 col-md-2">
+
+                                <label class="form-label fw-semibold">
+                                    IVA %
+                                </label>
+
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    name="tax_pct"
+                                    value="13"
+                                    class="form-control rounded-3"
+                                >
+
+                            </div>
+
+                            <div class="col-12 col-md-3">
+
+                                <label class="form-label fw-semibold">
+                                    Tipo pago
+                                </label>
+
+                                <select
+                                    name="payment_type"
+                                    class="form-select rounded-3"
+                                >
+                                    <option value="">Seleccionar</option>
+                                    <option value="CONTADO">Contado</option>
+                                    <option value="CREDITO">Crédito</option>
+                                </select>
+
+                            </div>
+
+                            <div class="col-12 col-md-3">
+
+                                <label class="form-label fw-semibold">
+                                    Meses crédito
+                                </label>
+
+                                <input
+                                    type="number"
+                                    min="0"
+                                    name="payment_term_months"
+                                    class="form-control rounded-3"
+                                >
+
+                            </div>
+
+                            <div class="col-12 col-md-3">
+
+                                <label class="form-label fw-semibold">
+                                    Origen
+                                </label>
+
+                                <select
+                                    name="origin_type"
+                                    class="form-select rounded-3"
+                                >
+                                    <option value="">Seleccionar</option>
+                                    <option value="LOCAL">Local</option>
+                                    <option value="IMPORTACION">Importación</option>
+                                </select>
+
+                            </div>
+
+                            <div class="col-12 col-md-3">
+
+                                <label class="form-label fw-semibold">
+                                    Entrega días
+                                </label>
+
+                                <input
+                                    type="number"
+                                    min="0"
+                                    name="lead_time_days"
+                                    class="form-control rounded-3"
+                                >
+
+                            </div>
+
+                            <div class="col-12 col-md-6">
+
+                                <label class="form-label fw-semibold">
+                                    Marca / Modelo
+                                </label>
+
+                                <input
+                                    type="text"
+                                    name="brand_model"
+                                    class="form-control rounded-3"
+                                >
+
+                            </div>
+
+                            <div class="col-12">
+
+                                <label class="form-label fw-semibold">
+                                    Notas
+                                </label>
+
+                                <textarea
+                                    name="notes"
+                                    rows="4"
+                                    class="form-control rounded-3"
+                                ></textarea>
+
+                            </div>
+
+                            <div class="col-12">
+
+                                <div class="form-check">
+
+                                    <input
+                                        class="form-check-input"
+                                        type="checkbox"
+                                        value="1"
+                                        name="tax_included"
+                                        id="taxIncluded"
+                                    >
+
+                                    <label
+                                        class="form-check-label"
+                                        for="taxIncluded"
+                                    >
+                                        El precio ingresado ya incluye IVA
+                                    </label>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- ===================================================== -->
+            <!-- BOTONES -->
+            <!-- ===================================================== -->
+
+            <div class="col-12">
+
+                <div class="d-flex flex-column flex-lg-row justify-content-end gap-3">
+
+                    <a href="{{ url_for('purchases.create_quotation') }}"
+                       class="btn btn-light rounded-3 px-4">
+
+                        Cancelar
+
+                    </a>
+
+                    <button
+                        type="submit"
+                        class="btn btn-dark rounded-3 px-4"
+                    >
+
+                        <i class="bi bi-check2-circle me-2"></i>
+                        Guardar cotización
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </form>
+
+</div>
+
+<script>
+(function () {
+
+    // =====================================================
+    // SEARCH ARTICLE
+    // =====================================================
+
+    const articleSearch =
+        document.getElementById("articleSearch");
+
+    const articleResults =
+        document.getElementById("articleResults");
+
+    const articleId =
+        document.getElementById("articleId");
+
+    let articleTimer;
+
+    articleSearch.addEventListener(
+        "input",
+        function () {
+
+            clearTimeout(articleTimer);
+
+            const term =
+                this.value.trim();
+
+            if (term.length < 2) {
+
+                articleResults.innerHTML = "";
+                articleResults.classList.add("d-none");
+
+                return;
+            }
+
+            articleTimer = setTimeout(
+                async () => {
+
+                    try {
+
+                        const response = await fetch(
+                            `/purchases/quotations/articles/search?q=${encodeURIComponent(term)}`
+                        );
+
+                        const data =
+                            await response.json();
+
+                        articleResults.innerHTML = "";
+
+                        if (!data.items.length) {
+
+                            articleResults.innerHTML = `
+                                <div class="list-group-item text-muted">
+                                    Sin resultados
+                                </div>
+                            `;
+
+                        } else {
+
+                            data.items.forEach(item => {
+
+                                const btn =
+                                    document.createElement("button");
+
+                                btn.type = "button";
+
+                                btn.className =
+                                    "list-group-item list-group-item-action";
+
+                                btn.innerHTML = `
+                                    <strong>${item.code}</strong>
+                                    <div class="small text-muted">
+                                        ${item.name}
+                                    </div>
+                                `;
+
+                                btn.addEventListener(
+                                    "click",
+                                    function () {
+
+                                        articleSearch.value =
+                                            `${item.code} - ${item.name}`;
+
+                                        articleId.value =
+                                            item.id;
+
+                                        articleResults.classList.add("d-none");
+                                    }
+                                );
+
+                                articleResults.appendChild(btn);
+
+                            });
+                        }
+
+                        articleResults.classList.remove("d-none");
+
+                    } catch (error) {
+
+                        console.error(error);
+                    }
+
+                },
+                300
+            );
+        }
+    );
+
+    // =====================================================
+    // SEARCH SUPPLIER
+    // =====================================================
+
+    const supplierSearch =
+        document.getElementById("supplierSearch");
+
+    const supplierResults =
+        document.getElementById("supplierResults");
+
+    const supplierId =
+        document.getElementById("supplierId");
+
+    let supplierTimer;
+
+    supplierSearch.addEventListener(
+        "input",
+        function () {
+
+            clearTimeout(supplierTimer);
+
+            const term =
+                this.value.trim();
+
+            if (term.length < 2) {
+
+                supplierResults.innerHTML = "";
+                supplierResults.classList.add("d-none");
+
+                return;
+            }
+
+            supplierTimer = setTimeout(
+                async () => {
+
+                    try {
+
+                        const response = await fetch(
+                            `/purchases/suppliers/search?q=${encodeURIComponent(term)}`
+                        );
+
+                        const data =
+                            await response.json();
+
+                        supplierResults.innerHTML = "";
+
+                        if (!data.items.length) {
+
+                            supplierResults.innerHTML = `
+                                <div class="list-group-item text-muted">
+                                    Sin resultados
+                                </div>
+                            `;
+
+                        } else {
+
+                            data.items.forEach(item => {
+
+                                const btn =
+                                    document.createElement("button");
+
+                                btn.type = "button";
+
+                                btn.className =
+                                    "list-group-item list-group-item-action";
+
+                                btn.innerHTML = `
+                                    <strong>${item.commercial_name}</strong>
+                                `;
+
+                                btn.addEventListener(
+                                    "click",
+                                    function () {
+
+                                        supplierSearch.value =
+                                            item.commercial_name;
+
+                                        supplierId.value =
+                                            item.id;
+
+                                        supplierResults.classList.add("d-none");
+                                    }
+                                );
+
+                                supplierResults.appendChild(btn);
+
+                            });
+                        }
+
+                        supplierResults.classList.remove("d-none");
+
+                    } catch (error) {
+
+                        console.error(error);
+                    }
+
+                },
+                300
+            );
+        }
+    );
+
+})();
+</script>
+{% endblock %}

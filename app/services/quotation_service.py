@@ -14,6 +14,8 @@ from app.models.purchase_request_line import PurchaseRequestLine
 from app.models.quotation_batch import QuotationBatch
 from app.models.quotation_line import QuotationLine
 from app.models.supplier import Supplier
+from app.models.article import Article
+from app.models.pending_article import PendingArticle
 
 
 class QuotationServiceError(Exception):
@@ -112,6 +114,11 @@ def _validate_quotation_line(line: QuotationLinePayload) -> None:
 def list_quotation_request_groups(search: str | None = None) -> list[dict]:
     search = (search or "").strip()
 
+    result = []
+
+    # =====================================================
+    # COTIZACIONES DESDE SOLICITUD
+    # =====================================================
     query = (
         db.session.query(
             PurchaseRequest.id.label("purchase_request_id"),
@@ -151,22 +158,124 @@ def list_quotation_request_groups(search: str | None = None) -> list[dict]:
             PurchaseRequest.number.ilike(like_value)
         )
 
-    rows = query.order_by(
-        func.max(QuotationLine.quote_date).desc().nullslast(),
-        PurchaseRequest.id.desc(),
-    ).all()
-
-    result = []
+    rows = query.all()
 
     for row in rows:
         result.append({
+            "group_type": "REQUEST",
             "purchase_request_id": row.purchase_request_id,
             "purchase_request_number": row.purchase_request_number,
+            "item_name": None,
+            "item_code": None,
+            "article_id": None,
+            "pending_article_id": None,
             "total_lines": int(row.total_lines or 0),
             "quoted_lines": int(row.quoted_lines or 0),
             "pending_lines": int(row.pending_lines or 0),
+            "total_quotes": None,
             "last_quote_date": row.last_quote_date,
         })
+
+    # =====================================================
+    # COTIZACIONES LIBRES - ARTÍCULO EXISTENTE
+    # =====================================================
+    free_article_rows = (
+        db.session.query(
+            QuotationLine.article_id,
+            Article.code.label("item_code"),
+            Article.name.label("item_name"),
+            func.count(QuotationLine.id).label("total_quotes"),
+            func.max(QuotationLine.quote_date).label("last_quote_date"),
+        )
+        .join(Article, Article.id == QuotationLine.article_id)
+        .filter(
+            QuotationLine.purchase_request_line_id.is_(None),
+            QuotationLine.article_id.isnot(None),
+        )
+        .group_by(
+            QuotationLine.article_id,
+            Article.code,
+            Article.name,
+        )
+    )
+
+    if search:
+        like_value = f"%{search}%"
+        free_article_rows = free_article_rows.filter(
+            db.or_(
+                Article.code.ilike(like_value),
+                Article.name.ilike(like_value),
+            )
+        )
+
+    for row in free_article_rows.all():
+        result.append({
+            "group_type": "FREE_ARTICLE",
+            "purchase_request_id": None,
+            "purchase_request_number": "Cotización libre",
+            "item_name": row.item_name,
+            "item_code": row.item_code,
+            "article_id": row.article_id,
+            "pending_article_id": None,
+            "total_lines": 1,
+            "quoted_lines": int(row.total_quotes or 0),
+            "pending_lines": 0,
+            "total_quotes": int(row.total_quotes or 0),
+            "last_quote_date": row.last_quote_date,
+        })
+
+    # =====================================================
+    # COTIZACIONES LIBRES - ARTÍCULO PENDIENTE
+    # =====================================================
+    free_pending_rows = (
+        db.session.query(
+            QuotationLine.pending_article_id,
+            PendingArticle.provisional_code.label("item_code"),
+            PendingArticle.provisional_name.label("item_name"),
+            func.count(QuotationLine.id).label("total_quotes"),
+            func.max(QuotationLine.quote_date).label("last_quote_date"),
+        )
+        .join(PendingArticle, PendingArticle.id == QuotationLine.pending_article_id)
+        .filter(
+            QuotationLine.purchase_request_line_id.is_(None),
+            QuotationLine.pending_article_id.isnot(None),
+        )
+        .group_by(
+            QuotationLine.pending_article_id,
+            PendingArticle.provisional_code,
+            PendingArticle.provisional_name,
+        )
+    )
+
+    if search:
+        like_value = f"%{search}%"
+        free_pending_rows = free_pending_rows.filter(
+            db.or_(
+                PendingArticle.provisional_code.ilike(like_value),
+                PendingArticle.provisional_name.ilike(like_value),
+            )
+        )
+
+    for row in free_pending_rows.all():
+        result.append({
+            "group_type": "FREE_PENDING",
+            "purchase_request_id": None,
+            "purchase_request_number": "Cotización libre",
+            "item_name": row.item_name,
+            "item_code": row.item_code,
+            "article_id": None,
+            "pending_article_id": row.pending_article_id,
+            "total_lines": 1,
+            "quoted_lines": int(row.total_quotes or 0),
+            "pending_lines": 0,
+            "total_quotes": int(row.total_quotes or 0),
+            "last_quote_date": row.last_quote_date,
+        })
+
+    result.sort(
+        key=lambda item: item["last_quote_date"] or datetime.min.date(),
+        reverse=True,
+    )
 
     return result
 def _ensure_article_supplier(
