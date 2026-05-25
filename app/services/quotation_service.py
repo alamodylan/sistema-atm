@@ -42,9 +42,13 @@ class QuotationLinePayload:
 
 
 def _generate_quotation_number() -> str:
-    max_id = db.session.query(func.max(QuotationBatch.id)).scalar() or 0
-    next_id = int(max_id) + 1
-    return f"COT-{next_id:06d}"
+    next_id = (
+        db.session.query(
+            func.nextval("atm.quotation_batches_id_seq")
+        ).scalar()
+    )
+
+    return f"COT-{int(next_id):06d}"
 
 
 def _normalize_decimal(value: Any, field_name: str) -> Decimal:
@@ -170,31 +174,61 @@ def _ensure_article_supplier(
     article_id: int | None,
     supplier_id: int,
 ) -> None:
+
     if not article_id:
         return
 
-    existing = (
-        ArticleSupplier.query
-        .filter(
-            ArticleSupplier.article_id == article_id,
-            ArticleSupplier.supplier_id == supplier_id,
-        )
-        .first()
-    )
+    existing = db.session.execute(
+        db.text("""
+            SELECT id, is_active
+            FROM atm.article_suppliers
+            WHERE article_id = :article_id
+              AND supplier_id = :supplier_id
+            LIMIT 1
+        """),
+        {
+            "article_id": article_id,
+            "supplier_id": supplier_id,
+        }
+    ).fetchone()
 
     if existing:
+
         if not existing.is_active:
-            existing.is_active = True
-        existing.updated_at = datetime.now(UTC)
+            db.session.execute(
+                db.text("""
+                    UPDATE atm.article_suppliers
+                    SET is_active = TRUE,
+                        updated_at = NOW()
+                    WHERE id = :id
+                """),
+                {"id": existing.id}
+            )
+
         return
 
-    article_supplier = ArticleSupplier(
-        article_id=article_id,
-        supplier_id=supplier_id,
-        is_active=True,
+    db.session.execute(
+        db.text("""
+            INSERT INTO atm.article_suppliers (
+                article_id,
+                supplier_id,
+                is_active,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                :article_id,
+                :supplier_id,
+                TRUE,
+                NOW(),
+                NOW()
+            )
+        """),
+        {
+            "article_id": article_id,
+            "supplier_id": supplier_id,
+        }
     )
-
-    db.session.add(article_supplier)
 
 
 def _mark_purchase_request_line_as_quoted(
