@@ -28,12 +28,13 @@
                         <div class="small text-muted">
                             Última actualización:
                             <strong id="lastRefreshLabel">
-                                {{ current_time.created_at|cr_datetime if current_time else '-' }}
+                                {{ current_time|cr_datetime if current_time else '-' }}
                             </strong>
                         </div>
                     </div>
                 </div>
             </div>
+
             <div class="bg-primary-subtle px-4 py-3 border-top">
                 <div class="small text-primary-emphasis mb-0">
                     Jefatura revisa primero las solicitudes del mecánico. Bodega interviene solo cuando ya existe aprobación o avance operativo posterior.
@@ -52,6 +53,7 @@
                             {{ work_orders_in_process }}
                         </div>
                     </div>
+
                     <div class="rounded-circle bg-success-subtle d-flex align-items-center justify-content-center"
                          style="width: 52px; height: 52px;">
                         <span class="fw-bold text-success">OT</span>
@@ -86,7 +88,17 @@
                 </div>
 
                 <div id="workOrdersContainer">
-                    {% include "dashboard/_work_orders.html" %}
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary mb-3" role="status"></div>
+
+                        <div class="fw-semibold">
+                            Cargando órdenes en proceso...
+                        </div>
+
+                        <div class="text-muted small mt-2">
+                            Espere un momento.
+                        </div>
+                    </div>
                 </div>
 
             </div>
@@ -133,6 +145,8 @@
         if (!workOrdersContainer) return;
 
         try {
+            workOrdersContainer.style.opacity = "0.55";
+
             const res = await fetch("/dashboard/partial/work-orders", {
                 headers: {
                     "X-Requested-With": "XMLHttpRequest"
@@ -144,7 +158,7 @@
             }
 
             const html = await res.text();
-            workOrdersContainer.style.opacity = "0.55";
+
             workOrdersContainer.innerHTML = html;
             workOrdersContainer.style.opacity = "1";
 
@@ -153,6 +167,14 @@
             }
         } catch (error) {
             console.error("Error actualizando bloque de OTs:", error);
+
+            workOrdersContainer.style.opacity = "1";
+            workOrdersContainer.innerHTML = `
+                <div class="alert alert-warning rounded-4 mb-0">
+                    No se pudo cargar el bloque de órdenes en proceso.
+                    Intente actualizar nuevamente.
+                </div>
+            `;
         }
     }
 
@@ -161,6 +183,8 @@
     }
 
     setInterval(refreshWorkOrders, 120000);
+
+    refreshWorkOrders();
 })();
 </script>
 {% endblock %}

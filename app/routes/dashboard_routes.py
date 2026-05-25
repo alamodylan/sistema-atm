@@ -213,22 +213,11 @@ def index():
             .count()
         )
 
-        work_orders_in_process_list = (
-            WorkOrder.query
-            .options(
-                selectinload(WorkOrder.requests).selectinload(WorkOrderRequest.lines),
-                selectinload(WorkOrder.tool_loans),
-            )
-            .filter(
-                WorkOrder.site_id == active_site_id,
-                WorkOrder.status == "EN_PROCESO",
-            )
-            .order_by(WorkOrder.created_at.desc())
-            .all()
-        )
-
-        _apply_work_order_semaphore(work_orders_in_process_list)
-
+        # IMPORTANTE:
+        # Ya NO cargamos aquí la lista de OTs en proceso.
+        # Esa lista es pesada porque carga requests, líneas y herramientas.
+        # Se cargará después por AJAX usando:
+        # /dashboard/partial/work-orders
         return render_template(
             "dashboard/index.html",
             title="Dashboard",
@@ -242,7 +231,7 @@ def index():
             waste_cerrada=waste_counts.get("CERRADA", 0),
             waste_cancelada=waste_counts.get("CANCELADA", 0),
             inventory_records=inventory_records,
-            work_orders_in_process_list=work_orders_in_process_list,
+            work_orders_in_process_list=[],
             current_time=current_time,
         )
 
