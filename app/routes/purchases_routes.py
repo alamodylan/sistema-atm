@@ -927,6 +927,46 @@ def quotation_free():
     return render_template(
         "purchases/quotations/free.html",
     )
+
+@purchases_bp.route("/suppliers/search")
+@login_required
+def search_suppliers_for_quotation():
+    q = (request.args.get("q") or "").strip()
+
+    if len(q) < 2:
+        return {"items": []}
+
+    like_value = f"%{q}%"
+
+    suppliers = (
+        Supplier.query
+        .filter(
+            Supplier.is_active.is_(True),
+            db.or_(
+                Supplier.commercial_name.ilike(like_value),
+                Supplier.legal_name.ilike(like_value),
+                Supplier.tax_id.ilike(like_value),
+            )
+        )
+        .order_by(
+            Supplier.commercial_name.asc(),
+            Supplier.legal_name.asc(),
+        )
+        .limit(20)
+        .all()
+    )
+
+    return {
+        "items": [
+            {
+                "id": supplier.id,
+                "commercial_name": supplier.commercial_name or "",
+                "legal_name": supplier.legal_name or "",
+                "tax_id": supplier.tax_id or "",
+            }
+            for supplier in suppliers
+        ]
+    }
 # =========================
 # ORDENES DE COMPRA
 # =========================

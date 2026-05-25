@@ -144,26 +144,104 @@
                     <form method="post" action="{{ url_for('purchases.create_quote_for_line', line_id=line_id) }}">
                         <input type="hidden" name="status" value="COTIZADA">
 
+                        {% set is_pending_article = request_line.item_code and request_line.item_code.startswith("PEND") %}
+
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Proveedor</label>
 
-                            <select name="supplier_id" id="supplier_id" class="form-select rounded-3" required>
-                                <option value="">Seleccione proveedor</option>
+                            <label class="form-label fw-semibold">
+                                Proveedor
+                            </label>
 
-                                {% if suppliers %}
-                                    {% for supplier in suppliers %}
-                                        <option value="{{ supplier.id }}">
-                                            {{ supplier.commercial_name or supplier.legal_name }}
-                                        </option>
-                                    {% endfor %}
-                                {% endif %}
+                            {% if is_pending_article %}
 
-                                <option value="-1">+ Nuevo proveedor</option>
-                            </select>
+                                <input
+                                    type="text"
+                                    id="supplier_search"
+                                    class="form-control rounded-3"
+                                    placeholder="Buscar proveedor existente..."
+                                    autocomplete="off"
+                                >
 
-                            <div class="form-text">
-                                Solo aparecen proveedores ligados a este artículo. Si no existe, usa “Nuevo proveedor”.
-                            </div>
+                                <input
+                                    type="hidden"
+                                    name="supplier_id"
+                                    id="supplier_id"
+                                >
+
+                                <div
+                                    id="supplier_results"
+                                    class="list-group mt-2 d-none shadow-sm"
+                                ></div>
+
+                                <div class="text-center text-muted fw-semibold my-3">
+                                    — O —
+                                </div>
+
+                                <input
+                                    type="text"
+                                    name="new_supplier_name"
+                                    id="new_supplier_name"
+                                    class="form-control rounded-3"
+                                    placeholder="Nombre del nuevo proveedor"
+                                >
+
+                                <div class="form-text">
+                                    Puede seleccionar un proveedor existente o escribir uno nuevo.
+                                </div>
+
+                            {% else %}
+
+                                <select
+                                    name="supplier_id"
+                                    id="supplier_id"
+                                    class="form-select rounded-3"
+                                    required
+                                >
+
+                                    <option value="">
+                                        Seleccione proveedor
+                                    </option>
+
+                                    {% if suppliers %}
+                                        {% for supplier in suppliers %}
+                                            <option value="{{ supplier.id }}">
+                                                {{ supplier.commercial_name or supplier.legal_name }}
+                                            </option>
+                                        {% endfor %}
+                                    {% endif %}
+
+                                    <option value="-1">
+                                        + Nuevo proveedor
+                                    </option>
+
+                                </select>
+
+                                <div class="form-text">
+                                    Solo aparecen proveedores ligados a este artículo. Si no existe, usa “Nuevo proveedor”.
+                                </div>
+
+                                <div class="mb-3 d-none mt-3" id="new_supplier_group">
+
+                                    <label class="form-label fw-semibold">
+                                        Nombre del nuevo proveedor
+                                    </label>
+
+                                    <input
+                                        type="text"
+                                        name="new_supplier_name"
+                                        id="new_supplier_name"
+                                        class="form-control rounded-3"
+                                        placeholder="Ejemplo: Repuestos La Central"
+                                    >
+
+                                    <div class="form-text">
+                                        Se creará un proveedor básico y luego podrá completarse desde el módulo de proveedores.
+                                    </div>
+
+                                </div>
+
+                            {% endif %}
+
                         </div>
 
                         <div class="mb-3 d-none" id="new_supplier_group">
@@ -393,6 +471,9 @@
 <script>
 (function () {
     const supplierSelect = document.getElementById("supplier_id");
+    const supplierSearch = document.getElementById("supplier_search");
+    const supplierResults = document.getElementById("supplier_results");
+
     const lastPriceDisplay = document.getElementById("last_price_display");
     const keepRadio = document.getElementById("price_mode_keep");
     const newRadio = document.getElementById("price_mode_new");
@@ -416,6 +497,8 @@
     const summaryTotal = document.getElementById("summary_total");
     const taxIncludedRadio = document.getElementById("tax_included");
     const taxExcludedRadio = document.getElementById("tax_excluded");
+
+    let supplierTimer;
 
     const comparisonDataElement = document.getElementById("comparison-data");
     const comparisonBySupplier = comparisonDataElement
@@ -494,8 +577,13 @@
         const supplierId = supplierSelect.value;
 
         if (supplierId === "-1") {
-            newSupplierGroup.classList.remove("d-none");
-            newSupplierInput.setAttribute("required", "required");
+            if (newSupplierGroup) {
+                newSupplierGroup.classList.remove("d-none");
+            }
+
+            if (newSupplierInput) {
+                newSupplierInput.setAttribute("required", "required");
+            }
 
             lastPriceDisplay.value = "Proveedor nuevo";
             keepRadio.disabled = true;
@@ -504,9 +592,14 @@
             return;
         }
 
-        newSupplierGroup.classList.add("d-none");
-        newSupplierInput.removeAttribute("required");
-        newSupplierInput.value = "";
+        if (newSupplierGroup) {
+            newSupplierGroup.classList.add("d-none");
+        }
+
+        if (newSupplierInput && !supplierSearch) {
+            newSupplierInput.removeAttribute("required");
+            newSupplierInput.value = "";
+        }
 
         const data = comparisonBySupplier[supplierId];
 
@@ -518,7 +611,7 @@
             keepRadio.disabled = false;
             fillCommercialFields(data);
         } else {
-            lastPriceDisplay.value = "Sin precio previo";
+            lastPriceDisplay.value = supplierId ? "Sin precio previo" : "Sin precio previo";
             keepRadio.disabled = true;
             clearCommercialFields();
             setNewPriceMode();
@@ -540,7 +633,109 @@
         updateQuotationSummary();
     }
 
-    supplierSelect.addEventListener("change", updateLastPrice);
+    if (supplierSearch && supplierResults) {
+        supplierSearch.addEventListener("input", function () {
+            clearTimeout(supplierTimer);
+
+            const term = this.value.trim();
+
+            supplierSelect.value = "";
+
+            if (term.length < 2) {
+                supplierResults.innerHTML = "";
+                supplierResults.classList.add("d-none");
+                return;
+            }
+
+            supplierResults.innerHTML = `
+                <div class="list-group-item text-muted">
+                    Buscando proveedores...
+                </div>
+            `;
+            supplierResults.classList.remove("d-none");
+
+            supplierTimer = setTimeout(async function () {
+                try {
+                    const response = await fetch(
+                        `/purchases/suppliers/search?q=${encodeURIComponent(term)}`
+                    );
+
+                    const data = await response.json();
+
+                    supplierResults.innerHTML = "";
+
+                    if (!data.items || !data.items.length) {
+                        supplierResults.innerHTML = `
+                            <div class="list-group-item text-muted">
+                                Sin resultados
+                            </div>
+                        `;
+                    } else {
+                        data.items.slice(0, 15).forEach(function (item) {
+                            const btn = document.createElement("button");
+
+                            btn.type = "button";
+                            btn.className = "list-group-item list-group-item-action";
+
+                            const name = item.commercial_name || item.legal_name || "Proveedor";
+                            const taxId = item.tax_id || "";
+
+                            btn.innerHTML = `
+                                <strong>${name}</strong>
+                                <div class="small text-muted">
+                                    ${taxId}
+                                </div>
+                            `;
+
+                            btn.addEventListener("click", function () {
+                                supplierSearch.value = name;
+                                supplierSelect.value = item.id;
+
+                                if (newSupplierInput) {
+                                    newSupplierInput.value = "";
+                                }
+
+                                supplierResults.classList.add("d-none");
+
+                                updateLastPrice();
+                            });
+
+                            supplierResults.appendChild(btn);
+                        });
+                    }
+                } catch (error) {
+                    console.error(error);
+
+                    supplierResults.innerHTML = `
+                        <div class="list-group-item text-danger">
+                            Error buscando proveedores.
+                        </div>
+                    `;
+                }
+            }, 300);
+        });
+
+        if (newSupplierInput) {
+            newSupplierInput.addEventListener("input", function () {
+                if (this.value.trim() !== "") {
+                    supplierSelect.value = "";
+                    supplierSearch.value = "";
+                    supplierResults.innerHTML = "";
+                    supplierResults.classList.add("d-none");
+
+                    lastPriceDisplay.value = "Proveedor nuevo";
+                    keepRadio.disabled = true;
+                    clearCommercialFields();
+                    setNewPriceMode();
+                }
+            });
+        }
+    }
+
+    if (supplierSelect) {
+        supplierSelect.addEventListener("change", updateLastPrice);
+    }
+
     keepRadio.addEventListener("change", updatePriceMode);
     newRadio.addEventListener("change", updatePriceMode);
 
@@ -548,6 +743,16 @@
     discountInput.addEventListener("input", updateQuotationSummary);
     taxIncludedRadio.addEventListener("change", updateQuotationSummary);
     taxExcludedRadio.addEventListener("change", updateQuotationSummary);
+
+    document.addEventListener("click", function (event) {
+        if (
+            supplierResults &&
+            !event.target.closest("#supplier_results") &&
+            !event.target.closest("#supplier_search")
+        ) {
+            supplierResults.classList.add("d-none");
+        }
+    });
 
     updateLastPrice();
     updatePriceMode();
