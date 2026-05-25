@@ -25,6 +25,7 @@ from app.models.work_order_request_line import WorkOrderRequestLine
 from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 from app.utils.permissions import permission_required
 import re
+from flask import jsonify
 from app.models.equipment_type import EquipmentType
 from app.services.work_order_service import (
     WorkOrderServiceError,
@@ -210,7 +211,9 @@ def create_work_order_page():
     )
 
     if active_site_id:
-        warehouses_query = warehouses_query.filter(Warehouse.site_id == int(active_site_id))
+        warehouses_query = warehouses_query.filter(
+            Warehouse.site_id == int(active_site_id)
+        )
 
     warehouses = warehouses_query.all()
 
@@ -218,13 +221,6 @@ def create_work_order_page():
         EquipmentType.query
         .filter(EquipmentType.is_active.is_(True))
         .order_by(EquipmentType.name.asc())
-        .all()
-    )
-
-    equipments = (
-        Equipment.query
-        .filter(Equipment.is_active.is_(True))
-        .order_by(Equipment.code, Equipment.description)
         .all()
     )
 
@@ -242,12 +238,11 @@ def create_work_order_page():
         subtitle="Cree una orden con bodega, equipo, tipo de reparación y mecánico asignado.",
         sites=sites,
         warehouses=warehouses,
-        equipments=equipments,
+        equipments=[],
         equipment_types=equipment_types,
         repair_types=repair_types,
         repair_type_mechanics_map=repair_type_mechanics_map,
     )
-
 
 # =========================================================
 # CREAR OT
@@ -344,6 +339,49 @@ def create_work_order_action():
         flash("Error interno al crear la OT.", "danger")
         return redirect(url_for("work_orders.create_work_order_page"))
 
+@work_order_bp.route("/equipment/search", methods=["GET"])
+@login_required
+@permission_required("ot")
+def search_equipment_for_work_order():
+    q = (request.args.get("q") or "").strip()
+    equipment_type_id = request.args.get("equipment_type_id", type=int)
+
+    if len(q) < 2:
+        return jsonify([])
+
+    query = (
+        Equipment.query
+        .filter(Equipment.is_active.is_(True))
+    )
+
+    if equipment_type_id:
+        query = query.filter(
+            Equipment.equipment_type_id == equipment_type_id
+        )
+
+    query = query.filter(
+        db.or_(
+            Equipment.code.ilike(f"{q}%"),
+            Equipment.description.ilike(f"%{q}%"),
+        )
+    )
+
+    equipments = (
+        query
+        .order_by(Equipment.code.asc(), Equipment.description.asc())
+        .limit(20)
+        .all()
+    )
+
+    return jsonify([
+        {
+            "id": equipment.id,
+            "code": equipment.code,
+            "description": equipment.description or "",
+            "label": f"{equipment.code} - {equipment.description or ''}".strip(),
+        }
+        for equipment in equipments
+    ])
 
 # =========================================================
 # DETALLE OT

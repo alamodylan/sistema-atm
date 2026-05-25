@@ -230,19 +230,17 @@ document.addEventListener("DOMContentLoaded", function () {
     const containerError =
         document.getElementById("containerError");
 
-    const equipmentDataElement =
-        document.getElementById("equipmentData");
-
-    const allEquipments =
-        equipmentDataElement
-            ? JSON.parse(equipmentDataElement.textContent || "[]")
-            : [];
-
-    let filteredEquipments = [];
-
     const repairTypeMechanicsMap = JSON.parse(
         '{{ repair_type_mechanics_map | default({}) | tojson | safe }}'
     );
+
+    let searchTimeout = null;
+
+    let currentEquipments = [];
+
+    // =====================================================
+    // EQUIPMENT TYPE
+    // =====================================================
 
     function getSelectedEquipmentTypeCode() {
 
@@ -265,57 +263,14 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function resetEquipmentSearch() {
+
         equipmentIdInput.value = "";
+
         equipmentSearchInput.value = "";
-        equipmentDatalist.innerHTML = "";
-        filteredEquipments = [];
-    }
 
-    function renderEquipmentOptions(searchText = "") {
         equipmentDatalist.innerHTML = "";
 
-        const cleanSearch =
-            searchText.trim().toUpperCase();
-
-        let visibleEquipments =
-            filteredEquipments;
-
-        if (cleanSearch) {
-            visibleEquipments =
-                filteredEquipments.filter(function (equipment) {
-                    return (
-                        equipment.code.toUpperCase().includes(cleanSearch)
-                        || equipment.label.toUpperCase().includes(cleanSearch)
-                    );
-                });
-        }
-
-        visibleEquipments
-            .slice(0, 50)
-            .forEach(function (equipment) {
-                const option =
-                    document.createElement("option");
-
-                option.value =
-                    equipment.label;
-
-                equipmentDatalist.appendChild(option);
-            });
-    }
-
-    function filterEquipmentByType() {
-
-        const selectedTypeId =
-            equipmentTypeSelect.value;
-
-        resetEquipmentSearch();
-
-        filteredEquipments =
-            allEquipments.filter(function (equipment) {
-                return equipment.typeId === selectedTypeId;
-            });
-
-        renderEquipmentOptions();
+        currentEquipments = [];
     }
 
     function toggleEquipmentFields() {
@@ -352,8 +307,150 @@ document.addEventListener("DOMContentLoaded", function () {
 
         equipmentSelectWrapper.classList.remove("d-none");
 
-        filterEquipmentByType();
+        resetEquipmentSearch();
     }
+
+    equipmentTypeSelect.addEventListener(
+        "change",
+        toggleEquipmentFields
+    );
+
+    // =====================================================
+    // AJAX EQUIPMENT SEARCH
+    // =====================================================
+
+    async function searchEquipments(query) {
+
+        if (!query || query.length < 2) {
+
+            equipmentDatalist.innerHTML = "";
+
+            currentEquipments = [];
+
+            return;
+        }
+
+        try {
+
+            const params = new URLSearchParams({
+                q: query,
+                equipment_type_id: equipmentTypeSelect.value
+            });
+
+            const response = await fetch(
+                `/work-orders/equipment/search?${params.toString()}`,
+                {
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest"
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error("Error buscando equipos.");
+            }
+
+            const data = await response.json();
+
+            currentEquipments = data;
+
+            equipmentDatalist.innerHTML = "";
+
+            data.forEach(function (equipment) {
+
+                const option =
+                    document.createElement("option");
+
+                option.value = equipment.label;
+
+                equipmentDatalist.appendChild(option);
+
+            });
+
+        } catch (error) {
+
+            console.error(
+                "Error buscando equipos:",
+                error
+            );
+        }
+    }
+
+    equipmentSearchInput.addEventListener(
+        "input",
+        function () {
+
+            const value =
+                this.value.trim();
+
+            equipmentIdInput.value = "";
+
+            equipmentCodeSnapshotInput.value = "";
+
+            clearTimeout(searchTimeout);
+
+            searchTimeout = setTimeout(function () {
+
+                searchEquipments(value);
+
+            }, 250);
+
+            const selectedEquipment =
+                currentEquipments.find(function (equipment) {
+
+                    return (
+                        equipment.label === value
+                        || equipment.code === value
+                    );
+                });
+
+            if (selectedEquipment) {
+
+                equipmentIdInput.value =
+                    selectedEquipment.id;
+
+                equipmentCodeSnapshotInput.value =
+                    selectedEquipment.code;
+            }
+        }
+    );
+
+    equipmentSearchInput.addEventListener(
+        "change",
+        function () {
+
+            const value =
+                this.value.trim();
+
+            const selectedEquipment =
+                currentEquipments.find(function (equipment) {
+
+                    return (
+                        equipment.label === value
+                        || equipment.code === value
+                    );
+                });
+
+            if (selectedEquipment) {
+
+                equipmentIdInput.value =
+                    selectedEquipment.id;
+
+                equipmentCodeSnapshotInput.value =
+                    selectedEquipment.code;
+
+            } else {
+
+                equipmentIdInput.value = "";
+
+                equipmentCodeSnapshotInput.value = "";
+            }
+        }
+    );
+
+    // =====================================================
+    // CONTAINER FORMAT
+    // =====================================================
 
     function formatContainer(value) {
 
@@ -398,45 +495,6 @@ document.addEventListener("DOMContentLoaded", function () {
         return /^[A-Z]{4}-\d{6}-\d{1}$/.test(value);
     }
 
-    equipmentTypeSelect.addEventListener(
-        "change",
-        toggleEquipmentFields
-    );
-
-    equipmentSearchInput.addEventListener(
-        "input",
-        function () {
-
-            const value =
-                this.value.trim();
-
-            renderEquipmentOptions(value);
-
-            const selectedEquipment =
-                filteredEquipments.find(function (equipment) {
-                    return (
-                        equipment.label === value
-                        || equipment.code === value
-                    );
-                });
-
-            if (selectedEquipment) {
-
-                equipmentIdInput.value =
-                    selectedEquipment.id;
-
-                equipmentCodeSnapshotInput.value =
-                    selectedEquipment.code;
-
-            } else {
-
-                equipmentIdInput.value = "";
-
-                equipmentCodeSnapshotInput.value = "";
-            }
-        }
-    );
-
     containerInput.addEventListener(
         "input",
         function () {
@@ -463,44 +521,85 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     );
 
+    // =====================================================
+    // REPAIR TYPES / MECHANICS
+    // =====================================================
+
     function bindRepairTypeChange(row) {
-        const repairSelect = row.querySelector(".repair-type-select");
-        const mechanicSelect = row.querySelector(".mechanic-select");
 
-        repairSelect.addEventListener("change", function () {
-            const repairTypeId = this.value;
+        const repairSelect =
+            row.querySelector(".repair-type-select");
 
-            mechanicSelect.innerHTML = "";
+        const mechanicSelect =
+            row.querySelector(".mechanic-select");
 
-            if (!repairTypeId || !repairTypeMechanicsMap[repairTypeId]) {
-                mechanicSelect.innerHTML = '<option value="">Sin mecánicos</option>';
-                mechanicSelect.disabled = true;
-                return;
+        repairSelect.addEventListener(
+            "change",
+            function () {
+
+                const repairTypeId =
+                    this.value;
+
+                mechanicSelect.innerHTML = "";
+
+                if (
+                    !repairTypeId
+                    || !repairTypeMechanicsMap[repairTypeId]
+                ) {
+
+                    mechanicSelect.innerHTML =
+                        '<option value="">Sin mecánicos</option>';
+
+                    mechanicSelect.disabled = true;
+
+                    return;
+                }
+
+                const mechanics =
+                    repairTypeMechanicsMap[repairTypeId];
+
+                mechanicSelect.disabled = false;
+
+                mechanicSelect.innerHTML =
+                    '<option value="">Seleccione...</option>';
+
+                mechanics.forEach(function (m) {
+
+                    const option =
+                        document.createElement("option");
+
+                    option.value = m.id;
+
+                    option.textContent =
+                        m.name + " (" + m.code + ")";
+
+                    mechanicSelect.appendChild(option);
+
+                });
             }
-
-            const mechanics = repairTypeMechanicsMap[repairTypeId];
-
-            mechanicSelect.disabled = false;
-            mechanicSelect.innerHTML = '<option value="">Seleccione...</option>';
-
-            mechanics.forEach(function (m) {
-                const option = document.createElement("option");
-                option.value = m.id;
-                option.textContent = m.name + " (" + m.code + ")";
-                mechanicSelect.appendChild(option);
-            });
-        });
+        );
     }
 
     function addTaskRow() {
-        const container = document.getElementById("tasks-container");
-        const firstRow = document.querySelector(".task-row");
-        const newRow = firstRow.cloneNode(true);
+
+        const container =
+            document.getElementById("tasks-container");
+
+        const firstRow =
+            document.querySelector(".task-row");
+
+        const newRow =
+            firstRow.cloneNode(true);
 
         newRow.querySelectorAll("select").forEach(s => {
+
             s.value = "";
+
             if (s.classList.contains("mechanic-select")) {
-                s.innerHTML = '<option value="">Seleccione tipo primero</option>';
+
+                s.innerHTML =
+                    '<option value="">Seleccione tipo primero</option>';
+
                 s.disabled = true;
             }
         });
@@ -514,9 +613,12 @@ document.addEventListener("DOMContentLoaded", function () {
         bindRepairTypeChange(row);
     });
 
-    document.getElementById("addTaskRowBtn").addEventListener("click", addTaskRow);
+    document
+        .getElementById("addTaskRowBtn")
+        .addEventListener("click", addTaskRow);
 
     toggleEquipmentFields();
+
 });
 </script>
 
