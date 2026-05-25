@@ -16,6 +16,8 @@ from app.models.quotation_line import QuotationLine
 from app.models.inventory import WarehouseStock
 from sqlalchemy import func
 from flask import session
+from flask import jsonify
+from sqlalchemy.orm import joinedload
 
 from flask import (
     Blueprint,
@@ -696,157 +698,58 @@ def quotation_request_lines(request_id: int):
 @purchases_bp.route("/quotations/create", methods=["GET", "POST"])
 @login_required
 def create_quotation():
-    # 🔥 SOLO solicitudes válidas
+
     purchase_requests = (
-        PurchaseRequest.query.filter(
+        PurchaseRequest.query
+        .options(
+            joinedload(PurchaseRequest.site),
+            joinedload(PurchaseRequest.warehouse),
+        )
+        .filter(
             PurchaseRequest.status.in_([
                 "EN_REVISION_PROVEEDURIA",
                 "PARCIALMENTE_COTIZADA",
                 "COTIZADA",
-            ]))
+            ])
+        )
         .order_by(PurchaseRequest.created_at.desc())
+        .limit(100)
         .all()
     )
-
-    suppliers = (
-        Supplier.query.filter_by(is_active=True)
-        .order_by(Supplier.commercial_name.asc())
-        .all()
-    )
-
-    articles = (
-        Article.query.filter_by(is_active=True)
-        .order_by(Article.code.asc())
-        .all()
-    )
-
-    pending_articles = (
-        PendingArticle.query.filter(
-            PendingArticle.status.in_(["PENDIENTE_CODIFICACION", "CODIFICADO"])
-        )
-        .order_by(PendingArticle.created_at.desc())
-        .all()
-    )
-
-    # 🔥 MAPA DE LÍNEAS (solo activas)
-    purchase_request_lines_map: dict[int, list] = {}
-    for pr in purchase_requests:
-        purchase_request_lines_map[pr.id] = [
-            line for line in pr.lines
-            if line.line_status not in ["CANCELADA", "CONVERTIDA_A_OC", "RECIBIDA"]
-        ]
-
-    if request.method == "POST":
-        purchase_request_id = _to_int(request.form.get("purchase_request_id"))
-        quote_date = request.form.get("quote_date")
-        notes = request.form.get("notes")
-
-        pr_line_ids = request.form.getlist("line_purchase_request_line_id[]")
-        supplier_ids = request.form.getlist("line_supplier_id[]")
-        article_ids = request.form.getlist("line_article_id[]")
-        pending_article_ids = request.form.getlist("line_pending_article_id[]")
-        prices = request.form.getlist("line_unit_price[]")
-        currencies = request.form.getlist("line_currency_code[]")
-        discounts = request.form.getlist("line_discount_pct[]")
-        taxes = request.form.getlist("line_tax_pct[]")
-        tax_included_flags = request.form.getlist("line_tax_included[]")
-        lead_times = request.form.getlist("line_lead_time_days[]")
-        brands = request.form.getlist("line_brand_model[]")
-        notes_list = request.form.getlist("line_notes[]")
-
-        # 🔥 NUEVOS CAMPOS
-        payment_types = request.form.getlist("line_payment_type[]")
-        payment_terms = request.form.getlist("line_payment_term_months[]")
-        origin_types = request.form.getlist("line_origin_type[]")
-
-        max_len = max(
-            [len(supplier_ids), len(prices)],
-            default=0,
-        )
-
-        lines: list[QuotationLinePayload] = []
-
-        for index in range(max_len):
-            supplier_id = _to_int(supplier_ids[index] if index < len(supplier_ids) else None)
-            article_id = _to_int(article_ids[index] if index < len(article_ids) else None)
-            pending_article_id = _to_int(
-                pending_article_ids[index] if index < len(pending_article_ids) else None
-            )
-            pr_line_id = _to_int(pr_line_ids[index] if index < len(pr_line_ids) else None)
-            price_raw = prices[index] if index < len(prices) else None
-
-            if not any([supplier_id, article_id, pending_article_id, price_raw, pr_line_id]):
-                continue
-
-            try:
-                unit_price = _to_decimal(price_raw)
-                discount_pct = _to_decimal(discounts[index] if index < len(discounts) else None)
-                tax_pct = _to_decimal(taxes[index] if index < len(taxes) else None)
-            except ValueError:
-                flash(f"Error en línea {index + 1}", "danger")
-                return render_template(
-                    "purchases/quotations/create.html",
-                    purchase_requests=purchase_requests,
-                    purchase_request_lines_map=purchase_request_lines_map,
-                    suppliers=suppliers,
-                    articles=articles,
-                    pending_articles=pending_articles,
-                )
-
-            lines.append(
-                QuotationLinePayload(
-                    purchase_request_line_id=pr_line_id,
-                    supplier_id=supplier_id,
-                    quote_date=quote_date,
-                    unit_price=unit_price,
-                    currency_code=(currencies[index] if index < len(currencies) else "CRC") or "CRC",
-                    article_id=article_id,
-                    pending_article_id=pending_article_id,
-                    discount_pct=discount_pct,
-                    tax_pct=tax_pct,
-                    tax_included=str(index) in tax_included_flags,
-                    lead_time_days=_to_int(lead_times[index] if index < len(lead_times) else None),
-                    brand_model=brands[index] if index < len(brands) else None,
-                    notes=notes_list[index] if index < len(notes_list) else None,
-
-                    # 🔥 NUEVO
-                    payment_type=payment_types[index] if index < len(payment_types) else None,
-                    payment_term_months=_to_int(payment_terms[index] if index < len(payment_terms) else None),
-                    origin_type=origin_types[index] if index < len(origin_types) else None,
-
-                    status="COTIZADA",
-                )
-            )
-
-        try:
-            quotation_batch = create_quotation_batch(
-                purchase_request_id=purchase_request_id,
-                created_by_user_id=current_user.id,
-                quote_date=quote_date,
-                notes=notes,
-                lines=lines,
-            )
-        except QuotationServiceError as exc:
-            flash(str(exc), "danger")
-            return render_template(
-                "purchases/quotations/create.html",
-                purchase_requests=purchase_requests,
-                purchase_request_lines_map=purchase_request_lines_map,
-                suppliers=suppliers,
-                articles=articles,
-                pending_articles=pending_articles,
-            )
-
-        flash("Cotización creada correctamente.", "success")
-        return redirect(url_for("purchases.quotation_detail", batch_id=quotation_batch.id))
 
     return render_template(
         "purchases/quotations/create.html",
         purchase_requests=purchase_requests,
-        purchase_request_lines_map=purchase_request_lines_map,
-        suppliers=suppliers,
-        articles=articles,
-        pending_articles=pending_articles,
+    )
+
+@purchases_bp.route(
+    "/quotations/request/<int:request_id>/partial-lines"
+)
+@login_required
+def quotation_request_lines_partial(request_id: int):
+
+    rows = (
+        db.session.query(
+            PurchaseRequestLine
+        )
+        .options(
+            joinedload(PurchaseRequestLine.unit)
+        )
+        .filter(
+            PurchaseRequestLine.purchase_request_id == request_id,
+            PurchaseRequestLine.line_status.notin_([
+                "CANCELADA",
+                "CONVERTIDA_A_OC",
+                "RECIBIDA",
+            ])
+        )
+        .order_by(PurchaseRequestLine.id.asc())
+        .all()
+    )
+
+    return render_template(
+        "purchases/quotations/_request_lines.html",
+        lines=rows,
     )
 
 

@@ -18,7 +18,6 @@
 
     <div class="row g-4">
 
-        <!-- SOLICITUDES PENDIENTES -->
         <div class="col-12 col-xl-8">
             <div class="card border-0 shadow-sm rounded-4">
                 <div class="card-body p-4">
@@ -34,8 +33,6 @@
                     {% if purchase_requests %}
                         <div class="accordion" id="purchaseRequestsAccordion">
                             {% for pr in purchase_requests %}
-                                {% set lines = purchase_request_lines_map.get(pr.id, []) %}
-
                                 <div class="accordion-item border rounded-4 mb-3 overflow-hidden">
                                     <h2 class="accordion-header" id="heading-{{ pr.id }}">
                                         <button class="accordion-button collapsed fw-semibold"
@@ -69,57 +66,23 @@
                                          data-bs-parent="#purchaseRequestsAccordion">
 
                                         <div class="accordion-body bg-light-subtle">
-                                            {% if lines %}
-                                                <div class="table-responsive">
-                                                    <table class="table table-hover align-middle mb-0">
-                                                        <thead class="table-light">
-                                                            <tr>
-                                                                <th>Artículo</th>
-                                                                <th>Código</th>
-                                                                <th>Cantidad</th>
-                                                                <th>Unidad</th>
-                                                                <th>Estado línea</th>
-                                                                <th class="text-end">Acción</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {% for line in lines %}
-                                                                <tr>
-                                                                    <td class="fw-semibold">
-                                                                        {{ line.item_name or "Sin artículo" }}
-                                                                    </td>
-                                                                    <td>
-                                                                        {{ line.item_code or "-" }}
-                                                                    </td>
-                                                                    <td>
-                                                                        {{ line.quantity_requested }}
-                                                                    </td>
-                                                                    <td>
-                                                                        {{ line.unit.name if line.unit else "-" }}
-                                                                    </td>
-                                                                    <td>
-                                                                        <span class="badge bg-secondary-subtle text-secondary border">
-                                                                            {{ line.line_status }}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td class="text-end">
-                                                                        <a href="{{ url_for('purchases.quotation_line_view', line_id=line.id) }}"
-                                                                           class="btn btn-sm btn-dark rounded-3">
-                                                                            <i class="bi bi-search me-1"></i>
-                                                                            Ver comparativo / Cotizar
-                                                                        </a>
-                                                                    </td>
-                                                                </tr>
-                                                            {% endfor %}
-                                                        </tbody>
-                                                    </table>
+                                            <div
+                                                class="quotation-lines-container"
+                                                data-request-id="{{ pr.id }}"
+                                            >
+                                                <div class="text-center py-4">
+                                                    <div
+                                                        class="spinner-border spinner-border-sm text-dark mb-2"
+                                                        role="status"
+                                                    ></div>
+
+                                                    <div class="small text-muted">
+                                                        Cargando líneas...
+                                                    </div>
                                                 </div>
-                                            {% else %}
-                                                <div class="alert alert-warning rounded-4 mb-0">
-                                                    Esta solicitud no tiene líneas disponibles para cotizar.
-                                                </div>
-                                            {% endif %}
+                                            </div>
                                         </div>
+
                                     </div>
                                 </div>
                             {% endfor %}
@@ -133,7 +96,6 @@
             </div>
         </div>
 
-        <!-- COTIZACIÓN LIBRE -->
         <div class="col-12 col-xl-4">
             <div class="card border-0 shadow-sm rounded-4 mb-4">
                 <div class="card-body p-4">
@@ -223,4 +185,55 @@
 
     </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const loadedRequests = new Set();
+
+    document
+        .querySelectorAll(".accordion-collapse")
+        .forEach(function (collapse) {
+            collapse.addEventListener("show.bs.collapse", async function () {
+                const container = this.querySelector(".quotation-lines-container");
+
+                if (!container) return;
+
+                const requestId = container.dataset.requestId;
+
+                if (!requestId || loadedRequests.has(requestId)) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(
+                        `/purchases/quotations/request/${requestId}/partial-lines`,
+                        {
+                            headers: {
+                                "X-Requested-With": "XMLHttpRequest"
+                            }
+                        }
+                    );
+
+                    if (!response.ok) {
+                        throw new Error("Error cargando líneas.");
+                    }
+
+                    const html = await response.text();
+
+                    container.innerHTML = html;
+                    loadedRequests.add(requestId);
+
+                } catch (error) {
+                    console.error(error);
+
+                    container.innerHTML = `
+                        <div class="alert alert-danger rounded-4 mb-0">
+                            Error cargando líneas.
+                        </div>
+                    `;
+                }
+            });
+        });
+});
+</script>
 {% endblock %}
