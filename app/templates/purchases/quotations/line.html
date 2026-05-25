@@ -100,9 +100,10 @@
                                         </td>
                                         <td class="fw-semibold">{{ item.supplier_name }}</td>
                                         <td>
-                                            {{ item.currency_code or "CRC" }}
-                                            {{ item.total_amount or item.last_price }}
-                                        </td>
+                                            <td>
+                                                {{ item.currency_code or "CRC" }}
+                                                {{ "{:,.2f}".format((item.total_amount or item.last_price or 0)|float) }}
+                                            </td>
                                         <td>
                                             {{ item.last_quote_date.strftime("%d/%m/%Y") if item.last_quote_date else "-" }}
                                         </td>
@@ -409,7 +410,7 @@
                             </div>
 
                             <div class="col-12 col-md-6">
-                                <label class="form-label fw-semibold">Lead time</label>
+                                <label class="form-label fw-semibold">Tiempo de entrega</label>
                                 <input type="number"
                                        min="0"
                                        name="lead_time_days"
