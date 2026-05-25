@@ -120,6 +120,26 @@ def _build_repair_type_mechanics_map(site_id: int):
 def list_work_orders():
     status = (request.args.get("status") or "").strip()
     ot_number = (request.args.get("ot_number") or "").strip()
+
+    return render_template(
+        "work_orders/index.html",
+        title="Órdenes de trabajo",
+        subtitle="Consulte órdenes de trabajo por estado o número de OT.",
+        work_orders=[],
+        pagination=None,
+        status=status,
+        ot_number=ot_number,
+    )
+
+# =========================================================
+# PARCIAL AJAX - LISTADO DE ÓRDENES DE TRABAJO
+# =========================================================
+@work_order_bp.route("/partial/list", methods=["GET"])
+@login_required
+@permission_required("ot")
+def list_work_orders_partial():
+    status = (request.args.get("status") or "").strip()
+    ot_number = (request.args.get("ot_number") or "").strip()
     page = request.args.get("page", 1, type=int)
 
     try:
@@ -163,9 +183,7 @@ def list_work_orders():
         )
 
         return render_template(
-            "work_orders/index.html",
-            title="Órdenes de trabajo",
-            subtitle="Consulte órdenes de trabajo por estado o número de OT.",
+            "work_orders/_list.html",
             work_orders=pagination.items,
             pagination=pagination,
             status=status,
@@ -173,19 +191,8 @@ def list_work_orders():
         )
 
     except Exception as exc:
-        print(f"[LIST OT ERROR] {exc}")
-
-        flash("Error al cargar órdenes de trabajo.", "danger")
-
-        return render_template(
-            "work_orders/index.html",
-            title="Órdenes de trabajo",
-            subtitle="Consulte órdenes de trabajo por estado o número de OT.",
-            work_orders=[],
-            pagination=None,
-            status=status,
-            ot_number=ot_number,
-        )
+        print(f"[LIST OT PARTIAL ERROR] {exc}")
+        return ""
 
 
 @work_order_bp.route("/create", methods=["GET"])

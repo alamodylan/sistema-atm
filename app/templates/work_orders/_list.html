@@ -1,0 +1,193 @@
+{% if pagination %}
+    <div class="d-flex justify-content-end mb-3">
+        <span class="badge bg-light text-dark border">
+            Página {{ pagination.page }} de {{ pagination.pages }}
+        </span>
+    </div>
+{% endif %}
+
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>OT</th>
+                <th>Estado</th>
+                <th>Predio</th>
+                <th>Bodega</th>
+                <th>Responsable</th>
+                <th>Equipo</th>
+                <th>Fecha creación</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            {% if work_orders %}
+
+                {% for work_order in work_orders %}
+
+                    <tr>
+
+                        <td>
+                            <a href="{{ url_for('work_orders.get_work_order', work_order_id=work_order.id) }}"
+                               class="text-decoration-none fw-semibold">
+                                {{ work_order.number }}
+                            </a>
+                        </td>
+
+                        <td>
+
+                            {% if work_order.status == "EN_PROCESO" %}
+                                <span class="badge text-bg-warning">
+                                    {{ work_order.status }}
+                                </span>
+
+                            {% elif work_order.status == "FINALIZADA" %}
+                                <span class="badge text-bg-info">
+                                    {{ work_order.status }}
+                                </span>
+
+                            {% elif work_order.status == "CERRADA" %}
+                                <span class="badge text-bg-dark">
+                                    {{ work_order.status }}
+                                </span>
+
+                            {% else %}
+                                <span class="badge text-bg-secondary">
+                                    {{ work_order.status }}
+                                </span>
+                            {% endif %}
+
+                        </td>
+
+                        <td>
+                            {{ work_order.site.name if work_order.site else "-" }}
+                        </td>
+
+                        <td>
+                            {{ work_order.warehouse.name if work_order.warehouse else "-" }}
+                        </td>
+
+                        <td>
+                            {{ work_order.responsible_user.full_name if work_order.responsible_user else "-" }}
+                        </td>
+
+                        <td>
+                            {{ work_order.equipment_code_snapshot or "-" }}
+                        </td>
+
+                        <td>
+                            {{ work_order.created_at|cr_datetime if work_order.created_at else "-" }}
+                        </td>
+
+                    </tr>
+
+                {% endfor %}
+
+            {% else %}
+
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">
+                        No hay órdenes de trabajo para mostrar.
+                    </td>
+                </tr>
+
+            {% endif %}
+
+        </tbody>
+    </table>
+</div>
+
+{% if pagination and pagination.pages > 1 %}
+
+    <nav class="mt-4">
+
+        <ul class="pagination justify-content-center flex-wrap gap-1">
+
+            {% if pagination.has_prev %}
+
+                <li class="page-item">
+
+                    <a
+                        class="page-link"
+                        href="{{ url_for(
+                            'work_orders.list_work_orders_partial',
+                            page=pagination.prev_num,
+                            status=status,
+                            ot_number=ot_number
+                        ) }}"
+                    >
+                        Anterior
+                    </a>
+
+                </li>
+
+            {% else %}
+
+                <li class="page-item disabled">
+                    <span class="page-link">Anterior</span>
+                </li>
+
+            {% endif %}
+
+            {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+
+                {% if p %}
+
+                    <li class="page-item {% if p == pagination.page %}active{% endif %}">
+
+                        <a
+                            class="page-link"
+                            href="{{ url_for(
+                                'work_orders.list_work_orders_partial',
+                                page=p,
+                                status=status,
+                                ot_number=ot_number
+                            ) }}"
+                        >
+                            {{ p }}
+                        </a>
+
+                    </li>
+
+                {% else %}
+
+                    <li class="page-item disabled">
+                        <span class="page-link">…</span>
+                    </li>
+
+                {% endif %}
+
+            {% endfor %}
+
+            {% if pagination.has_next %}
+
+                <li class="page-item">
+
+                    <a
+                        class="page-link"
+                        href="{{ url_for(
+                            'work_orders.list_work_orders_partial',
+                            page=pagination.next_num,
+                            status=status,
+                            ot_number=ot_number
+                        ) }}"
+                    >
+                        Siguiente
+                    </a>
+
+                </li>
+
+            {% else %}
+
+                <li class="page-item disabled">
+                    <span class="page-link">Siguiente</span>
+                </li>
+
+            {% endif %}
+
+        </ul>
+
+    </nav>
+
+{% endif %}
