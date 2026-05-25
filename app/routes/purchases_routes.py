@@ -996,7 +996,14 @@ def list_orders_partial():
     page = request.args.get("page", 1, type=int)
 
     try:
-        query = PurchaseOrder.query
+        query = (
+            PurchaseOrder.query
+            .options(
+                joinedload(PurchaseOrder.supplier),
+                joinedload(PurchaseOrder.purchase_request),
+                joinedload(PurchaseOrder.warehouse),
+            )
+        )
 
         if approval_status:
             query = query.filter(
@@ -1053,26 +1060,6 @@ def list_orders_partial():
 @purchases_bp.route("/orders/create", methods=["GET", "POST"])
 @login_required
 def create_order():
-    def _calculate_quote_amounts(line: QuotationLine, quantity: Decimal) -> dict:
-        unit_price = Decimal(str(line.unit_price or 0))
-        tax_factor = Decimal("1.13")
-
-        if line.tax_included:
-            unit_cost_without_tax = unit_price / tax_factor
-            subtotal = unit_cost_without_tax * quantity
-            total = unit_price * quantity
-        else:
-            unit_cost_without_tax = unit_price
-            subtotal = unit_cost_without_tax * quantity
-            total = subtotal * tax_factor
-
-        return {
-            "unit_cost_without_tax": unit_cost_without_tax,
-            "subtotal": subtotal,
-            "tax_amount": total - subtotal,
-            "total": total,
-        }
-
     if request.method == "POST":
         q_line_ids = request.form.getlist("line_quotation_line_id[]")
         quantities = request.form.getlist("line_quantity_ordered[]")
@@ -1116,7 +1103,6 @@ def create_order():
             if not quotation_line:
                 continue
 
-            # 🔥 VALIDACIÓN: la línea de solicitud ya fue usada en otra OC
             if quotation_line.purchase_request_line_id:
                 already_used_request_line = PurchaseOrderLine.query.filter(
                     PurchaseOrderLine.purchase_request_line_id == quotation_line.purchase_request_line_id
@@ -1157,12 +1143,11 @@ def create_order():
             if currency_code is None:
                 currency_code = quotation_line.currency_code or "CRC"
 
-            if payment_terms is None:
-                if quotation_line.payment_type:
-                    if quotation_line.payment_term_months:
-                        payment_terms = f"{quotation_line.payment_type} {quotation_line.payment_term_months} meses"
-                    else:
-                        payment_terms = quotation_line.payment_type
+            if payment_terms is None and quotation_line.payment_type:
+                if quotation_line.payment_term_months:
+                    payment_terms = f"{quotation_line.payment_type} {quotation_line.payment_term_months} meses"
+                else:
+                    payment_terms = quotation_line.payment_type
 
             quantity_raw = quantities[index] if index < len(quantities) else None
 
@@ -1213,12 +1198,25 @@ def create_order():
                 notes=request.form.get("notes"),
                 lines=lines,
             )
+
         except PurchaseOrderServiceError as exc:
             flash(str(exc), "danger")
             return redirect(url_for("purchases.create_order"))
 
         flash("Orden de compra creada correctamente y enviada a aprobación.", "success")
         return redirect(url_for("purchases.order_print", order_id=purchase_order.id))
+
+    return render_template(
+        "purchases/orders/create.html",
+        quotation_groups=[],
+    )
+
+@purchases_bp.route("/orders/create/partial/quotation-groups")
+@login_required
+def create_order_quotation_groups_partial():
+
+    page = request.args.get("page", 1, type=int)
+    search = (request.args.get("search") or "").strip()
 
     used_quotation_line_ids = {
         row[0]
@@ -1238,18 +1236,34 @@ def create_order():
         )
     }
 
-    quotation_lines = (
+    query = (
         QuotationLine.query
-        .filter(QuotationLine.status == "COTIZADA")
+        .filter(
+            QuotationLine.status == "COTIZADA"
+        )
+    )
+
+    if search:
+
+        like_value = f"%{search}%"
+
+        query = query.filter(
+            db.or_(
+                QuotationLine.notes.ilike(like_value),
+            )
+        )
+
+    quotation_lines = (
+        query
         .order_by(
-            QuotationLine.purchase_request_line_id.asc(),
             QuotationLine.quote_date.desc(),
             QuotationLine.id.desc(),
         )
+        .limit(100)
         .all()
     )
 
-    quotation_groups_map: dict[str, dict] = {}
+    quotation_groups_map = {}
 
     for line in quotation_lines:
 
@@ -1264,7 +1278,14 @@ def create_order():
         if line.purchase_request_line and line.purchase_request_line.quantity_requested:
             quantity = Decimal(str(line.purchase_request_line.quantity_requested))
 
-        amounts = _calculate_quote_amounts(line, quantity)
+        if line.tax_included:
+            subtotal = (Decimal(str(line.unit_price or 0)) / Decimal("1.13")) * quantity
+            total = Decimal(str(line.unit_price or 0)) * quantity
+        else:
+            subtotal = Decimal(str(line.unit_price or 0)) * quantity
+            total = subtotal * Decimal("1.13")
+
+        tax_amount = total - subtotal
 
         if line.purchase_request_line_id:
             group_key = f"pr-line-{line.purchase_request_line_id}"
@@ -1272,9 +1293,11 @@ def create_order():
             group_key = f"quotation-line-{line.id}"
 
         if group_key not in quotation_groups_map:
+
             purchase_request = (
                 line.purchase_request_line.purchase_request
-                if line.purchase_request_line and line.purchase_request_line.purchase_request
+                if line.purchase_request_line
+                and line.purchase_request_line.purchase_request
                 else None
             )
 
@@ -1289,8 +1312,6 @@ def create_order():
                     line.purchase_request_line.unit.name
                     if line.purchase_request_line
                     and line.purchase_request_line.unit
-                    else line.article.unit.name
-                    if line.article and line.article.unit
                     else "-"
                 ),
                 "options": [],
@@ -1312,9 +1333,9 @@ def create_order():
                 "origin_type": line.origin_type or "",
                 "brand_model": line.brand_model or "",
                 "notes": line.notes or "",
-                "estimated_subtotal": str(amounts["subtotal"]),
-                "estimated_tax": str(amounts["tax_amount"]),
-                "estimated_total": str(amounts["total"]),
+                "estimated_subtotal": str(subtotal),
+                "estimated_tax": str(tax_amount),
+                "estimated_total": str(total),
             }
         )
 
@@ -1327,10 +1348,9 @@ def create_order():
         )
     )
 
-    return render_template(
-        "purchases/orders/create.html",
-        quotation_groups=quotation_groups,
-    )
+    return {
+        "items": quotation_groups
+    }
 
 @purchases_bp.route("/orders/create/manual", methods=["GET", "POST"])
 @login_required

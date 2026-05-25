@@ -34,7 +34,7 @@
                                 </p>
                             </div>
                             <span class="badge text-bg-light border">
-                                {{ quotation_groups|length }} líneas
+                                <span id="quotation-groups-count">0</span> líneas
                             </span>
                         </div>
 
@@ -62,13 +62,16 @@
                             </button>
                         </div>
 
-                        {% if quotation_groups %}
-                            <div id="quotation-groups-list" class="d-flex flex-column gap-2"></div>
-                        {% else %}
-                            <div class="alert alert-light border mb-0">
-                                No hay líneas cotizadas disponibles para crear OC.
-                            </div>
-                        {% endif %}
+                        <div id="quotation-groups-loading" class="text-center py-4">
+                            <div class="spinner-border spinner-border-sm text-dark mb-2"></div>
+                            <div class="small text-muted">Cargando líneas cotizadas...</div>
+                        </div>
+
+                        <div id="quotation-groups-list" class="d-flex flex-column gap-2 d-none"></div>
+
+                        <div id="quotation-groups-empty" class="alert alert-light border mb-0 d-none">
+                            No hay líneas cotizadas disponibles para crear OC.
+                        </div>
                     </div>
                 </div>
 
@@ -243,16 +246,16 @@
     </form>
 </div>
 
-<script id="quotation-groups-data" type="application/json">
-{{ quotation_groups|tojson }}
-</script>
-
 <script>
 (function () {
     const TAX_FACTOR = 1.13;
 
     const form = document.getElementById("purchase-order-form");
     const groupsList = document.getElementById("quotation-groups-list");
+    const groupsLoading = document.getElementById("quotation-groups-loading");
+    const groupsEmpty = document.getElementById("quotation-groups-empty");
+    const groupsCount = document.getElementById("quotation-groups-count");
+
     const lineSearch = document.getElementById("line-search");
     const filterButtons = document.querySelectorAll(".line-filter-btn");
 
@@ -277,15 +280,13 @@
     const hiddenFields = document.getElementById("hidden-fields");
     const submitBtn = document.getElementById("submit-btn");
 
-    const quotationGroups = JSON.parse(
-        document.getElementById("quotation-groups-data").textContent || "[]"
-    );
-
+    let quotationGroups = [];
     let activeGroupKey = null;
     let activeFilter = "all";
     let lockedSupplierId = null;
     let lockedSupplierLabel = null;
     let lockedCurrency = null;
+    let searchTimer = null;
 
     const selectedLines = new Map();
 
@@ -318,17 +319,6 @@
         const keys = new Set();
         selectedLines.forEach(line => keys.add(String(line.group_key)));
         return keys;
-    }
-
-    function getOptionByQuotationLineId(quotationLineId) {
-        for (const group of quotationGroups) {
-            for (const option of group.options || []) {
-                if (String(option.quotation_line_id) === String(quotationLineId)) {
-                    return { group, option };
-                }
-            }
-        }
-        return null;
     }
 
     function calculateFromOption(option, quantity) {
@@ -366,21 +356,66 @@
         ].join(" ").toLowerCase();
     }
 
-    function groupHasSupplierOption(group, supplierId) {
-        if (!supplierId) return true;
-
-        return (group.options || []).some(option =>
-            String(option.supplier_id) === String(supplierId) &&
-            !selectedLines.has(String(option.quotation_line_id))
-        );
-    }
-
     function groupHasAvailableOptions(group) {
         return (group.options || []).some(option => {
             if (selectedLines.has(String(option.quotation_line_id))) return false;
             if (lockedSupplierId && String(option.supplier_id) !== String(lockedSupplierId)) return false;
             return true;
         });
+    }
+
+    async function loadQuotationGroups() {
+        const search = (lineSearch.value || "").trim();
+
+        groupsLoading.classList.remove("d-none");
+        groupsList.classList.add("d-none");
+        groupsEmpty.classList.add("d-none");
+
+        try {
+            const params = new URLSearchParams({
+                search: search
+            });
+
+            const response = await fetch(
+                `/purchases/orders/create/partial/quotation-groups?${params.toString()}`,
+                {
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest"
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error("Error cargando líneas cotizadas.");
+            }
+
+            const data = await response.json();
+
+            quotationGroups = data.items || [];
+            groupsCount.textContent = quotationGroups.length;
+
+            groupsLoading.classList.add("d-none");
+
+            if (!quotationGroups.length) {
+                groupsList.classList.add("d-none");
+                groupsEmpty.classList.remove("d-none");
+            } else {
+                groupsList.classList.remove("d-none");
+                groupsEmpty.classList.add("d-none");
+            }
+
+            activeGroupKey = null;
+            renderGroups();
+            renderQuotationOptions();
+
+        } catch (error) {
+            console.error(error);
+
+            groupsLoading.classList.add("d-none");
+            groupsList.classList.add("d-none");
+            groupsEmpty.classList.remove("d-none");
+            groupsEmpty.textContent = "Error cargando líneas cotizadas.";
+        }
     }
 
     function renderGroups() {
@@ -399,7 +434,6 @@
             const hasAvailable = groupHasAvailableOptions(group);
 
             if (query && !getSearchText(group).includes(query)) return;
-
             if (activeFilter === "available" && (!hasAvailable || isSelected)) return;
             if (activeFilter === "selected" && !isSelected) return;
 
@@ -497,13 +531,9 @@
         if (!availableOptions.length) {
             quotationOptionsContainer.classList.add("d-none");
             quotationOptionsEmpty.classList.remove("d-none");
-
-            if (lockedSupplierId) {
-                quotationOptionsEmpty.textContent = "Esta línea no tiene cotización disponible del proveedor fijo de la OC.";
-            } else {
-                quotationOptionsEmpty.textContent = "Esta línea no tiene cotizaciones disponibles.";
-            }
-
+            quotationOptionsEmpty.textContent = lockedSupplierId
+                ? "Esta línea no tiene cotización disponible del proveedor fijo de la OC."
+                : "Esta línea no tiene cotizaciones disponibles.";
             return;
         }
 
@@ -635,6 +665,7 @@
             summaryTotal.textContent = "0.00";
 
             resetSupplierIfNoLines();
+            renderLockedSupplier();
             renderGroups();
             renderQuotationOptions();
             return;
@@ -758,7 +789,13 @@
     });
 
     if (lineSearch) {
-        lineSearch.addEventListener("input", renderGroups);
+        lineSearch.addEventListener("input", function () {
+            clearTimeout(searchTimer);
+
+            searchTimer = setTimeout(function () {
+                loadQuotationGroups();
+            }, 350);
+        });
     }
 
     form.addEventListener("submit", function (event) {
@@ -776,9 +813,9 @@
     });
 
     renderLockedSupplier();
-    renderGroups();
     renderQuotationOptions();
     renderSelectedLines();
+    loadQuotationGroups();
 })();
 </script>
 {% endblock %}
