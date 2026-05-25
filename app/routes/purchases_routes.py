@@ -149,6 +149,33 @@ def list_requests():
         search=search,
     )
 
+@purchases_bp.route("/requests/partial/list")
+@login_required
+def list_requests_partial():
+    status = request.args.get("status", type=str)
+    priority = request.args.get("priority", type=str)
+    search = request.args.get("search", type=str)
+
+    try:
+        purchase_requests = list_purchase_requests(
+            status=status,
+            priority=priority,
+            search=search,
+        )
+
+        return render_template(
+            "purchases/requests/_list.html",
+            purchase_requests=purchase_requests,
+        )
+
+    except Exception as exc:
+        print(f"[PURCHASE REQUESTS PARTIAL ERROR] {exc}")
+        db.session.rollback()
+        return render_template(
+            "purchases/requests/_list.html",
+            purchase_requests=[],
+        ), 500
+
 
 @purchases_bp.route("/requests/create", methods=["GET", "POST"])
 @login_required
