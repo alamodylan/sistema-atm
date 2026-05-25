@@ -38,7 +38,7 @@
 
                         <dt class="col-5 text-muted">Fecha</dt>
                         <dd class="col-7">
-                            {{ quotation_batch.quote_date|cr_datetime if quotation_batch.quote_date else '-' }}
+                            {{ quotation_batch.quote_date.strftime("%d/%m/%Y") if quotation_batch.quote_date else '-' }}
                         </dd>
 
                         <dt class="col-5 text-muted">Creado por</dt>
