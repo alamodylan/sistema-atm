@@ -2,126 +2,410 @@
 
 {% block content %}
 <div class="container-fluid py-4">
+
     <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+
         <div>
-            <h2 class="fw-bold mb-1">Órdenes de compra</h2>
+            <h2 class="fw-bold mb-1">
+                Órdenes de compra
+            </h2>
+
             <p class="text-muted mb-0">
                 Consulta, seguimiento y aprobación de órdenes de compra.
             </p>
         </div>
+
         <div>
-            <a href="{{ url_for('purchases.create_order') }}" class="btn btn-dark rounded-3">
-                <i class="bi bi-plus-lg me-2"></i>Nueva orden
+            <a href="{{ url_for('purchases.create_order') }}"
+               class="btn btn-dark rounded-3">
+
+                <i class="bi bi-plus-lg me-2"></i>
+                Nueva orden
+
             </a>
         </div>
+
     </div>
 
+    <!-- ===================================================== -->
+    <!-- FILTROS -->
+    <!-- ===================================================== -->
+
     <div class="card border-0 shadow-sm rounded-4 mb-4">
+
         <div class="card-body p-4">
-            <form method="get" class="row g-3">
+
+            <form id="filtersForm" class="row g-3">
+
                 <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Buscar</label>
-                    <input type="text"
-                           name="search"
-                           value="{{ search or '' }}"
-                           class="form-control rounded-3"
-                           placeholder="Número de orden">
+
+                    <label class="form-label fw-semibold">
+                        Buscar
+                    </label>
+
+                    <input
+                        type="text"
+                        name="search"
+                        id="searchInput"
+                        value="{{ search or '' }}"
+                        class="form-control rounded-3"
+                        placeholder="Número de orden"
+                    >
+
                 </div>
 
                 <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Estado</label>
-                    <select name="approval_status" class="form-select rounded-3">
+
+                    <label class="form-label fw-semibold">
+                        Estado
+                    </label>
+
+                    <select
+                        name="approval_status"
+                        id="approvalStatus"
+                        class="form-select rounded-3"
+                    >
+
                         <option value="">Todos</option>
-                        {% for value in ['BORRADOR','PENDIENTE_APROBACION','APROBADA','RECHAZADA','ANULADA','RECIBIDA_PARCIAL','RECIBIDA_TOTAL','CERRADA'] %}
-                            <option value="{{ value }}" {% if selected_approval_status == value %}selected{% endif %}>
+
+                        {% for value in [
+                            'BORRADOR',
+                            'PENDIENTE_APROBACION',
+                            'APROBADA',
+                            'RECHAZADA',
+                            'ANULADA',
+                            'RECIBIDA_PARCIAL',
+                            'RECIBIDA_TOTAL',
+                            'CERRADA'
+                        ] %}
+
+                            <option
+                                value="{{ value }}"
+                                {% if selected_approval_status == value %}selected{% endif %}
+                            >
                                 {{ value }}
                             </option>
+
                         {% endfor %}
+
                     </select>
+
                 </div>
 
                 <div class="col-12 col-md-3">
-                    <label class="form-label fw-semibold">Proveedor</label>
-                    <select name="supplier_id" class="form-select rounded-3">
-                        <option value="">Todos</option>
-                        {% for item in suppliers %}
-                            <option value="{{ item.id }}" {% if selected_supplier_id == item.id %}selected{% endif %}>
-                                {{ item.commercial_name }}
-                            </option>
-                        {% endfor %}
-                    </select>
+
+                    <label class="form-label fw-semibold">
+                        Proveedor
+                    </label>
+
+                    <input
+                        type="text"
+                        id="supplierSearch"
+                        class="form-control rounded-3"
+                        placeholder="Buscar proveedor..."
+                        autocomplete="off"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="supplier_id"
+                        id="supplierId"
+                        value="{{ selected_supplier_id or '' }}"
+                    >
+
+                    <div
+                        id="supplierResults"
+                        class="list-group mt-2 d-none shadow-sm"
+                    ></div>
+
                 </div>
 
                 <div class="col-12 col-md-1 d-grid align-self-end">
-                    <button type="submit" class="btn btn-outline-dark rounded-3">
+
+                    <button
+                        type="button"
+                        id="applyFiltersBtn"
+                        class="btn btn-outline-dark rounded-3"
+                    >
+
                         <i class="bi bi-search"></i>
+
                     </button>
+
                 </div>
+
             </form>
+
         </div>
+
     </div>
 
-    <div class="card border-0 shadow-sm rounded-4">
-        <div class="card-body p-0">
-            {% if purchase_orders %}
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="ps-4">Número</th>
-                                <th>Proveedor</th>
-                                <th>Solicitud</th>
-                                <th>Estado</th>
-                                <th>Moneda</th>
-                                <th>Bodega sugerida</th>
-                                <th>Fecha</th>
-                                <th class="text-end pe-4">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in purchase_orders %}
-                                <tr>
-                                    <td class="ps-4 fw-semibold">{{ item.number }}</td>
-                                    <td>{{ item.supplier.commercial_name if item.supplier else '-' }}</td>
-                                    <td>{{ item.purchase_request.number if item.purchase_request else '-' }}</td>
-                                    <td>
-                                        {% if item.approval_status == 'APROBADA' %}
-                                            <span class="badge text-bg-success">{{ item.approval_status }}</span>
-                                        {% elif item.approval_status in ['RECHAZADA', 'ANULADA'] %}
-                                            <span class="badge text-bg-danger">{{ item.approval_status }}</span>
-                                        {% elif item.approval_status in ['RECIBIDA_PARCIAL', 'RECIBIDA_TOTAL'] %}
-                                            <span class="badge text-bg-info">{{ item.approval_status }}</span>
-                                        {% else %}
-                                            <span class="badge text-bg-secondary">{{ item.approval_status }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ item.currency_code }}</td>
-                                    <td>{{ item.warehouse.name if item.warehouse else 'No definida' }}</td>
-                                    <td>{{ item.created_at|cr_datetime if item.created_at else '-' }}</td>
-                                    <td class="text-end pe-4">
-                                        <a href="{{ url_for('purchases.order_detail', order_id=item.id) }}"
-                                           class="btn btn-sm btn-outline-dark rounded-3">
-                                            Ver detalle
-                                        </a>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <div class="p-5 text-center">
-                    <i class="bi bi-file-earmark-text fs-1 text-muted"></i>
-                    <h5 class="mt-3 fw-bold">No hay órdenes registradas</h5>
-                    <p class="text-muted mb-4">
-                        No se encontraron órdenes de compra con ese criterio.
-                    </p>
-                    <a href="{{ url_for('purchases.create_order') }}" class="btn btn-dark rounded-3">
-                        <i class="bi bi-plus-lg me-2"></i>Crear orden
-                    </a>
-                </div>
-            {% endif %}
+    <!-- ===================================================== -->
+    <!-- LISTADO AJAX -->
+    <!-- ===================================================== -->
+
+    <div
+        id="ordersContainer"
+        data-url="{{ url_for('purchases.list_orders_partial') }}"
+    >
+
+        <div class="card border-0 shadow-sm rounded-4">
+
+            <div class="card-body p-5 text-center">
+
+                <div
+                    class="spinner-border text-dark mb-3"
+                    role="status"
+                ></div>
+
+                <h5 class="fw-bold">
+                    Cargando órdenes...
+                </h5>
+
+            </div>
+
         </div>
+
     </div>
+
 </div>
+
+<script>
+(function () {
+
+    const ordersContainer =
+        document.getElementById("ordersContainer");
+
+    const filtersForm =
+        document.getElementById("filtersForm");
+
+    const applyFiltersBtn =
+        document.getElementById("applyFiltersBtn");
+
+    const supplierSearch =
+        document.getElementById("supplierSearch");
+
+    const supplierId =
+        document.getElementById("supplierId");
+
+    const supplierResults =
+        document.getElementById("supplierResults");
+
+    let supplierTimer;
+
+    // =====================================================
+    // LOAD ORDERS
+    // =====================================================
+
+    async function loadOrders(page = 1) {
+
+        const formData =
+            new FormData(filtersForm);
+
+        const params =
+            new URLSearchParams(formData);
+
+        params.set("page", page);
+
+        try {
+
+            ordersContainer.innerHTML = `
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-body p-5 text-center">
+                        <div class="spinner-border text-dark mb-3"></div>
+                        <h5 class="fw-bold">
+                            Cargando órdenes...
+                        </h5>
+                    </div>
+                </div>
+            `;
+
+            const response = await fetch(
+                `${ordersContainer.dataset.url}?${params.toString()}`
+            );
+
+            const html =
+                await response.text();
+
+            ordersContainer.innerHTML = html;
+
+            bindPagination();
+
+        } catch (error) {
+
+            console.error(error);
+
+            ordersContainer.innerHTML = `
+                <div class="alert alert-danger rounded-4">
+                    Error cargando órdenes de compra.
+                </div>
+            `;
+        }
+    }
+
+    // =====================================================
+    // PAGINATION
+    // =====================================================
+
+    function bindPagination() {
+
+        document
+            .querySelectorAll(".ajax-page-link")
+            .forEach(link => {
+
+                link.addEventListener(
+                    "click",
+                    function (event) {
+
+                        event.preventDefault();
+
+                        const page =
+                            this.dataset.page;
+
+                        loadOrders(page);
+                    }
+                );
+
+            });
+    }
+
+    // =====================================================
+    // SUPPLIER SEARCH AJAX
+    // =====================================================
+
+    supplierSearch.addEventListener(
+        "input",
+        function () {
+
+            clearTimeout(supplierTimer);
+
+            const term =
+                this.value.trim();
+
+            supplierId.value = "";
+
+            if (term.length < 2) {
+
+                supplierResults.innerHTML = "";
+                supplierResults.classList.add("d-none");
+
+                return;
+            }
+
+            supplierResults.innerHTML = `
+                <div class="list-group-item text-muted">
+                    Buscando proveedores...
+                </div>
+            `;
+
+            supplierResults.classList.remove("d-none");
+
+            supplierTimer = setTimeout(
+                async () => {
+
+                    try {
+
+                        const response = await fetch(
+                            `/purchases/suppliers/search?q=${encodeURIComponent(term)}`
+                        );
+
+                        const data =
+                            await response.json();
+
+                        supplierResults.innerHTML = "";
+
+                        if (!data.items.length) {
+
+                            supplierResults.innerHTML = `
+                                <div class="list-group-item text-muted">
+                                    Sin resultados
+                                </div>
+                            `;
+
+                        } else {
+
+                            data.items.forEach(item => {
+
+                                const btn =
+                                    document.createElement("button");
+
+                                btn.type = "button";
+
+                                btn.className =
+                                    "list-group-item list-group-item-action";
+
+                                btn.innerHTML = `
+                                    <strong>
+                                        ${item.commercial_name || item.legal_name}
+                                    </strong>
+                                `;
+
+                                btn.addEventListener(
+                                    "click",
+                                    function () {
+
+                                        supplierSearch.value =
+                                            item.commercial_name || item.legal_name;
+
+                                        supplierId.value =
+                                            item.id;
+
+                                        supplierResults.classList.add("d-none");
+                                    }
+                                );
+
+                                supplierResults.appendChild(btn);
+
+                            });
+                        }
+
+                    } catch (error) {
+
+                        console.error(error);
+                    }
+
+                },
+                300
+            );
+        }
+    );
+
+    // =====================================================
+    // APPLY FILTERS
+    // =====================================================
+
+    applyFiltersBtn.addEventListener(
+        "click",
+        function () {
+
+            loadOrders(1);
+        }
+    );
+
+    // =====================================================
+    // HIDE RESULTS
+    // =====================================================
+
+    document.addEventListener(
+        "click",
+        function (event) {
+
+            if (
+                !event.target.closest("#supplierResults") &&
+                !event.target.closest("#supplierSearch")
+            ) {
+                supplierResults.classList.add("d-none");
+            }
+        }
+    );
+
+    // =====================================================
+    // INITIAL LOAD
+    // =====================================================
+
+    loadOrders();
+
+})();
+</script>
+
 {% endblock %}

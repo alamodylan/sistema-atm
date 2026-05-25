@@ -977,21 +977,77 @@ def list_orders():
     supplier_id = _to_int(request.args.get("supplier_id"))
     search = request.args.get("search", type=str)
 
-    purchase_orders = list_purchase_orders(
-        approval_status=approval_status,
-        supplier_id=supplier_id,
-        search=search,
-    )
-    suppliers = Supplier.query.filter_by(is_active=True).order_by(Supplier.commercial_name.asc()).all()
-
     return render_template(
         "purchases/orders/index.html",
-        purchase_orders=purchase_orders,
-        suppliers=suppliers,
+        purchase_orders=[],
+        suppliers=[],
+        pagination=None,
         selected_approval_status=approval_status,
         selected_supplier_id=supplier_id,
         search=search,
     )
+
+@purchases_bp.route("/orders/partial/list")
+@login_required
+def list_orders_partial():
+    approval_status = request.args.get("approval_status", type=str)
+    supplier_id = _to_int(request.args.get("supplier_id"))
+    search = request.args.get("search", type=str)
+    page = request.args.get("page", 1, type=int)
+
+    try:
+        query = PurchaseOrder.query
+
+        if approval_status:
+            query = query.filter(
+                PurchaseOrder.approval_status == approval_status
+            )
+
+        if supplier_id:
+            query = query.filter(
+                PurchaseOrder.supplier_id == supplier_id
+            )
+
+        if search:
+            like_value = f"%{search.strip()}%"
+            query = query.filter(
+                PurchaseOrder.number.ilike(like_value)
+            )
+
+        pagination = (
+            query
+            .order_by(
+                PurchaseOrder.created_at.desc(),
+                PurchaseOrder.id.desc(),
+            )
+            .paginate(
+                page=page,
+                per_page=20,
+                error_out=False,
+            )
+        )
+
+        return render_template(
+            "purchases/orders/_list.html",
+            purchase_orders=pagination.items,
+            pagination=pagination,
+            selected_approval_status=approval_status,
+            selected_supplier_id=supplier_id,
+            search=search,
+        )
+
+    except Exception as exc:
+        print(f"[PURCHASE ORDERS PARTIAL ERROR] {exc}")
+        db.session.rollback()
+
+        return render_template(
+            "purchases/orders/_list.html",
+            purchase_orders=[],
+            pagination=None,
+            selected_approval_status=approval_status,
+            selected_supplier_id=supplier_id,
+            search=search,
+        ), 500
 
 
 @purchases_bp.route("/orders/create", methods=["GET", "POST"])
