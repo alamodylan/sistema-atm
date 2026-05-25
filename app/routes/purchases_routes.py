@@ -14,6 +14,8 @@ from openpyxl.utils import get_column_letter
 from app.models.purchase_order_approval import PurchaseOrderApproval
 from app.models.quotation_line import QuotationLine
 from app.models.inventory import WarehouseStock
+from sqlalchemy import func
+from flask import session
 
 from flask import (
     Blueprint,
@@ -595,18 +597,71 @@ def list_quotations():
 def quotation_request_lines(request_id: int):
     purchase_request = PurchaseRequest.query.get_or_404(request_id)
 
-    lines = [
-        line for line in purchase_request.lines
-        if line.line_status not in ["CANCELADA"]
-    ]
+    rows = (
+        db.session.query(
+            PurchaseRequestLine.id.label("purchase_request_line_id"),
+            PurchaseRequestLine.line_status.label("line_status"),
+            PurchaseRequestLine.quantity_requested.label("quantity_requested"),
+            PurchaseRequest.number.label("purchase_request_number"),
+            PurchaseRequest.id.label("purchase_request_id"),
+            func.count(QuotationLine.id).label("total_quotes"),
+            func.sum(
+                db.case(
+                    (QuotationLine.status == "BORRADOR", 1),
+                    else_=0,
+                )
+            ).label("draft_quotes"),
+            func.sum(
+                db.case(
+                    (QuotationLine.status == "COTIZADA", 1),
+                    else_=0,
+                )
+            ).label("confirmed_quotes"),
+            func.max(QuotationLine.quote_date).label("last_quote_date"),
+        )
+        .join(
+            PurchaseRequest,
+            PurchaseRequest.id == PurchaseRequestLine.purchase_request_id,
+        )
+        .outerjoin(
+            QuotationLine,
+            QuotationLine.purchase_request_line_id == PurchaseRequestLine.id,
+        )
+        .filter(
+            PurchaseRequestLine.purchase_request_id == request_id,
+            PurchaseRequestLine.line_status != "CANCELADA",
+        )
+        .group_by(
+            PurchaseRequestLine.id,
+            PurchaseRequestLine.line_status,
+            PurchaseRequestLine.quantity_requested,
+            PurchaseRequest.number,
+            PurchaseRequest.id,
+        )
+        .order_by(PurchaseRequestLine.id.asc())
+        .all()
+    )
 
-    line_groups = list_quotation_line_groups()
+    line_groups = []
 
-    # 🔥 Filtrar solo las líneas de esta solicitud
-    line_groups = [
-        lg for lg in line_groups
-        if lg["purchase_request_id"] == request_id
-    ]
+    for row in rows:
+        request_line = PurchaseRequestLine.query.get(row.purchase_request_line_id)
+
+        line_groups.append({
+            "purchase_request_id": row.purchase_request_id,
+            "purchase_request_number": row.purchase_request_number,
+            "purchase_request_line_id": row.purchase_request_line_id,
+            "item_code": request_line.item_code or "-",
+            "item_name": request_line.item_name or "Sin artículo",
+            "quantity_requested": row.quantity_requested,
+            "line_status": row.line_status,
+            "total_quotes": int(row.total_quotes or 0),
+            "draft_quotes": int(row.draft_quotes or 0),
+            "confirmed_quotes": int(row.confirmed_quotes or 0),
+            "best_price": None,
+            "best_supplier": None,
+            "last_quote_date": row.last_quote_date,
+        })
 
     return render_template(
         "purchases/quotations/request_lines.html",
