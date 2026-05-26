@@ -270,22 +270,36 @@
     const supplierDisplayInput = document.getElementById("supplier_display");
     const supplierIdInput = document.getElementById("supplier_id");
     const warehouseSelect = document.getElementById("warehouse_id");
+    const form = document.getElementById("inventory-entry-form");
 
     let purchaseOrderLinesData = [];
     let warehouseLocationsData = [];
 
     function toNumber(value) {
-        const n = parseFloat(value);
+        const clean = String(value || "0").replaceAll(",", "");
+        const n = parseFloat(clean);
         return Number.isFinite(n) ? n : 0;
     }
 
+    function formatNumber(value) {
+        return toNumber(value).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    function cleanFormattedInputs() {
+        document.querySelectorAll(
+            ".line-cost-wo-tax-input, .line-cost-w-tax-input, .line-subtotal-input, .line-total-input"
+        ).forEach(input => {
+            input.value = String(input.value || "0").replaceAll(",", "");
+        });
+    }
+
     function updateLineNumbers() {
-        const items = container.querySelectorAll(".entry-line-item");
-        items.forEach((item, index) => {
+        container.querySelectorAll(".entry-line-item").forEach((item, index) => {
             const numberSpan = item.querySelector(".line-number");
-            if (numberSpan) {
-                numberSpan.textContent = index + 1;
-            }
+            if (numberSpan) numberSpan.textContent = index + 1;
         });
     }
 
@@ -296,18 +310,11 @@
         }
 
         try {
-            const response = await fetch(
-                `/purchases/orders/${orderId}/lines-for-entry`,
-                {
-                    headers: {
-                        "X-Requested-With": "XMLHttpRequest"
-                    }
-                }
-            );
+            const response = await fetch(`/purchases/orders/${orderId}/lines-for-entry`, {
+                headers: { "X-Requested-With": "XMLHttpRequest" }
+            });
 
-            if (!response.ok) {
-                throw new Error("Error cargando líneas de OC.");
-            }
+            if (!response.ok) throw new Error("Error cargando líneas de OC.");
 
             const data = await response.json();
             purchaseOrderLinesData = data.items || [];
@@ -327,18 +334,11 @@
         }
 
         try {
-            const response = await fetch(
-                `/purchases/warehouses/${warehouseId}/locations`,
-                {
-                    headers: {
-                        "X-Requested-With": "XMLHttpRequest"
-                    }
-                }
-            );
+            const response = await fetch(`/purchases/warehouses/${warehouseId}/locations`, {
+                headers: { "X-Requested-With": "XMLHttpRequest" }
+            });
 
-            if (!response.ok) {
-                throw new Error("Error cargando ubicaciones.");
-            }
+            if (!response.ok) throw new Error("Error cargando ubicaciones.");
 
             const data = await response.json();
             warehouseLocationsData = data.items || [];
@@ -384,7 +384,7 @@
         const netUnitWithoutTax = costWo * (1 - (discount / 100));
         const unitWithTax = netUnitWithoutTax * (1 + (tax / 100));
 
-        lineElement.querySelector(".line-cost-w-tax-input").value = Math.max(unitWithTax, 0).toFixed(4);
+        lineElement.querySelector(".line-cost-w-tax-input").value = formatNumber(Math.max(unitWithTax, 0));
     }
 
     function calculateFromWithTax(lineElement) {
@@ -395,7 +395,7 @@
         const denominator = (1 - (discount / 100)) * (1 + (tax / 100));
         const costWo = denominator > 0 ? costW / denominator : 0;
 
-        lineElement.querySelector(".line-cost-wo-tax-input").value = Math.max(costWo, 0).toFixed(4);
+        lineElement.querySelector(".line-cost-wo-tax-input").value = formatNumber(Math.max(costWo, 0));
     }
 
     function calculateTotals(lineElement) {
@@ -408,8 +408,8 @@
         const subtotal = qty * netUnitWithoutTax;
         const total = subtotal * (1 + (tax / 100));
 
-        lineElement.querySelector(".line-subtotal-input").value = Math.max(subtotal, 0).toFixed(4);
-        lineElement.querySelector(".line-total-input").value = Math.max(total, 0).toFixed(4);
+        lineElement.querySelector(".line-subtotal-input").value = formatNumber(Math.max(subtotal, 0));
+        lineElement.querySelector(".line-total-input").value = formatNumber(Math.max(total, 0));
     }
 
     function recalculateLine(lineElement, source = "without_tax") {
@@ -478,10 +478,7 @@
 
         selectElement.onchange = function () {
             const selected = this.options[this.selectedIndex];
-
-            if (!selected || !selected.value) {
-                return;
-            }
+            if (!selected || !selected.value) return;
 
             const articleId = selected.dataset.articleId || "";
             const pendingArticleId = selected.dataset.pendingArticleId || "";
@@ -503,31 +500,14 @@
                 articleSelect.value = "";
             }
 
-            if (pendingQuantity) {
-                quantityInput.value = pendingQuantity;
-            }
+            if (pendingQuantity) quantityInput.value = pendingQuantity;
+            if (unitId) unitSelect.value = unitId;
 
-            if (unitId) {
-                unitSelect.value = unitId;
-            }
-
-            costWoTaxInput.value = unitCost;
+            costWoTaxInput.value = formatNumber(unitCost);
             discountInput.value = discountPct;
             taxInput.value = taxPct;
 
             recalculateLine(selectElement.closest(".entry-line-item"), "without_tax");
-
-            if (!costWTaxInput.value) {
-                costWTaxInput.value = "0.0000";
-            }
-
-            if (!subtotalInput.value) {
-                subtotalInput.value = "0.0000";
-            }
-
-            if (!totalInput.value) {
-                totalInput.value = "0.0000";
-            }
         };
 
         if (selectElement.value) {
@@ -586,15 +566,11 @@
         });
 
         articleSelect.addEventListener("change", function () {
-            if (this.value) {
-                pendingSelect.value = "";
-            }
+            if (this.value) pendingSelect.value = "";
         });
 
         pendingSelect.addEventListener("change", function () {
-            if (this.value) {
-                articleSelect.value = "";
-            }
+            if (this.value) articleSelect.value = "";
         });
 
         costWoTaxInput.addEventListener("input", function () {
@@ -646,31 +622,8 @@
         }
     }
 
-    function refreshOrderLineSelects() {
-        const lineItems = container.querySelectorAll(".entry-line-item");
-
-        lineItems.forEach(item => {
-            populateOrderLineSelect(
-                item.querySelector(".line-po-line-select"),
-                item.querySelector(".line-po-line-help"),
-                item.querySelector(".line-article-select"),
-                item.querySelector(".line-pending-select"),
-                item.querySelector(".line-quantity-input"),
-                item.querySelector(".line-unit-select"),
-                item.querySelector(".line-cost-wo-tax-input"),
-                item.querySelector(".line-cost-w-tax-input"),
-                item.querySelector(".line-discount-input"),
-                item.querySelector(".line-tax-input"),
-                item.querySelector(".line-subtotal-input"),
-                item.querySelector(".line-total-input")
-            );
-        });
-    }
-
     function refreshLocationsOnly() {
-        const lineItems = container.querySelectorAll(".entry-line-item");
-
-        lineItems.forEach(item => {
+        container.querySelectorAll(".entry-line-item").forEach(item => {
             populateLocationSelect(
                 item.querySelector(".line-location-select"),
                 item.querySelector(".line-location-help")
@@ -686,12 +639,7 @@
             return pendingQty > 0;
         });
 
-        if (!purchaseOrderSelect.value) {
-            createLine();
-            return;
-        }
-
-        if (!lines.length) {
+        if (!purchaseOrderSelect.value || !lines.length) {
             createLine();
             return;
         }
@@ -714,13 +662,16 @@
         `;
 
         await loadPurchaseOrderLines(this.value);
-
         reloadLinesFromPurchaseOrder();
     });
 
     warehouseSelect.addEventListener("change", async function () {
         await loadWarehouseLocations(this.value);
         refreshLocationsOnly();
+    });
+
+    form.addEventListener("submit", function () {
+        cleanFormattedInputs();
     });
 
     createLine();
