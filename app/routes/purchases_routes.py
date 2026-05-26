@@ -18,6 +18,10 @@ from sqlalchemy import func
 from flask import session
 from flask import jsonify
 from sqlalchemy.orm import joinedload
+from app.models.inventory_entry import InventoryEntry
+from app.models.warehouse_location import WarehouseLocation
+from app.models.purchase_order import PurchaseOrder
+from app.models.purchase_order_line import PurchaseOrderLine
 
 from flask import (
     Blueprint,
@@ -1426,55 +1430,88 @@ def reject_order(order_id: int):
 @login_required
 def list_entries():
     search = request.args.get("search", type=str)
-    inventory_entries = list_inventory_entries(search=search)
 
     return render_template(
         "purchases/inventory_entries/index.html",
-        inventory_entries=inventory_entries,
+        inventory_entries=[],
+        pagination=None,
         search=search,
     )
 
+@purchases_bp.route("/inventory-entries/partial/list")
+@login_required
+def list_entries_partial():
+    search = request.args.get("search", type=str)
+    page = request.args.get("page", 1, type=int)
+
+    try:
+        query = (
+            InventoryEntry.query
+            .options(
+                joinedload(InventoryEntry.purchase_order),
+                joinedload(InventoryEntry.warehouse),
+                joinedload(InventoryEntry.entered_by_user),
+            )
+        )
+
+        if search:
+            like_value = f"%{search.strip()}%"
+            query = query.filter(
+                db.or_(
+                    InventoryEntry.number.ilike(like_value),
+                    InventoryEntry.invoice_number.ilike(like_value),
+                )
+            )
+
+        pagination = (
+            query
+            .order_by(
+                InventoryEntry.created_at.desc(),
+                InventoryEntry.id.desc(),
+            )
+            .paginate(
+                page=page,
+                per_page=15,
+                error_out=False,
+            )
+        )
+
+        return render_template(
+            "purchases/inventory_entries/_list.html",
+            inventory_entries=pagination.items,
+            pagination=pagination,
+            search=search,
+        )
+
+    except Exception as exc:
+        print(f"[INVENTORY ENTRIES PARTIAL ERROR] {exc}")
+        db.session.rollback()
+
+        return render_template(
+            "purchases/inventory_entries/_list.html",
+            inventory_entries=[],
+            pagination=None,
+            search=search,
+        ), 500
 
 @purchases_bp.route("/entries/create", methods=["GET", "POST"])
 @login_required
 def create_entry():
+
     purchase_orders = _get_valid_purchase_orders_for_receiving()
 
-    suppliers = (
-        Supplier.query.filter_by(is_active=True)
-        .order_by(Supplier.commercial_name.asc())
-        .all()
-    )
-
     warehouses = (
-        Warehouse.query.filter_by(is_active=True)
+        Warehouse.query
+        .filter_by(is_active=True)
         .order_by(Warehouse.name.asc())
         .all()
     )
 
-    units = Unit.query.order_by(Unit.id.asc()).all()
-
-    articles = (
-        Article.query.filter_by(is_active=True)
-        .order_by(Article.code.asc())
+    units = (
+        Unit.query
+        .order_by(Unit.id.asc())
         .all()
     )
-
-    pending_articles = (
-        PendingArticle.query.filter(
-            PendingArticle.status.in_(["PENDIENTE_CODIFICACION", "CODIFICADO"])
-        )
-        .order_by(PendingArticle.created_at.desc())
-        .all()
-    )
-
-    purchase_order_lines_map: dict[int, list] = {}
-    for po in purchase_orders:
-        purchase_order_lines_map[po.id] = list(po.lines) if po.lines else []
-
-    warehouse_locations_map: dict[int, list] = {}
-    for wh in warehouses:
-        warehouse_locations_map[wh.id] = list(wh.locations) if wh.locations else []
 
     if request.method == "POST":
         purchase_order_id = _to_int(request.form.get("purchase_order_id"))
@@ -1522,18 +1559,15 @@ def create_entry():
                 cost2 = _to_decimal(cost_w_tax[i] if i < len(cost_w_tax) else None)
                 discount = _to_decimal(discounts[i] if i < len(discounts) else None)
                 tax = _to_decimal(taxes[i] if i < len(taxes) else None)
+
             except ValueError:
-                flash(f"Error en línea {i+1}", "danger")
+                flash(f"Error en línea {i + 1}", "danger")
+
                 return render_template(
                     "purchases/inventory_entries/create.html",
                     purchase_orders=purchase_orders,
-                    purchase_order_lines_map=purchase_order_lines_map,
-                    suppliers=suppliers,
                     warehouses=warehouses,
-                    warehouse_locations_map=warehouse_locations_map,
                     units=units,
-                    articles=articles,
-                    pending_articles=pending_articles,
                 )
 
             lines.append(
@@ -1565,18 +1599,15 @@ def create_entry():
                 notes=notes,
                 lines=lines,
             )
+
         except InventoryEntryServiceError as exc:
             flash(str(exc), "danger")
+
             return render_template(
                 "purchases/inventory_entries/create.html",
                 purchase_orders=purchase_orders,
-                purchase_order_lines_map=purchase_order_lines_map,
-                suppliers=suppliers,
                 warehouses=warehouses,
-                warehouse_locations_map=warehouse_locations_map,
                 units=units,
-                articles=articles,
-                pending_articles=pending_articles,
             )
 
         flash("Entrada registrada correctamente.", "success")
@@ -1585,15 +1616,133 @@ def create_entry():
     return render_template(
         "purchases/inventory_entries/create.html",
         purchase_orders=purchase_orders,
-        purchase_order_lines_map=purchase_order_lines_map,
-        suppliers=suppliers,
         warehouses=warehouses,
-        warehouse_locations_map=warehouse_locations_map,
         units=units,
-        articles=articles,
-        pending_articles=pending_articles,
     )
 
+# =========================================================
+# AJAX - LÍNEAS DE OC PARA ENTRADAS
+# =========================================================
+@purchases_bp.route("/orders/<int:order_id>/lines-for-entry")
+@login_required
+def get_order_lines_for_entry(order_id):
+
+    try:
+
+        purchase_order = (
+            PurchaseOrder.query
+            .options(
+                joinedload(PurchaseOrder.lines)
+                .joinedload(PurchaseOrderLine.unit),
+
+                joinedload(PurchaseOrder.lines)
+                .joinedload(PurchaseOrderLine.article),
+
+                joinedload(PurchaseOrder.lines)
+                .joinedload(PurchaseOrderLine.pending_article),
+            )
+            .get_or_404(order_id)
+        )
+
+        items = []
+
+        for line in purchase_order.lines:
+
+            quantity_ordered = float(line.quantity_ordered or 0)
+            quantity_received = float(line.quantity_received or 0)
+
+            pending_quantity = max(
+                quantity_ordered - quantity_received,
+                0,
+            )
+
+            items.append({
+                "id": line.id,
+
+                "item_name": line.item_name or "Sin artículo",
+
+                "item_code": line.item_code or "",
+
+                "article_id": line.article_id,
+
+                "pending_article_id": line.pending_article_id,
+
+                "quantity_ordered": quantity_ordered,
+
+                "quantity_received": quantity_received,
+
+                "pending_quantity": pending_quantity,
+
+                "unit_id": line.unit_id,
+
+                "unit_name": (
+                    line.unit.name
+                    if line.unit else ""
+                ),
+
+                "unit_cost": float(line.unit_cost or 0),
+
+                "discount_pct": float(line.discount_pct or 0),
+
+                "tax_pct": float(line.tax_pct or 0),
+            })
+
+        return {
+            "items": items
+        }
+
+    except Exception as exc:
+
+        print(f"[ORDER LINES FOR ENTRY ERROR] {exc}")
+
+        return {
+            "items": []
+        }, 500
+
+
+# =========================================================
+# AJAX - UBICACIONES DE BODEGA
+# =========================================================
+@purchases_bp.route("/warehouses/<int:warehouse_id>/locations")
+@login_required
+def get_warehouse_locations(warehouse_id):
+
+    try:
+
+        locations = (
+            WarehouseLocation.query
+            .filter(
+                WarehouseLocation.warehouse_id == warehouse_id,
+                WarehouseLocation.is_active.is_(True),
+            )
+            .order_by(
+                WarehouseLocation.code.asc(),
+                WarehouseLocation.id.asc(),
+            )
+            .all()
+        )
+
+        items = []
+
+        for loc in locations:
+
+            items.append({
+                "id": loc.id,
+                "code": loc.code or "",
+                "description": loc.description or "",
+            })
+
+        return {
+            "items": items
+        }
+
+    except Exception as exc:
+
+        print(f"[WAREHOUSE LOCATIONS ERROR] {exc}")
+
+        return {
+            "items": []
+        }, 500
 
 @purchases_bp.route("/inventory-entries/<int:entry_id>")
 @login_required
