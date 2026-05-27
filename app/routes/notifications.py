@@ -68,3 +68,29 @@ def read(notification_id):
     return jsonify({
         "ok": success,
     })
+
+@notification_bp.route("/mark-all-read", methods=["POST"])
+@login_required
+def mark_all_read():
+    from app.extensions import db
+    from app.models.notification import Notification
+    from datetime import datetime, UTC
+
+    now = datetime.now(UTC)
+
+    Notification.query.filter(
+        Notification.recipient_user_id == current_user.id,
+        Notification.is_read.is_(False),
+    ).update(
+        {
+            "is_read": True,
+            "read_at": now,
+        },
+        synchronize_session=False,
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+    })

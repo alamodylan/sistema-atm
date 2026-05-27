@@ -152,19 +152,55 @@
         },
 
         initNotifications() {
+
             if (window.location.pathname.includes("/login")) {
                 return;
             }
 
+            // =====================================================
+            // CARGA INICIAL
+            // =====================================================
+
             this.loadNotificationPanel();
+
             this.checkPopupNotifications();
 
-            window.setInterval(() => {
-                this.loadNotificationPanel();
-            }, 60000);
+            // =====================================================
+            // MARCAR TODAS COMO LEÍDAS
+            // AL ABRIR CAMPANA
+            // =====================================================
+
+            const notificationButton = document.getElementById(
+                "notificationBellButton"
+            );
+
+            if (notificationButton) {
+
+                notificationButton.addEventListener("click", () => {
+
+                    this.markAllNotificationsRead();
+
+                });
+            }
+
+            // =====================================================
+            // RECARGA PANEL
+            // =====================================================
 
             window.setInterval(() => {
+
+                this.loadNotificationPanel();
+
+            }, 60000);
+
+            // =====================================================
+            // VERIFICAR POPUPS
+            // =====================================================
+
+            window.setInterval(() => {
+
                 this.checkPopupNotifications();
+
             }, 120000);
         },
 
@@ -303,6 +339,31 @@
             } catch (error) {
                 console.warn(
                     "No se pudieron verificar popups:",
+                    error
+                );
+            }
+        },
+
+        async markAllNotificationsRead() {
+
+            try {
+
+                await fetch(
+                    "/notifications/mark-all-read",
+                    {
+                        method: "POST",
+                        headers: {
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                    }
+                );
+
+                this.loadNotificationPanel();
+
+            } catch (error) {
+
+                console.warn(
+                    "No se pudieron marcar notificaciones:",
                     error
                 );
             }
