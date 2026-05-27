@@ -281,11 +281,8 @@
         return Number.isFinite(n) ? n : 0;
     }
 
-    function formatNumber(value) {
-        return toNumber(value).toLocaleString("en-US", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        });
+    function formatNumber(value, decimals = 4) {
+        return toNumber(value).toFixed(decimals);
     }
 
     function cleanFormattedInputs() {
@@ -384,7 +381,8 @@
         const netUnitWithoutTax = costWo * (1 - (discount / 100));
         const unitWithTax = netUnitWithoutTax * (1 + (tax / 100));
 
-        lineElement.querySelector(".line-cost-w-tax-input").value = formatNumber(Math.max(unitWithTax, 0));
+        lineElement.querySelector(".line-cost-w-tax-input").value =
+            formatNumber(Math.max(unitWithTax, 0), 4);
     }
 
     function calculateFromWithTax(lineElement) {
@@ -395,7 +393,8 @@
         const denominator = (1 - (discount / 100)) * (1 + (tax / 100));
         const costWo = denominator > 0 ? costW / denominator : 0;
 
-        lineElement.querySelector(".line-cost-wo-tax-input").value = formatNumber(Math.max(costWo, 0));
+        lineElement.querySelector(".line-cost-wo-tax-input").value =
+            formatNumber(Math.max(costWo, 0), 4);
     }
 
     function calculateTotals(lineElement) {
@@ -408,8 +407,11 @@
         const subtotal = qty * netUnitWithoutTax;
         const total = subtotal * (1 + (tax / 100));
 
-        lineElement.querySelector(".line-subtotal-input").value = formatNumber(Math.max(subtotal, 0));
-        lineElement.querySelector(".line-total-input").value = formatNumber(Math.max(total, 0));
+        lineElement.querySelector(".line-subtotal-input").value =
+            formatNumber(Math.max(subtotal, 0), 4);
+
+        lineElement.querySelector(".line-total-input").value =
+            formatNumber(Math.max(total, 0), 4);
     }
 
     function recalculateLine(lineElement, source = "without_tax") {
@@ -503,9 +505,9 @@
             if (pendingQuantity) quantityInput.value = pendingQuantity;
             if (unitId) unitSelect.value = unitId;
 
-            costWoTaxInput.value = formatNumber(unitCost);
-            discountInput.value = discountPct;
-            taxInput.value = taxPct;
+            costWoTaxInput.value = formatNumber(unitCost, 4);
+            discountInput.value = formatNumber(discountPct, 4);
+            taxInput.value = formatNumber(taxPct, 4);
 
             recalculateLine(selectElement.closest(".entry-line-item"), "without_tax");
         };
