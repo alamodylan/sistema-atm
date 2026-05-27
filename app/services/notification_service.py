@@ -257,7 +257,6 @@ def get_popup_notifications(user_id, active_site_id=None):
         .filter(
             Notification.recipient_user_id == user_id,
             Notification.notification_type == "TRANSFER_SENT",
-            Notification.is_read.is_(False),
             Transfer.status == "EN_TRANSITO",
             db.or_(
                 Notification.last_popup_at.is_(None),
