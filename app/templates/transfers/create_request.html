@@ -5,7 +5,7 @@
 
     <h3>Nueva Solicitud de Traslado</h3>
 
-    <form method="POST">
+    <form method="POST" id="transfer-request-form">
 
         <div class="row">
 
@@ -55,45 +55,7 @@
             <small class="text-muted">Puede agregar varias líneas en una sola solicitud</small>
         </div>
 
-        <div id="request-lines-wrapper">
-            <div class="request-line border rounded p-3 mb-3">
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label>Artículo</label>
-                        <select name="article_id[]" class="form-control" required>
-                            <option value="">Seleccione un artículo</option>
-                            {% for a in articles %}
-                            <option value="{{ a.id }}">
-                                {{ a.code }} - {{ a.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="col-md-2 mb-3">
-                        <label>Cantidad</label>
-                        <input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            name="quantity_requested[]"
-                            class="form-control"
-                            required
-                        >
-                    </div>
-
-                    <div class="col-md-4 mb-3">
-                        <label>Nota de línea</label>
-                        <input
-                            type="text"
-                            name="line_notes[]"
-                            class="form-control"
-                            placeholder="Opcional"
-                        >
-                    </div>
-                </div>
-            </div>
-        </div>
+        <div id="request-lines-wrapper"></div>
 
         <div class="mb-4">
             <button type="button" class="btn btn-outline-secondary" id="add-line-btn">
@@ -107,21 +69,222 @@
 
 </div>
 
+<template id="request-line-template">
+    <div class="request-line border rounded p-3 mb-3 position-relative">
+
+        <div class="row">
+
+            <div class="col-md-6 mb-3">
+                <label>Artículo</label>
+
+                <input type="text"
+                       class="form-control article-search-input"
+                       placeholder="Buscar por código o nombre..."
+                       autocomplete="off"
+                       required>
+
+                <input type="hidden"
+                       name="article_id[]"
+                       class="article-id-input">
+
+                <div class="list-group mt-2 d-none article-results shadow-sm"></div>
+
+                <div class="form-text">
+                    Escriba al menos 2 caracteres para buscar.
+                </div>
+            </div>
+
+            <div class="col-md-2 mb-3">
+                <label>Cantidad</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    name="quantity_requested[]"
+                    class="form-control"
+                    required
+                >
+            </div>
+
+            <div class="col-md-4 mb-3">
+                <label>Nota de línea</label>
+                <input
+                    type="text"
+                    name="line_notes[]"
+                    class="form-control"
+                    placeholder="Opcional"
+                >
+            </div>
+
+        </div>
+
+        <button type="button"
+                class="btn btn-sm btn-outline-danger remove-line-btn d-none">
+            Eliminar línea
+        </button>
+
+    </div>
+</template>
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const addLineBtn = document.getElementById("add-line-btn");
     const wrapper = document.getElementById("request-lines-wrapper");
+    const template = document.getElementById("request-line-template");
 
-    addLineBtn.addEventListener("click", function () {
-        const firstLine = wrapper.querySelector(".request-line");
-        const newLine = firstLine.cloneNode(true);
+    function createLine() {
+        const fragment = template.content.cloneNode(true);
+        const line = fragment.querySelector(".request-line");
 
-        newLine.querySelectorAll("select, input").forEach(function (field) {
-            field.value = "";
+        const searchInput = line.querySelector(".article-search-input");
+        const articleIdInput = line.querySelector(".article-id-input");
+        const resultsBox = line.querySelector(".article-results");
+        const removeBtn = line.querySelector(".remove-line-btn");
+
+        let searchTimer;
+
+        function refreshRemoveButtons() {
+            const lines = wrapper.querySelectorAll(".request-line");
+
+            lines.forEach(function (item) {
+                const btn = item.querySelector(".remove-line-btn");
+
+                if (lines.length <= 1) {
+                    btn.classList.add("d-none");
+                } else {
+                    btn.classList.remove("d-none");
+                }
+            });
+        }
+
+        searchInput.addEventListener("input", function () {
+            clearTimeout(searchTimer);
+
+            const term = this.value.trim();
+            articleIdInput.value = "";
+
+            if (term.length < 2) {
+                resultsBox.innerHTML = "";
+                resultsBox.classList.add("d-none");
+                return;
+            }
+
+            resultsBox.innerHTML = `
+                <div class="list-group-item text-muted">
+                    Buscando artículos...
+                </div>
+            `;
+            resultsBox.classList.remove("d-none");
+
+            searchTimer = setTimeout(async function () {
+                try {
+                    const response = await fetch(
+                        `/transfers/articles/search?q=${encodeURIComponent(term)}`,
+                        {
+                            headers: {
+                                "X-Requested-With": "XMLHttpRequest"
+                            }
+                        }
+                    );
+
+                    if (!response.ok) {
+                        throw new Error("Error buscando artículos.");
+                    }
+
+                    const data = await response.json();
+
+                    resultsBox.innerHTML = "";
+
+                    if (!data.items || !data.items.length) {
+                        resultsBox.innerHTML = `
+                            <div class="list-group-item text-muted">
+                                Sin resultados
+                            </div>
+                        `;
+                    } else {
+                        data.items.forEach(function (item) {
+                            const btn = document.createElement("button");
+                            btn.type = "button";
+                            btn.className = "list-group-item list-group-item-action";
+
+                            btn.innerHTML = `
+                                <strong>${item.code || ""}</strong>
+                                <div class="small text-muted">
+                                    ${item.name || ""}
+                                </div>
+                            `;
+
+                            btn.addEventListener("click", function () {
+                                searchInput.value = `${item.code || ""} - ${item.name || ""}`;
+                                articleIdInput.value = item.id;
+                                resultsBox.classList.add("d-none");
+                            });
+
+                            resultsBox.appendChild(btn);
+                        });
+                    }
+
+                    resultsBox.classList.remove("d-none");
+
+                } catch (error) {
+                    console.error(error);
+
+                    resultsBox.innerHTML = `
+                        <div class="list-group-item text-danger">
+                            Error buscando artículos.
+                        </div>
+                    `;
+                    resultsBox.classList.remove("d-none");
+                }
+            }, 300);
         });
 
-        wrapper.appendChild(newLine);
+        removeBtn.addEventListener("click", function () {
+            line.remove();
+            refreshRemoveButtons();
+        });
+
+        wrapper.appendChild(fragment);
+        refreshRemoveButtons();
+    }
+
+    addLineBtn.addEventListener("click", function () {
+        createLine();
     });
+
+    document.addEventListener("click", function (event) {
+        if (
+            !event.target.closest(".article-results") &&
+            !event.target.closest(".article-search-input")
+        ) {
+            document.querySelectorAll(".article-results").forEach(function (box) {
+                box.classList.add("d-none");
+            });
+        }
+    });
+
+    document.getElementById("transfer-request-form").addEventListener("submit", function (event) {
+        let isValid = true;
+
+        wrapper.querySelectorAll(".request-line").forEach(function (line) {
+            const articleIdInput = line.querySelector(".article-id-input");
+            const searchInput = line.querySelector(".article-search-input");
+
+            if (!articleIdInput.value) {
+                isValid = false;
+                searchInput.classList.add("is-invalid");
+            } else {
+                searchInput.classList.remove("is-invalid");
+            }
+        });
+
+        if (!isValid) {
+            event.preventDefault();
+            alert("Debe seleccionar un artículo válido desde la búsqueda.");
+        }
+    });
+
+    createLine();
 });
 </script>
 

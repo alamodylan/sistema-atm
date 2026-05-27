@@ -273,15 +273,11 @@ def partial_transfers():
 @login_required
 def create_request():
     accessible_warehouses = _get_user_accessible_warehouses()
+
     supplying_warehouses = (
         Warehouse.query
         .filter(Warehouse.is_active.is_(True))
         .order_by(Warehouse.name.asc())
-        .all()
-    )
-    articles = (
-        Article.query
-        .order_by(Article.code.asc(), Article.name.asc())
         .all()
     )
 
@@ -308,6 +304,7 @@ def create_request():
             line_notes = request.form.getlist("line_notes[]")
 
             valid_lines = []
+
             for idx, raw_article_id in enumerate(article_ids):
                 raw_article_id = (raw_article_id or "").strip()
                 raw_quantity = (quantities[idx] if idx < len(quantities) else "").strip()
@@ -364,14 +361,6 @@ def create_request():
             db.session.flush()
 
             for line in valid_lines:
-                current_app.logger.warning(
-                    "[TRANSFER CREATE][ADDING LINE] request_id=%s article_id=%s quantity_requested=%s notes=%s",
-                    request_obj.id,
-                    line["article_id"],
-                    line["quantity_requested"],
-                    line["notes"],
-                )
-
                 add_transfer_request_line(
                     transfer_request_id=request_obj.id,
                     article_id=line["article_id"],
@@ -390,6 +379,7 @@ def create_request():
             )
 
             flash("Solicitud de traslado creada correctamente.", "success")
+
             return redirect(
                 url_for(
                     "transfers.detail_request",
@@ -399,6 +389,7 @@ def create_request():
 
         except TransferServiceError as exc:
             db.session.rollback()
+
             current_app.logger.warning(
                 "[TRANSFER CREATE][BUSINESS ERROR] user_id=%s username=%s role=%s form=%s error=%s",
                 getattr(current_user, "id", None),
@@ -407,10 +398,12 @@ def create_request():
                 request.form.to_dict(flat=False),
                 str(exc),
             )
+
             flash(str(exc), "danger")
 
         except Exception as exc:
             db.session.rollback()
+
             current_app.logger.exception(
                 "[TRANSFER CREATE][UNEXPECTED ERROR] user_id=%s username=%s role=%s form=%s request_id=%s",
                 getattr(current_user, "id", None),
@@ -419,14 +412,51 @@ def create_request():
                 request.form.to_dict(flat=False),
                 getattr(request_obj, "id", None),
             )
+
             flash(f"No se pudo crear la solicitud de traslado: {exc}", "danger")
 
     return render_template(
         "transfers/create_request.html",
         accessible_warehouses=accessible_warehouses,
         supplying_warehouses=supplying_warehouses,
-        articles=articles,
     )
+
+@transfer_bp.route("/articles/search", methods=["GET"])
+@login_required
+def search_transfer_articles():
+    q = (request.args.get("q") or "").strip()
+
+    if len(q) < 2:
+        return {"items": []}
+
+    like_value = f"%{q}%"
+
+    articles = (
+        Article.query
+        .filter(
+            db.or_(
+                Article.code.ilike(like_value),
+                Article.name.ilike(like_value),
+            )
+        )
+        .order_by(
+            Article.code.asc(),
+            Article.name.asc(),
+        )
+        .limit(20)
+        .all()
+    )
+
+    return {
+        "items": [
+            {
+                "id": article.id,
+                "code": article.code or "",
+                "name": article.name or "",
+            }
+            for article in articles
+        ]
+    }
 
 
 @transfer_bp.route("/requests/<int:transfer_request_id>", methods=["GET"])
