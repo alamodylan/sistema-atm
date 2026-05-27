@@ -133,51 +133,140 @@ def _redirect_after_request_action(transfer_request_id: int):
 def index():
     active_site_id = _get_active_site_id()
 
-    request_query = TransferRequest.query
-    transfer_query = Transfer.query
-
-    if active_site_id:
-        request_query = request_query.filter(
-            db.or_(
-                db.and_(
-                    TransferRequest.status == "BORRADOR",
-                    TransferRequest.origin_site_id == active_site_id,
-                ),
-                db.and_(
-                    TransferRequest.status != "BORRADOR",
-                    db.or_(
-                        TransferRequest.origin_site_id == active_site_id,
-                        TransferRequest.destination_site_id == active_site_id,
-                    ),
-                ),
-            )
-        )
-
-        transfer_query = transfer_query.filter(
-            db.or_(
-                Transfer.origin_site_id == active_site_id,
-                Transfer.destination_site_id == active_site_id,
-            )
-        )
-
-    transfer_requests = (
-        request_query
-        .order_by(TransferRequest.created_at.desc(), TransferRequest.id.desc())
-        .all()
-    )
-
-    transfers = (
-        transfer_query
-        .order_by(Transfer.created_at.desc(), Transfer.id.desc())
-        .all()
-    )
-
     return render_template(
         "transfers/index.html",
-        transfer_requests=transfer_requests,
-        transfers=transfers,
+        transfer_requests=[],
+        transfers=[],
         active_site_id=active_site_id,
     )
+
+@transfer_bp.route("/partial/requests", methods=["GET"])
+@login_required
+@permission_required("traslados")
+def partial_transfer_requests():
+    active_site_id = _get_active_site_id()
+    page = request.args.get("page", 1, type=int)
+    search = (request.args.get("search") or "").strip()
+
+    try:
+        query = TransferRequest.query
+
+        if active_site_id:
+            query = query.filter(
+                db.or_(
+                    db.and_(
+                        TransferRequest.status == "BORRADOR",
+                        TransferRequest.origin_site_id == active_site_id,
+                    ),
+                    db.and_(
+                        TransferRequest.status != "BORRADOR",
+                        db.or_(
+                            TransferRequest.origin_site_id == active_site_id,
+                            TransferRequest.destination_site_id == active_site_id,
+                        ),
+                    ),
+                )
+            )
+
+        if search:
+            like_value = f"%{search}%"
+            query = query.filter(
+                db.or_(
+                    TransferRequest.number.ilike(like_value),
+                    TransferRequest.status.ilike(like_value),
+                )
+            )
+
+        pagination = (
+            query
+            .order_by(
+                TransferRequest.created_at.desc(),
+                TransferRequest.id.desc(),
+            )
+            .paginate(
+                page=page,
+                per_page=15,
+                error_out=False,
+            )
+        )
+
+        return render_template(
+            "transfers/_requests_list.html",
+            transfer_requests=pagination.items,
+            pagination=pagination,
+            search=search,
+        )
+
+    except Exception as exc:
+        print(f"[TRANSFER REQUESTS PARTIAL ERROR] {exc}")
+        db.session.rollback()
+
+        return render_template(
+            "transfers/_requests_list.html",
+            transfer_requests=[],
+            pagination=None,
+            search=search,
+        ), 500
+    
+
+@transfer_bp.route("/partial/transfers", methods=["GET"])
+@login_required
+@permission_required("traslados")
+def partial_transfers():
+    active_site_id = _get_active_site_id()
+    page = request.args.get("page", 1, type=int)
+    search = (request.args.get("search") or "").strip()
+
+    try:
+        query = Transfer.query
+
+        if active_site_id:
+            query = query.filter(
+                db.or_(
+                    Transfer.origin_site_id == active_site_id,
+                    Transfer.destination_site_id == active_site_id,
+                )
+            )
+
+        if search:
+            like_value = f"%{search}%"
+            query = query.filter(
+                db.or_(
+                    Transfer.number.ilike(like_value),
+                    Transfer.status.ilike(like_value),
+                )
+            )
+
+        pagination = (
+            query
+            .order_by(
+                Transfer.created_at.desc(),
+                Transfer.id.desc(),
+            )
+            .paginate(
+                page=page,
+                per_page=15,
+                error_out=False,
+            )
+        )
+
+        return render_template(
+            "transfers/_transfers_list.html",
+            transfers=pagination.items,
+            pagination=pagination,
+            search=search,
+        )
+
+    except Exception as exc:
+        print(f"[TRANSFERS PARTIAL ERROR] {exc}")
+        db.session.rollback()
+
+        return render_template(
+            "transfers/_transfers_list.html",
+            transfers=[],
+            pagination=None,
+            search=search,
+        ), 500
 
 
 @transfer_bp.route("/requests/create", methods=["GET", "POST"])

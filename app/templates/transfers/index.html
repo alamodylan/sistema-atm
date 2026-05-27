@@ -1,85 +1,150 @@
 {% extends "base.html" %}
-{% block content %}
 
+{% block content %}
 <div class="container-fluid mt-4">
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3>Traslados</h3>
-        <a href="{{ url_for('transfers.create_request') }}" class="btn btn-primary">
-            Nueva Solicitud
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">Traslados</h3>
+            <p class="text-muted mb-0">
+                Solicitudes y traslados entre bodegas.
+            </p>
+        </div>
+
+        <a href="{{ url_for('transfers.create_request') }}" class="btn btn-primary rounded-3">
+            <i class="bi bi-plus-lg me-2"></i>Nueva Solicitud
         </a>
     </div>
 
-    <div class="card mb-4">
-        <div class="card-header">
-            <strong>Solicitudes de Traslado</strong>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Origen</th>
-                        <th>Destino</th>
-                        <th>Estado</th>
-                        <th>Fecha</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for r in transfer_requests %}
-                    <tr>
-                        <td>{{ r.number }}</td>
-                        <td>{{ r.origin_warehouse.name }}</td>
-                        <td>{{ r.destination_warehouse.name }}</td>
-                        <td>{{ r.status }}</td>
-                        <td>{{ r.created_at|cr_datetime }}</td>
-                        <td>
-                            <a href="{{ url_for('transfers.detail_request', transfer_request_id=r.id) }}" class="btn btn-sm btn-outline-primary">
-                                Ver
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4">
+            <form id="transferFiltersForm" class="row g-3">
+                <div class="col-12 col-lg-10">
+                    <label class="form-label fw-semibold">Buscar</label>
+                    <input
+                        type="text"
+                        name="search"
+                        id="transferSearchInput"
+                        class="form-control rounded-3"
+                        placeholder="Buscar por número o estado..."
+                    >
+                </div>
+
+                <div class="col-12 col-lg-2 d-grid align-self-end">
+                    <button type="submit" class="btn btn-outline-dark rounded-3">
+                        <i class="bi bi-search me-2"></i>Filtrar
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header">
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-header bg-white border-0 pt-4 px-4">
+            <strong>Solicitudes de Traslado</strong>
+        </div>
+
+        <div
+            id="transferRequestsContainer"
+            data-url="{{ url_for('transfers.partial_transfer_requests') }}"
+        >
+            <div class="p-5 text-center">
+                <div class="spinner-border text-dark mb-3" role="status"></div>
+                <h6 class="fw-bold mb-1">Cargando solicitudes...</h6>
+                <p class="text-muted mb-0">Consultando solicitudes de traslado.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-header bg-white border-0 pt-4 px-4">
             <strong>Traslados</strong>
         </div>
-        <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Origen</th>
-                        <th>Destino</th>
-                        <th>Estado</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for t in transfers %}
-                    <tr>
-                        <td>{{ t.number }}</td>
-                        <td>{{ t.origin_warehouse.name }}</td>
-                        <td>{{ t.destination_warehouse.name }}</td>
-                        <td>{{ t.status }}</td>
-                        <td>
-                            <a href="{{ url_for('transfers.detail_transfer', transfer_id=t.id) }}" class="btn btn-sm btn-outline-success">
-                                Ver
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+
+        <div
+            id="transfersContainer"
+            data-url="{{ url_for('transfers.partial_transfers') }}"
+        >
+            <div class="p-5 text-center">
+                <div class="spinner-border text-dark mb-3" role="status"></div>
+                <h6 class="fw-bold mb-1">Cargando traslados...</h6>
+                <p class="text-muted mb-0">Consultando traslados registrados.</p>
+            </div>
         </div>
     </div>
 
 </div>
 
+<script>
+(function () {
+    const filtersForm = document.getElementById("transferFiltersForm");
+    const requestsContainer = document.getElementById("transferRequestsContainer");
+    const transfersContainer = document.getElementById("transfersContainer");
+
+    async function loadPartial(container, page = 1) {
+        const formData = new FormData(filtersForm);
+        const params = new URLSearchParams(formData);
+
+        params.set("page", page);
+
+        container.innerHTML = `
+            <div class="p-5 text-center">
+                <div class="spinner-border text-dark mb-3" role="status"></div>
+                <h6 class="fw-bold mb-1">Cargando información...</h6>
+                <p class="text-muted mb-0">Consultando datos.</p>
+            </div>
+        `;
+
+        try {
+            const response = await fetch(
+                `${container.dataset.url}?${params.toString()}`,
+                {
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest"
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error("Error cargando datos.");
+            }
+
+            const html = await response.text();
+            container.innerHTML = html;
+
+            bindPagination(container);
+
+        } catch (error) {
+            console.error(error);
+
+            container.innerHTML = `
+                <div class="alert alert-danger rounded-4 m-4">
+                    Error cargando información.
+                </div>
+            `;
+        }
+    }
+
+    function bindPagination(container) {
+        container.querySelectorAll(".ajax-page-link").forEach(function (link) {
+            link.addEventListener("click", function (event) {
+                event.preventDefault();
+
+                const page = this.dataset.page || "1";
+                loadPartial(container, page);
+            });
+        });
+    }
+
+    filtersForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+
+        loadPartial(requestsContainer, 1);
+        loadPartial(transfersContainer, 1);
+    });
+
+    loadPartial(requestsContainer, 1);
+    loadPartial(transfersContainer, 1);
+})();
+</script>
 {% endblock %}
