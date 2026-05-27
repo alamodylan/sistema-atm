@@ -25,11 +25,9 @@ def _get_active_site_id():
 @notification_bp.route("/panel", methods=["GET"])
 @login_required
 def panel():
-    active_site_id = _get_active_site_id()
-
     items = get_notification_panel_items(
         user_id=current_user.id,
-        active_site_id=active_site_id,
+        active_site_id=None,
         limit=20,
     )
 
@@ -48,11 +46,9 @@ def panel():
 @notification_bp.route("/popup-check", methods=["GET"])
 @login_required
 def popup_check():
-    active_site_id = _get_active_site_id()
-
     items = get_popup_notifications(
         user_id=current_user.id,
-        active_site_id=active_site_id,
+        active_site_id=None,
     )
 
     return jsonify({
