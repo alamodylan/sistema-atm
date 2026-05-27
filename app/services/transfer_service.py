@@ -17,7 +17,11 @@ from app.services.audit_service import log_action
 from app.models.user import User
 from sqlalchemy import func
 from app.services.request_routing_service import resolve_request_routing
-
+from app.services.notification_service import (
+    create_transfer_sent_notifications,
+    close_transfer_sent_notifications,
+    create_transfer_received_notifications,
+)
 
 class TransferServiceError(Exception):
     pass
@@ -1146,6 +1150,8 @@ def send_transfer(
     )
     db.session.add(event)
 
+    create_transfer_sent_notifications(transfer)
+
     db.session.flush()
 
     log_action(
@@ -1271,6 +1277,9 @@ def receive_transfer(
         created_at=_now(),
     )
     db.session.add(event)
+
+    close_transfer_sent_notifications(transfer)
+    create_transfer_received_notifications(transfer)
 
     db.session.flush()
 

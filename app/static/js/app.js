@@ -10,6 +10,7 @@
             this.initGlobalSearchShortcuts();
             this.initPWAInstallPrompt();
             this.registerServiceWorker();
+            this.initNotifications();
         },
 
         initTooltips() {
@@ -76,13 +77,11 @@
 
         initGlobalSearchShortcuts() {
             document.addEventListener("keydown", (event) => {
-                // Evita activar shortcuts mientras se escribe en input/textarea/select
                 const tagName = (event.target.tagName || "").toLowerCase();
                 const isTypingContext = ["input", "textarea", "select"].includes(tagName);
 
                 if (isTypingContext) return;
 
-                // Ctrl + / o Cmd + /
                 if ((event.ctrlKey || event.metaKey) && event.key === "/") {
                     event.preventDefault();
 
@@ -150,6 +149,228 @@
                     console.warn("No se pudo registrar el Service Worker:", error);
                 }
             });
+        },
+
+        initNotifications() {
+            if (window.location.pathname.includes("/login")) {
+                return;
+            }
+
+            this.loadNotificationPanel();
+            this.checkPopupNotifications();
+
+            window.setInterval(() => {
+                this.loadNotificationPanel();
+            }, 60000);
+
+            window.setInterval(() => {
+                this.checkPopupNotifications();
+            }, 120000);
+        },
+
+        async loadNotificationPanel() {
+            try {
+                const response = await fetch(
+                    "/notifications/panel",
+                    {
+                        headers: {
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                    }
+                );
+
+                if (!response.ok) {
+                    return;
+                }
+
+                const data = await response.json();
+
+                const badge = document.getElementById(
+                    "notificationUnreadBadge"
+                );
+
+                const container = document.getElementById(
+                    "notificationDropdownContent"
+                );
+
+                if (badge) {
+                    const unread = data.unread_count || 0;
+
+                    if (unread > 0) {
+                        badge.textContent = unread;
+                        badge.classList.remove("d-none");
+                    } else {
+                        badge.classList.add("d-none");
+                    }
+                }
+
+                if (!container) {
+                    return;
+                }
+
+                const items = data.items || [];
+
+                if (!items.length) {
+                    container.innerHTML = `
+                        <div class="p-3 text-center text-muted small">
+                            No hay notificaciones.
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = items.map((item) => {
+                    const createdAt = item.created_at
+                        ? new Date(item.created_at).toLocaleString()
+                        : "";
+
+                    const href = item.entity_type === "TRANSFER" && item.entity_id
+                        ? `/transfers/transfers/${item.entity_id}`
+                        : "#";
+
+                    return `
+                        <a
+                            href="${href}"
+                            class="dropdown-item border-bottom py-3 ${item.is_read ? "" : "bg-light"}"
+                            data-notification-id="${item.id}"
+                        >
+                            <div class="fw-semibold mb-1">
+                                ${item.title || ""}
+                            </div>
+
+                            <div class="small text-muted mb-1">
+                                ${item.message || ""}
+                            </div>
+
+                            <div class="small text-secondary">
+                                ${createdAt}
+                            </div>
+                        </a>
+                    `;
+                }).join("");
+
+                container
+                    .querySelectorAll("[data-notification-id]")
+                    .forEach((el) => {
+                        el.addEventListener("click", () => {
+                            const notificationId = el.dataset.notificationId;
+
+                            fetch(
+                                `/notifications/${notificationId}/read`,
+                                {
+                                    method: "POST",
+                                    headers: {
+                                        "X-Requested-With": "XMLHttpRequest",
+                                    },
+                                }
+                            );
+                        });
+                    });
+
+            } catch (error) {
+                console.warn(
+                    "No se pudieron cargar notificaciones:",
+                    error
+                );
+            }
+        },
+
+        async checkPopupNotifications() {
+            try {
+                const response = await fetch(
+                    "/notifications/popup-check",
+                    {
+                        headers: {
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                    }
+                );
+
+                if (!response.ok) {
+                    return;
+                }
+
+                const data = await response.json();
+                const items = data.items || [];
+
+                if (!items.length) {
+                    return;
+                }
+
+                const item = items[0];
+                this.showTransferPopup(item);
+
+            } catch (error) {
+                console.warn(
+                    "No se pudieron verificar popups:",
+                    error
+                );
+            }
+        },
+
+        showTransferPopup(item) {
+            if (typeof bootstrap === "undefined") {
+                return;
+            }
+
+            const modalEl = document.getElementById(
+                "transferNotificationModal"
+            );
+
+            if (!modalEl) {
+                return;
+            }
+
+            const titleEl = document.getElementById(
+                "transferNotificationTitle"
+            );
+
+            const messageEl = document.getElementById(
+                "transferNotificationMessage"
+            );
+
+            const elapsedEl = document.getElementById(
+                "transferNotificationElapsed"
+            );
+
+            const linkEl = document.getElementById(
+                "transferNotificationLink"
+            );
+
+            if (titleEl) {
+                titleEl.textContent = item.title || "Traslado pendiente";
+            }
+
+            if (messageEl) {
+                messageEl.textContent = item.message || "";
+            }
+
+            if (elapsedEl) {
+                const seconds = parseInt(item.elapsed_seconds || 0, 10);
+                elapsedEl.textContent = this.formatElapsedTime(seconds);
+            }
+
+            if (linkEl && item.transfer_id) {
+                linkEl.href = `/transfers/transfers/${item.transfer_id}`;
+            }
+
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        },
+
+        formatElapsedTime(seconds) {
+            if (!seconds || seconds <= 0) {
+                return "Hace unos segundos";
+            }
+
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+
+            if (hours <= 0) {
+                return `${minutes} min`;
+            }
+
+            return `${hours}h ${minutes}m`;
         },
 
         notify(message, type = "success", delay = 3500) {

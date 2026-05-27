@@ -36,6 +36,7 @@ from app.services.transfer_service import (
 )
 from app.utils.permissions import permission_required
 
+
 transfer_bp = Blueprint(
     "transfers",
     __name__,

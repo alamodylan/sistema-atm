@@ -51,6 +51,8 @@ def create_app():
     from app.routes.home import home_bp
     from app.routes.tool_loans_routes import tool_loans_bp
     from app.routes.request_routing_routes import request_routing_bp
+    from app.routes.notifications import notification_bp
+
 
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(dashboard_bp, url_prefix="/")
@@ -82,6 +84,7 @@ def create_app():
     app.register_blueprint(home_bp)
     app.register_blueprint(tool_loans_bp)
     app.register_blueprint(request_routing_bp)
+    app.register_blueprint(notification_bp)
 
     @app.route("/service-worker.js")
     def service_worker():
