@@ -11,6 +11,10 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required
+from io import BytesIO
+from flask import send_file
+from app.models.transfer_document import TransferDocument
+from app.services.transfer_document_service import generate_and_store_transfer_pdf
 
 from app.extensions import db
 from app.models.article import Article
@@ -18,6 +22,8 @@ from app.models.transfer import Transfer
 from app.models.transfer_request import TransferRequest
 from app.models.transfer_request_line import TransferRequestLine
 from app.models.user_warehouse_access import UserWarehouseAccess
+from flask import send_file
+from app.services.transfer_pdf_service import generate_transfer_pdf
 from app.models.warehouse import Warehouse
 from app.services.transfer_service import (
     TransferServiceError,
@@ -931,19 +937,34 @@ def detail_transfer(transfer_id: int):
 @login_required
 def submit_transfer(transfer_id: int):
     try:
-        send_transfer(
+        transfer = send_transfer(
             transfer_id=transfer_id,
             performed_by_user_id=current_user.id,
-            commit=True,
+            commit=False,
         )
-        flash("Traslado enviado correctamente.", "success")
+
+        generate_and_store_transfer_pdf(
+            transfer=transfer,
+            generated_by_user_id=current_user.id,
+        )
+
+        db.session.commit()
+
+        flash(
+            "Traslado enviado correctamente. Se generó el PDF para impresión.",
+            "success",
+        )
+
+        return redirect(
+            url_for("transfers.reprint_transfer_pdf", transfer_id=transfer.id)
+        )
 
     except TransferServiceError as exc:
         db.session.rollback()
         flash(str(exc), "danger")
-    except Exception:
+    except Exception as exc:
         db.session.rollback()
-        flash("No se pudo enviar el traslado.", "danger")
+        flash(f"No se pudo enviar el traslado: {exc}", "danger")
 
     return redirect(
         url_for("transfers.detail_transfer", transfer_id=transfer_id)
@@ -988,4 +1009,49 @@ def complete_transfer_receipt(transfer_id: int):
 
     return redirect(
         url_for("transfers.detail_transfer", transfer_id=transfer_id)
+    )
+
+@transfer_bp.route("/transfers/<int:transfer_id>/pdf", methods=["GET"])
+@login_required
+def transfer_pdf(transfer_id: int):
+    transfer = _get_transfer_or_404(transfer_id)
+
+    pdf_buffer = generate_transfer_pdf(transfer)
+
+    filename = f"traslado_{transfer.number}.pdf"
+
+    return send_file(
+        pdf_buffer,
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=filename,
+    )
+
+@transfer_bp.route("/transfers/<int:transfer_id>/pdf/reprint", methods=["GET"])
+@login_required
+def reprint_transfer_pdf(transfer_id: int):
+    transfer = _get_transfer_or_404(transfer_id)
+
+    document = (
+        TransferDocument.query
+        .filter(
+            TransferDocument.transfer_id == transfer.id,
+            TransferDocument.document_type == "TRANSFER_PDF",
+        )
+        .order_by(TransferDocument.generated_at.desc())
+        .first()
+    )
+
+    if not document:
+        document = generate_and_store_transfer_pdf(
+            transfer=transfer,
+            generated_by_user_id=current_user.id,
+        )
+        db.session.commit()
+
+    return send_file(
+        BytesIO(document.file_data),
+        mimetype=document.mime_type,
+        as_attachment=False,
+        download_name=document.filename,
     )
