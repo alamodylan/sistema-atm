@@ -243,7 +243,7 @@ def get_popup_notifications(user_id, active_site_id=None):
     - Mostrar si nunca se mostró o si pasaron 2 horas
     """
     now = _now()
-    popup_limit_time = now - timedelta(minutes=4)
+    popup_limit_time = now - timedelta(minutes=60)
 
     query = (
         Notification.query
