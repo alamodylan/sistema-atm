@@ -48,6 +48,105 @@
     </form>
     {% endif %}
 
+    <div class="card shadow-sm border-0 mb-3">
+        <div class="card-body">
+
+            <label class="form-label fw-semibold">
+                Buscar artículo
+            </label>
+
+            <input
+                type="text"
+                id="inventoryFilter"
+                class="form-control"
+                placeholder="Digite o escanee un código de artículo..."
+                autocomplete="off">
+
+            <small class="text-muted">
+                Al escribir un código se mostrará únicamente la línea encontrada.
+                Si borra el texto volverán a mostrarse todas las líneas.
+            </small>
+
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-3">
+        <div class="card-body">
+
+            <div class="row g-3 align-items-end">
+
+                <div class="col-md-5">
+                    <label class="form-label fw-semibold">
+                        Buscar artículo
+                    </label>
+
+                    <input
+                        type="text"
+                        id="inventoryFilter"
+                        class="form-control"
+                        placeholder="Digite o escanee un código..."
+                        autocomplete="off">
+                </div>
+
+                <div class="col-md-7">
+                    <label class="form-label fw-semibold">
+                        Filtros
+                    </label>
+
+                    <div class="d-flex flex-wrap gap-3 border rounded p-2 bg-light">
+
+                        <div class="form-check">
+                            <input class="form-check-input inventory-check-filter"
+                                type="checkbox"
+                                id="filterCounted"
+                                value="counted"
+                                checked>
+                            <label class="form-check-label" for="filterCounted">
+                                Contados
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input inventory-check-filter"
+                                type="checkbox"
+                                id="filterNotCounted"
+                                value="not_counted"
+                                checked>
+                            <label class="form-check-label" for="filterNotCounted">
+                                No contados
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input inventory-check-filter"
+                                type="checkbox"
+                                id="filterWithDiff"
+                                value="with_diff"
+                                checked>
+                            <label class="form-check-label" for="filterWithDiff">
+                                Con diferencia
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input inventory-check-filter"
+                                type="checkbox"
+                                id="filterWithoutDiff"
+                                value="without_diff"
+                                checked>
+                            <label class="form-check-label" for="filterWithoutDiff">
+                                Sin diferencia
+                            </label>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
     <!-- TABLA -->
     <div class="card mt-3 shadow-sm border-0">
         <div class="card-body p-0">
@@ -183,6 +282,153 @@
                 barcode === scanned
                 || articleCode === scanned
             );
+        });
+    }
+
+    // =====================================================
+    // FILTRO VISUAL
+    // =====================================================
+
+    function filterRows(searchValue) {
+
+        const value =
+            normalizeCode(searchValue);
+
+        const rows =
+            document.querySelectorAll(
+                "tbody tr[data-code]"
+            );
+
+        rows.forEach(row => {
+
+            if (!value) {
+
+                row.style.display = "";
+
+                return;
+            }
+
+            const barcode =
+                normalizeCode(
+                    row.dataset.barcode
+                );
+
+            const code =
+                normalizeCode(
+                    row.dataset.code
+                );
+
+            const match =
+                barcode.includes(value)
+                || code.includes(value);
+
+            row.style.display =
+                match
+                    ? ""
+                    : "none";
+        });
+    }
+
+    // =====================================================
+    // FILTROS VISUALES
+    // =====================================================
+
+    function applyInventoryFilters() {
+
+        const searchInput =
+            document.getElementById("inventoryFilter");
+
+        const searchValue =
+            normalizeCode(searchInput ? searchInput.value : "");
+
+        const enabledFilters =
+            Array.from(
+                document.querySelectorAll(".inventory-check-filter:checked")
+            ).map(input => input.value);
+
+        const rows =
+            document.querySelectorAll("tbody tr[data-code]");
+
+        rows.forEach(row => {
+
+            const barcode =
+                normalizeCode(row.dataset.barcode);
+
+            const code =
+                normalizeCode(row.dataset.code);
+
+            const qtyInput =
+                row.querySelector(".qty-input");
+
+            const physicalValue =
+                qtyInput
+                    ? String(qtyInput.value || "").trim()
+                    : "";
+
+            const diffCell =
+                row.querySelector(".diff");
+
+            const diffValue =
+                parseFloat(
+                    String(diffCell ? diffCell.innerText : "0")
+                        .replace(",", ".")
+                );
+
+            const isCounted =
+                physicalValue !== "";
+
+            const hasDifference =
+                isCounted
+                && Number.isFinite(diffValue)
+                && diffValue !== 0;
+
+            const withoutDifference =
+                isCounted
+                && Number.isFinite(diffValue)
+                && diffValue === 0;
+
+            let matchesSearch = true;
+
+            if (searchValue) {
+                matchesSearch =
+                    barcode.includes(searchValue)
+                    || code.includes(searchValue);
+            }
+
+            let matchesCheckFilter = false;
+
+            if (
+                isCounted
+                && enabledFilters.includes("counted")
+            ) {
+                matchesCheckFilter = true;
+            }
+
+            if (
+                !isCounted
+                && enabledFilters.includes("not_counted")
+            ) {
+                matchesCheckFilter = true;
+            }
+
+            if (
+                hasDifference
+                && enabledFilters.includes("with_diff")
+            ) {
+                matchesCheckFilter = true;
+            }
+
+            if (
+                withoutDifference
+                && enabledFilters.includes("without_diff")
+            ) {
+                matchesCheckFilter = true;
+            }
+
+            row.style.display =
+                matchesSearch && matchesCheckFilter
+                    ? ""
+                    : "none";
         });
     }
 
@@ -892,6 +1138,75 @@
 
         }, 400);
     }
+
+    // =====================================================
+    // BUSCADOR Y FILTROS
+    // =====================================================
+
+    const inventoryFilterInput =
+        document.getElementById(
+            "inventoryFilter"
+        );
+
+    if (inventoryFilterInput) {
+
+        inventoryFilterInput.addEventListener(
+            "input",
+            function () {
+
+                applyInventoryFilters();
+            }
+        );
+
+        inventoryFilterInput.addEventListener(
+            "keydown",
+            function (event) {
+
+                if (event.key !== "Enter") {
+                    return;
+                }
+
+                event.preventDefault();
+
+                const row =
+                    findRowByScannedCode(
+                        this.value
+                    );
+
+                if (!row) {
+                    return;
+                }
+
+                markRow(row);
+
+                const input =
+                    row.querySelector(
+                        ".qty-input"
+                    );
+
+                if (
+                    input
+                    && !input.disabled
+                ) {
+
+                    input.focus();
+                    input.select();
+                }
+            }
+        );
+    }
+
+    document
+        .querySelectorAll(".inventory-check-filter")
+        .forEach(filter => {
+
+            filter.addEventListener(
+                "change",
+                function () {
+                    applyInventoryFilters();
+                }
+            );
+        });
 
     // =====================================================
     // POLLING
