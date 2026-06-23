@@ -24,6 +24,10 @@ class PhysicalInventoryLine(db.Model):
     )
 
     system_quantity = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+
+    count_1_quantity = db.Column(db.Numeric(14, 2), nullable=True)
+    count_2_quantity = db.Column(db.Numeric(14, 2), nullable=True)
+
     physical_quantity = db.Column(db.Numeric(14, 2), nullable=True)
     difference_quantity = db.Column(db.Numeric(14, 2), nullable=True)
 
