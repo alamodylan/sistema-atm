@@ -146,7 +146,9 @@
                         <th>Código</th>
                         <th>Nombre</th>
                         <th>Sistema</th>
-                        <th>Físico</th>
+                        <th>Conteo 1</th>
+                        <th>Conteo 2</th>
+                        <th>Total físico</th>
                         <th>Diferencia</th>
                     </tr>
                 </thead>
@@ -163,11 +165,26 @@
 
                     <td>
                         <input type="number"
-                               inputmode="decimal"
-                               class="form-control qty-input"
-                               data-line-id="{{ line.id }}"
-                               value="{{ line.physical_quantity or '' }}"
-                               {% if inventory.status not in ["BORRADOR","EN_CONTEO"] %}disabled{% endif %}>
+                            inputmode="decimal"
+                            class="form-control qty-input count-input"
+                            data-line-id="{{ line.id }}"
+                            data-count-field="count_1_quantity"
+                            value="{{ line.count_1_quantity or '' }}"
+                            {% if inventory.status not in ["BORRADOR","EN_CONTEO"] %}disabled{% endif %}>
+                    </td>
+
+                    <td>
+                        <input type="number"
+                            inputmode="decimal"
+                            class="form-control qty-input count-input"
+                            data-line-id="{{ line.id }}"
+                            data-count-field="count_2_quantity"
+                            value="{{ line.count_2_quantity or '' }}"
+                            {% if inventory.status not in ["BORRADOR","EN_CONTEO"] %}disabled{% endif %}>
+                    </td>
+
+                    <td class="physical-total">
+                        {{ line.physical_quantity or '' }}
                     </td>
 
                     <td class="diff">
@@ -537,8 +554,21 @@
         const system =
             parseFloat(row.dataset.system || "0");
 
-        const physical =
-            parseFloat(input.value || "0");
+        const countInputs =
+            row.querySelectorAll(".count-input");
+
+        let physical = 0;
+
+        countInputs.forEach(countInput => {
+            physical += parseFloat(countInput.value || "0");
+        });
+
+        const totalCell =
+            row.querySelector(".physical-total");
+
+        if (totalCell) {
+            totalCell.innerText = physical.toFixed(2);
+        }
 
         const diff = physical - system;
 
@@ -561,25 +591,11 @@
         }
 
         if (diff === 0) {
-
-            cell.classList.add(
-                "text-success",
-                "fw-bold"
-            );
-
+            cell.classList.add("text-success", "fw-bold");
         } else if (diff > 0) {
-
-            cell.classList.add(
-                "text-warning",
-                "fw-bold"
-            );
-
+            cell.classList.add("text-warning", "fw-bold");
         } else {
-
-            cell.classList.add(
-                "text-danger",
-                "fw-bold"
-            );
+            cell.classList.add("text-danger", "fw-bold");
         }
     }
 
@@ -634,7 +650,8 @@
                     },
                     body: JSON.stringify({
                         line_id: input.dataset.lineId,
-                        physical_quantity: input.value
+                        field: input.dataset.countField,
+                        value: input.value
                     })
                 }
             );

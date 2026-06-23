@@ -308,10 +308,19 @@ def update_line():
     data = request.get_json(silent=True) or {}
 
     line_id = data.get("line_id")
-    physical_quantity_raw = data.get("physical_quantity")
+    field = data.get("field")
+    value_raw = data.get("value")
 
     if not line_id:
         return {"ok": False, "message": "No se recibió la línea."}, 400
+
+    allowed_fields = {
+        "count_1_quantity",
+        "count_2_quantity",
+    }
+
+    if field not in allowed_fields:
+        return {"ok": False, "message": "Campo de conteo inválido."}, 400
 
     line = PhysicalInventoryLine.query.get_or_404(int(line_id))
     inventory = line.physical_inventory
@@ -323,12 +332,19 @@ def update_line():
         }, 400
 
     try:
-        physical_quantity = _to_decimal(physical_quantity_raw)
+        count_value = _to_decimal(value_raw)
     except PhysicalInventoryRouteError as exc:
         return {"ok": False, "message": str(exc)}, 400
 
-    if physical_quantity < 0:
-        return {"ok": False, "message": "La cantidad física no puede ser negativa."}, 400
+    if count_value < 0:
+        return {"ok": False, "message": "La cantidad no puede ser negativa."}, 400
+
+    setattr(line, field, count_value)
+
+    count_1 = line.count_1_quantity or Decimal("0")
+    count_2 = line.count_2_quantity or Decimal("0")
+
+    physical_quantity = count_1 + count_2
 
     system_quantity = line.system_quantity or Decimal("0")
     difference_quantity = physical_quantity - system_quantity
@@ -342,6 +358,8 @@ def update_line():
     return {
         "ok": True,
         "line_id": line.id,
+        "count_1_quantity": str(line.count_1_quantity or Decimal("0")),
+        "count_2_quantity": str(line.count_2_quantity or Decimal("0")),
         "system_quantity": str(system_quantity),
         "physical_quantity": str(physical_quantity),
         "difference_quantity": str(difference_quantity),
