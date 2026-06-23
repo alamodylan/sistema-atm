@@ -59,7 +59,7 @@
                 type="text"
                 id="inventoryFilter"
                 class="form-control"
-                placeholder="Digite o escanee un código de artículo..."
+                placeholder="Digite código, código de barras o nombre del artículo..."
                 autocomplete="off"
                 inputmode="numeric"
                 pattern="[0-9]*">
@@ -157,6 +157,7 @@
                 {% for line in lines %}
                 <tr data-barcode="{{ line.article.barcode or '' }}"
                     data-code="{{ line.article.code or '' }}"
+                    data-name="{{ line.article.name or '' }}"
                     data-system="{{ line.system_quantity }}">
 
                     <td>{{ line.article.code }}</td>
@@ -324,9 +325,15 @@
                     row.dataset.code
                 );
 
+            const name =
+                normalizeCode(
+                    row.dataset.name
+                );
+
             const match =
                 barcode.includes(value)
-                || code.includes(value);
+                || code.includes(value)
+                || name.includes(value);
 
             row.style.display =
                 match
@@ -370,6 +377,9 @@
             const code =
                 normalizeCode(row.dataset.code);
 
+            const name =
+                normalizeCode(row.dataset.name);
+
             const qtyInputs =
                 row.querySelectorAll(".count-input");
 
@@ -410,7 +420,8 @@
             if (searchValue) {
                 matchesSearch =
                     barcode.includes(searchValue)
-                    || code.includes(searchValue);
+                    || code.includes(searchValue)
+                    || name.includes(searchValue);
             }
 
             let matchesCountStatus = false;
