@@ -347,10 +347,17 @@
         const searchValue =
             normalizeCode(searchInput ? searchInput.value : "");
 
-        const enabledFilters =
-            Array.from(
-                document.querySelectorAll(".inventory-check-filter:checked")
-            ).map(input => input.value);
+        const showCounted =
+            document.getElementById("filterCounted")?.checked === true;
+
+        const showNotCounted =
+            document.getElementById("filterNotCounted")?.checked === true;
+
+        const showWithDiff =
+            document.getElementById("filterWithDiff")?.checked === true;
+
+        const showWithoutDiff =
+            document.getElementById("filterWithoutDiff")?.checked === true;
 
         const rows =
             document.querySelectorAll("tbody tr[data-code]");
@@ -363,34 +370,39 @@
             const code =
                 normalizeCode(row.dataset.code);
 
-            const qtyInput =
-                row.querySelector(".qty-input");
+            const qtyInputs =
+                row.querySelectorAll(".count-input");
 
-            const physicalValue =
-                qtyInput
-                    ? String(qtyInput.value || "").trim()
-                    : "";
+            let hasPhysicalInfo = false;
+
+            qtyInputs.forEach(input => {
+                if (String(input.value || "").trim() !== "") {
+                    hasPhysicalInfo = true;
+                }
+            });
 
             const diffCell =
                 row.querySelector(".diff");
 
-            const diffValue =
-                parseFloat(
-                    String(diffCell ? diffCell.innerText : "0")
-                        .replace(",", ".")
-                );
+            const diffText =
+                String(diffCell ? diffCell.innerText : "")
+                    .trim()
+                    .replace(",", ".");
 
-            const isCounted =
-                physicalValue !== "";
+            const diffValue =
+                parseFloat(diffText || "0");
+
+            const hasValidDiff =
+                Number.isFinite(diffValue);
 
             const hasDifference =
-                isCounted
-                && Number.isFinite(diffValue)
+                hasPhysicalInfo
+                && hasValidDiff
                 && diffValue !== 0;
 
             const withoutDifference =
-                isCounted
-                && Number.isFinite(diffValue)
+                hasPhysicalInfo
+                && hasValidDiff
                 && diffValue === 0;
 
             let matchesSearch = true;
@@ -401,38 +413,34 @@
                     || code.includes(searchValue);
             }
 
-            let matchesCheckFilter = false;
+            let matchesCountStatus = false;
 
-            if (
-                isCounted
-                && enabledFilters.includes("counted")
-            ) {
-                matchesCheckFilter = true;
+            if (hasPhysicalInfo && showCounted) {
+                matchesCountStatus = true;
             }
 
-            if (
-                !isCounted
-                && enabledFilters.includes("not_counted")
-            ) {
-                matchesCheckFilter = true;
+            if (!hasPhysicalInfo && showNotCounted) {
+                matchesCountStatus = true;
             }
 
-            if (
-                hasDifference
-                && enabledFilters.includes("with_diff")
-            ) {
-                matchesCheckFilter = true;
-            }
+            let matchesDifferenceStatus = true;
 
-            if (
-                withoutDifference
-                && enabledFilters.includes("without_diff")
-            ) {
-                matchesCheckFilter = true;
+            if (hasPhysicalInfo) {
+                matchesDifferenceStatus = false;
+
+                if (hasDifference && showWithDiff) {
+                    matchesDifferenceStatus = true;
+                }
+
+                if (withoutDifference && showWithoutDiff) {
+                    matchesDifferenceStatus = true;
+                }
             }
 
             row.style.display =
-                matchesSearch && matchesCheckFilter
+                matchesSearch
+                && matchesCountStatus
+                && matchesDifferenceStatus
                     ? ""
                     : "none";
         });

@@ -27,7 +27,7 @@ class Config:
     SESSION_PERMANENT = False
 
     # Expiración por inactividad
-    PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=90)
 
     # Seguridad cookies
     REMEMBER_COOKIE_SECURE = True
