@@ -17,6 +17,12 @@
             </form>
             {% endif %}
 
+            <a class="btn btn-outline-primary"
+            target="_blank"
+            href="{{ url_for('physical_inventory.print_report', inventory_id=inventory.id) }}">
+                Imprimir PDF
+            </a>
+
         </div>
     </div>
 
@@ -652,6 +658,10 @@
             return;
         }
 
+        if (!input.dataset.countField) {
+            return;
+        }
+
         input.dataset.saving = "1";
 
         input.value = value;
@@ -734,20 +744,17 @@
     // AUTOSAVE
     // =====================================================
 
-    function triggerAutosave(
-        inputElement,
-        immediate = false
-    ) {
+    function triggerAutosave(inputElement, immediate = false) {
+
+        if (!inputElement || !inputElement.dataset.countField) {
+            return;
+        }
 
         if (inputElement._autosaveTimer) {
-
-            clearTimeout(
-                inputElement._autosaveTimer
-            );
+            clearTimeout(inputElement._autosaveTimer);
         }
 
         const executeSave = () => {
-
             saveQuantity(inputElement)
                 .then(() => {
                     clearScanBuffer();
@@ -755,16 +762,14 @@
         };
 
         if (immediate) {
-
             executeSave();
-
             return;
         }
 
         inputElement._autosaveTimer =
             setTimeout(() => {
                 executeSave();
-            }, 250);
+            }, 400);
     }
 
     // =====================================================
@@ -987,20 +992,6 @@
             );
 
             // =====================================
-            // BLUR
-            // =====================================
-
-            input.addEventListener(
-                "blur",
-                function () {
-                    triggerAutosave(
-                        this,
-                        true
-                    );
-                }
-            );
-
-            // =====================================
             // TOUCH
             // =====================================
 
@@ -1032,28 +1023,65 @@
 
     function updateLineFromServer(serverLine) {
 
-        const input = document.querySelector(
+        const inputs = document.querySelectorAll(
             `.qty-input[data-line-id="${serverLine.line_id}"]`
         );
 
-        if (!input) {
+        if (!inputs.length) {
             return;
         }
 
-        // =============================================
-        // NO TOCAR INPUT ACTIVO
-        // =============================================
+        const active =
+            document.activeElement;
 
-        if (document.activeElement === input) {
+        if (
+            Array.from(inputs).some(
+                input => input === active
+            )
+        ) {
             return;
         }
 
-        input.value =
-            serverLine.physical_quantity || "";
+        let row = null;
 
-        updateDifferenceVisual(input);
+        inputs.forEach(input => {
 
-        const row = input.closest("tr");
+            row = input.closest("tr");
+
+            if (
+                input.dataset.countField
+                === "count_1_quantity"
+            ) {
+                input.value =
+                    serverLine.count_1_quantity || "";
+            }
+
+            if (
+                input.dataset.countField
+                === "count_2_quantity"
+            ) {
+                input.value =
+                    serverLine.count_2_quantity || "";
+            }
+        });
+
+        const totalCell =
+            row ? row.querySelector(".physical-total") : null;
+
+        if (totalCell) {
+            totalCell.innerText =
+                serverLine.physical_quantity || "";
+        }
+
+        const diffCell =
+            row ? row.querySelector(".diff") : null;
+
+        if (diffCell) {
+            diffCell.innerText =
+                serverLine.difference_quantity || "";
+        }
+
+        updateDifferenceVisual(inputs[0]);
 
         if (!row) {
             return;
@@ -1071,6 +1099,8 @@
         setTimeout(() => {
             row.classList.remove("table-success");
         }, 2000);
+
+        applyInventoryFilters();
     }
 
     // =====================================================

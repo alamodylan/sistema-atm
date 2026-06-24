@@ -14,6 +14,7 @@ from app.models.physical_inventory_line import PhysicalInventoryLine
 from app.models.warehouse import Warehouse
 from app.models.inventory import WarehouseStock
 from app.services.physical_inventory_service import apply_physical_inventory_adjustment
+from app.models.article import Article
 
 
 physical_inventory_bp = Blueprint(
@@ -381,10 +382,6 @@ def get_changes(inventory_id: int):
         )
     )
 
-    # =============================================
-    # SOLO CAMBIOS NUEVOS
-    # =============================================
-
     if since:
         try:
             since_dt = datetime.fromisoformat(since)
@@ -406,6 +403,16 @@ def get_changes(inventory_id: int):
         "lines": [
             {
                 "line_id": line.id,
+                "count_1_quantity": (
+                    str(line.count_1_quantity)
+                    if line.count_1_quantity is not None
+                    else ""
+                ),
+                "count_2_quantity": (
+                    str(line.count_2_quantity)
+                    if line.count_2_quantity is not None
+                    else ""
+                ),
                 "physical_quantity": (
                     str(line.physical_quantity)
                     if line.physical_quantity is not None
@@ -423,7 +430,7 @@ def get_changes(inventory_id: int):
                 ),
             }
             for line in lines
-        ]
+        ],
     })
 
 @physical_inventory_bp.route("/<int:inventory_id>/close", methods=["POST"])
@@ -490,3 +497,29 @@ def apply_adjustment(inventory_id: int):
         flash(f"Error al aplicar ajuste: {str(e)}", "danger")
 
     return redirect(url_for("physical_inventory.detail", inventory_id=inventory.id))
+
+@physical_inventory_bp.route("/<int:inventory_id>/print-report")
+@login_required
+def print_report(inventory_id):
+    inventory = PhysicalInventory.query.get_or_404(inventory_id)
+
+    lines = (
+        PhysicalInventoryLine.query
+        .filter(
+            PhysicalInventoryLine.physical_inventory_id == inventory.id,
+            db.or_(
+                PhysicalInventoryLine.count_1_quantity.isnot(None),
+                PhysicalInventoryLine.count_2_quantity.isnot(None),
+                PhysicalInventoryLine.physical_quantity.isnot(None),
+            )
+        )
+        .join(Article, Article.id == PhysicalInventoryLine.article_id)
+        .order_by(Article.code.asc())
+        .all()
+    )
+
+    return render_template(
+        "physical_inventory/print_report.html",
+        inventory=inventory,
+        lines=lines,
+    )

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Inventario físico {{ inventory.number }}</title>
+
+    <style>
+        @page {
+            size: letter;
+            margin: 18mm 12mm;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 11px;
+            color: #111;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #111;
+            padding-bottom: 10px;
+            margin-bottom: 14px;
+        }
+
+        .logo {
+            height: 55px;
+            max-width: 160px;
+            object-fit: contain;
+        }
+
+        .title {
+            text-align: right;
+        }
+
+        .title h2 {
+            margin: 0;
+            font-size: 18px;
+            text-transform: uppercase;
+        }
+
+        .title p {
+            margin: 3px 0;
+        }
+
+        .section {
+            margin-bottom: 14px;
+        }
+
+        .participants-box {
+            border: 1px solid #111;
+            height: 70px;
+            padding: 8px;
+            margin-top: 6px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+
+        th,
+        td {
+            border: 1px solid #333;
+            padding: 5px;
+            vertical-align: middle;
+        }
+
+        th {
+            background: #e9ecef;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .text-end {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .signatures {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 55px;
+            page-break-inside: avoid;
+        }
+
+        .signature-box {
+            width: 42%;
+            text-align: center;
+        }
+
+        .signature-line {
+            border-top: 1px solid #111;
+            padding-top: 6px;
+        }
+
+        .no-print {
+            margin-bottom: 15px;
+        }
+
+        @media print {
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="no-print">
+        <button onclick="window.print()">
+            Imprimir / Guardar como PDF
+        </button>
+    </div>
+
+    <div class="header">
+        <div>
+            <img class="logo"
+                 src="{{ url_for('static', filename='img/logo.png') }}"
+                 alt="Logo">
+        </div>
+
+        <div class="title">
+            <h2>Inventario físico</h2>
+            <p><strong>Número:</strong> {{ inventory.number }}</p>
+            <p><strong>Predio:</strong> {{ inventory.site.name if inventory.site else '' }}</p>
+            <p><strong>Bodega:</strong> {{ inventory.warehouse.name if inventory.warehouse else '' }}</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <strong>Participantes:</strong>
+        <div class="participants-box"></div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 13%;">Código</th>
+                <th style="width: 24%;">Artículo</th>
+                <th style="width: 12%;">Cant. bodega</th>
+                <th style="width: 12%;">Conteo 1</th>
+                <th style="width: 12%;">Conteo 2</th>
+                <th style="width: 12%;">Diferencia</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for line in lines %}
+            <tr>
+                <td>{{ line.article.code }}</td>
+
+                <td>
+                    {{ (line.article.name or '')[:20] }}
+                </td>
+
+                <td class="text-end">
+                    {{ "%.2f"|format(line.system_quantity or 0) }}
+                </td>
+
+                <td class="text-end">
+                    {{ "%.2f"|format(line.count_1_quantity or 0) }}
+                </td>
+
+                <td class="text-end">
+                    {% if line.count_2_quantity is not none %}
+                        {{ "%.2f"|format(line.count_2_quantity) }}
+                    {% endif %}
+                </td>
+
+                <td class="text-end">
+                    {{ "%.2f"|format(line.difference_quantity or 0) }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="signatures">
+        <div class="signature-box">
+            <div class="signature-line">
+                Firma encargado de inventario
+            </div>
+        </div>
+
+        <div class="signature-box">
+            <div class="signature-line">
+                Firma gerencia
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.addEventListener("load", function () {
+            window.print();
+        });
+    </script>
+
+</body>
+</html>
