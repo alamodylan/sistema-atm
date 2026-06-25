@@ -560,3 +560,28 @@ def print_report(inventory_id):
         report_lines=report_lines,
         total_difference_amount=total_difference_amount,
     )
+
+@physical_inventory_bp.route("/update-participants", methods=["POST"])
+@login_required
+def update_participants():
+
+    data = request.get_json() or {}
+
+    inventory = PhysicalInventory.query.get_or_404(
+        data["inventory_id"]
+    )
+
+    if inventory.status not in ["BORRADOR", "EN_CONTEO"]:
+        return {
+            "ok": False
+        }, 400
+
+    inventory.participants = (
+        data.get("participants") or ""
+    ).strip()
+
+    db.session.commit()
+
+    return {
+        "ok": True
+    }

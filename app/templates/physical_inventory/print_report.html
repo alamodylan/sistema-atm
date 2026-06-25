@@ -141,7 +141,9 @@
 
     <div class="section">
         <strong>Participantes:</strong>
-        <div class="participants-box"></div>
+        <div class="participants-box">
+            {{ inventory.participants|replace('\n','<br>')|safe }}
+        </div>
     </div>
 
     <table>

@@ -41,6 +41,7 @@ class PhysicalInventory(db.Model):
 
     status = db.Column(db.String(30), nullable=False, default="BORRADOR", index=True)
     notes = db.Column(db.Text, nullable=True)
+    participants = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(
         db.DateTime(timezone=True),

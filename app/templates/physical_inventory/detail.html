@@ -79,6 +79,27 @@
     </div>
 
     <div class="card shadow-sm border-0 mb-3">
+    <div class="card-body">
+
+            <label class="form-label fw-semibold">
+                Participantes del inventario
+            </label>
+
+            <textarea
+                id="participants"
+                class="form-control"
+                rows="3"
+                {% if inventory.status not in ["BORRADOR","EN_CONTEO"] %}disabled{% endif %}
+            >{{ inventory.participants or "" }}</textarea>
+
+            <small class="text-muted">
+                Escriba los nombres de los participantes. Cada línea corresponde a una persona.
+            </small>
+
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-3">
         <div class="card-body">
 
             <div class="row g-3 align-items-end">
@@ -1263,6 +1284,54 @@
             );
         });
 
+
+    // =====================================================
+    // PARTICIPANTES
+    // =====================================================
+
+    const participants =
+        document.getElementById("participants");
+
+    if (participants) {
+
+        let participantsTimer;
+
+        participants.addEventListener("input", function () {
+
+            clearTimeout(participantsTimer);
+
+            participantsTimer = setTimeout(async () => {
+
+                try {
+
+                    await fetch(
+                        "{{ url_for('physical_inventory.update_participants') }}",
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                inventory_id: "{{ inventory.id }}",
+                                participants: participants.value
+                            })
+                        }
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        "Error guardando participantes",
+                        error
+                    );
+
+                }
+
+            }, 500);
+
+        });
+
+    }
     // =====================================================
     // POLLING
     // =====================================================
