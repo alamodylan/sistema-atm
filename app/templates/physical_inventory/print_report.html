@@ -7,12 +7,12 @@
     <style>
         @page {
             size: letter;
-            margin: 18mm 12mm;
+            margin: 18mm 10mm;
         }
 
         body {
             font-family: Arial, sans-serif;
-            font-size: 11px;
+            font-size: 10px;
             color: #111;
         }
 
@@ -37,7 +37,7 @@
 
         .title h2 {
             margin: 0;
-            font-size: 18px;
+            font-size: 17px;
             text-transform: uppercase;
         }
 
@@ -65,7 +65,7 @@
         th,
         td {
             border: 1px solid #333;
-            padding: 5px;
+            padding: 4px;
             vertical-align: middle;
         }
 
@@ -81,6 +81,10 @@
 
         .text-center {
             text-align: center;
+        }
+
+        .fw-bold {
+            font-weight: bold;
         }
 
         .signatures {
@@ -143,30 +147,35 @@
     <table>
         <thead>
             <tr>
-                <th style="width: 13%;">Código</th>
-                <th style="width: 24%;">Artículo</th>
-                <th style="width: 12%;">Cant. bodega</th>
-                <th style="width: 12%;">Conteo 1</th>
-                <th style="width: 12%;">Conteo 2</th>
-                <th style="width: 12%;">Diferencia</th>
+                <th style="width: 10%;">Código</th>
+                <th style="width: 20%;">Artículo</th>
+                <th style="width: 10%;">Cant. bodega</th>
+                <th style="width: 10%;">Conteo 1</th>
+                <th style="width: 10%;">Conteo 2</th>
+                <th style="width: 10%;">Diferencia</th>
+                <th style="width: 10%;">Costo</th>
+                <th style="width: 10%;">Gasto</th>
             </tr>
         </thead>
 
         <tbody>
-            {% for line in lines %}
-            <tr>
-                <td>{{ line.article.code }}</td>
+            {% for item in report_lines %}
+            {% set line = item.line %}
+            {% set article = item.article %}
 
-                <td>
-                    {{ (line.article.name or '')[:20] }}
-                </td>
+            <tr>
+                <td>{{ article.code }}</td>
+
+                <td>{{ (article.name or '')[:20] }}</td>
 
                 <td class="text-end">
                     {{ "%.2f"|format(line.system_quantity or 0) }}
                 </td>
 
                 <td class="text-end">
-                    {{ "%.2f"|format(line.count_1_quantity or 0) }}
+                    {% if line.count_1_quantity is not none %}
+                        {{ "%.2f"|format(line.count_1_quantity) }}
+                    {% endif %}
                 </td>
 
                 <td class="text-end">
@@ -178,8 +187,29 @@
                 <td class="text-end">
                     {{ "%.2f"|format(line.difference_quantity or 0) }}
                 </td>
+
+                <td class="text-end">
+                    {% if line.difference_quantity is not none and line.difference_quantity != 0 %}
+                        {{ "%.2f"|format(item.unit_cost or 0) }}
+                    {% endif %}
+                </td>
+
+                <td class="text-end">
+                    {% if line.difference_quantity is not none and line.difference_quantity != 0 %}
+                        {{ "%.2f"|format(item.difference_amount or 0) }}
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
+
+            <tr>
+                <td colspan="7" class="text-end fw-bold">
+                    Total gasto por diferencia
+                </td>
+                <td class="text-end fw-bold">
+                    {{ "%.2f"|format(total_difference_amount or 0) }}
+                </td>
+            </tr>
         </tbody>
     </table>
 
@@ -196,12 +226,6 @@
             </div>
         </div>
     </div>
-
-    <script>
-        window.addEventListener("load", function () {
-            window.print();
-        });
-    </script>
 
 </body>
 </html>

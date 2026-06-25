@@ -503,23 +503,60 @@ def apply_adjustment(inventory_id: int):
 def print_report(inventory_id):
     inventory = PhysicalInventory.query.get_or_404(inventory_id)
 
-    lines = (
-        PhysicalInventoryLine.query
+    rows = (
+        db.session.query(
+            PhysicalInventoryLine,
+            Article,
+            WarehouseStock.avg_unit_cost,
+            WarehouseStock.last_unit_cost,
+        )
+        .join(Article, Article.id == PhysicalInventoryLine.article_id)
+        .outerjoin(
+            WarehouseStock,
+            db.and_(
+                WarehouseStock.article_id == PhysicalInventoryLine.article_id,
+                WarehouseStock.warehouse_id == inventory.warehouse_id,
+            ),
+        )
         .filter(
             PhysicalInventoryLine.physical_inventory_id == inventory.id,
             db.or_(
                 PhysicalInventoryLine.count_1_quantity.isnot(None),
                 PhysicalInventoryLine.count_2_quantity.isnot(None),
                 PhysicalInventoryLine.physical_quantity.isnot(None),
-            )
+            ),
         )
-        .join(Article, Article.id == PhysicalInventoryLine.article_id)
         .order_by(Article.code.asc())
         .all()
     )
 
+    report_lines = []
+    total_difference_amount = Decimal("0")
+
+    for line, article, avg_unit_cost, last_unit_cost in rows:
+        system_quantity = line.system_quantity or Decimal("0")
+        physical_quantity = line.physical_quantity or Decimal("0")
+
+        # No mostrar artículos donde sistema = 0 y conteo total = 0
+        if system_quantity == Decimal("0") and physical_quantity == Decimal("0"):
+            continue
+
+        unit_cost = avg_unit_cost or last_unit_cost or Decimal("0")
+        difference_quantity = line.difference_quantity or Decimal("0")
+        difference_amount = difference_quantity * unit_cost
+
+        total_difference_amount += difference_amount
+
+        report_lines.append({
+            "line": line,
+            "article": article,
+            "unit_cost": unit_cost,
+            "difference_amount": difference_amount,
+        })
+
     return render_template(
         "physical_inventory/print_report.html",
         inventory=inventory,
-        lines=lines,
+        report_lines=report_lines,
+        total_difference_amount=total_difference_amount,
     )
