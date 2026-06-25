@@ -190,13 +190,13 @@
 
                 <td class="text-end">
                     {% if line.difference_quantity is not none and line.difference_quantity != 0 %}
-                        {{ "%.2f"|format(item.unit_cost or 0) }}
+                        ₡{{ "{:,.2f}".format(item.unit_cost or 0) }}
                     {% endif %}
                 </td>
 
                 <td class="text-end">
                     {% if line.difference_quantity is not none and line.difference_quantity != 0 %}
-                        {{ "%.2f"|format(item.difference_amount or 0) }}
+                        ₡{{ "{:,.2f}".format(item.difference_amount or 0) }}
                     {% endif %}
                 </td>
             </tr>
@@ -207,7 +207,7 @@
                     Total gasto por diferencia
                 </td>
                 <td class="text-end fw-bold">
-                    {{ "%.2f"|format(total_difference_amount or 0) }}
+                    ₡{{ "{:,.2f}".format(total_difference_amount or 0) }}
                 </td>
             </tr>
         </tbody>
