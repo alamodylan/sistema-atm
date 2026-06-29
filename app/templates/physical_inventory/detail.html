@@ -23,6 +23,11 @@
                 Imprimir PDF
             </a>
 
+            <a class="btn btn-outline-success"
+            href="{{ url_for('physical_inventory.export_excel', inventory_id=inventory.id) }}">
+                Exportar Excel
+            </a>
+
         </div>
     </div>
 

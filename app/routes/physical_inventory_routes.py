@@ -15,6 +15,11 @@ from app.models.warehouse import Warehouse
 from app.models.inventory import WarehouseStock
 from app.services.physical_inventory_service import apply_physical_inventory_adjustment
 from app.models.article import Article
+from io import BytesIO
+from flask import send_file
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 
 
 physical_inventory_bp = Blueprint(
@@ -585,3 +590,107 @@ def update_participants():
     return {
         "ok": True
     }
+
+@physical_inventory_bp.route("/<int:inventory_id>/export-excel")
+@login_required
+def export_excel(inventory_id):
+    inventory = PhysicalInventory.query.get_or_404(inventory_id)
+
+    rows = (
+        PhysicalInventoryLine.query
+        .options(joinedload(PhysicalInventoryLine.article))
+        .filter(PhysicalInventoryLine.physical_inventory_id == inventory.id)
+        .join(PhysicalInventoryLine.article)
+        .order_by(
+            db.text("atm.articles.code ASC"),
+            PhysicalInventoryLine.id.asc(),
+        )
+        .all()
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Inventario físico"
+
+    ws["A1"] = "Inventario físico"
+    ws["A1"].font = Font(bold=True, size=14)
+
+    ws["A2"] = "Número"
+    ws["B2"] = inventory.number
+
+    ws["A3"] = "Predio"
+    ws["B3"] = inventory.site.name if inventory.site else ""
+
+    ws["A4"] = "Bodega"
+    ws["B4"] = inventory.warehouse.name if inventory.warehouse else ""
+
+    ws["A5"] = "Estado"
+    ws["B5"] = inventory.status
+
+    headers = [
+        "Código",
+        "Nombre",
+        "Cantidad sistema",
+        "Conteo 1",
+        "Conteo 2",
+        "Total físico",
+        "Diferencia",
+    ]
+
+    start_row = 7
+
+    for col_idx, header in enumerate(headers, start=1):
+        cell = ws.cell(row=start_row, column=col_idx, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="1F4E78")
+        cell.alignment = Alignment(horizontal="center")
+
+    for row_idx, line in enumerate(rows, start=start_row + 1):
+        ws.cell(row=row_idx, column=1, value=line.article.code if line.article else "")
+        ws.cell(row=row_idx, column=2, value=line.article.name if line.article else "")
+        ws.cell(row=row_idx, column=3, value=float(line.system_quantity or 0))
+        ws.cell(row=row_idx, column=4, value=float(line.count_1_quantity) if line.count_1_quantity is not None else None)
+        ws.cell(row=row_idx, column=5, value=float(line.count_2_quantity) if line.count_2_quantity is not None else None)
+        ws.cell(row=row_idx, column=6, value=float(line.physical_quantity) if line.physical_quantity is not None else None)
+        ws.cell(row=row_idx, column=7, value=float(line.difference_quantity) if line.difference_quantity is not None else None)
+
+    thin = Side(style="thin", color="D9D9D9")
+
+    for row in ws.iter_rows(
+        min_row=start_row,
+        max_row=start_row + len(rows),
+        min_col=1,
+        max_col=len(headers),
+    ):
+        for cell in row:
+            cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+            cell.alignment = Alignment(vertical="center")
+
+    widths = {
+        1: 14,
+        2: 45,
+        3: 16,
+        4: 12,
+        5: 12,
+        6: 14,
+        7: 14,
+    }
+
+    for col_idx, width in widths.items():
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+    ws.freeze_panes = "A8"
+    ws.auto_filter.ref = f"A{start_row}:G{start_row + len(rows)}"
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"inventario_fisico_{inventory.number}.xlsx"
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
