@@ -597,14 +597,24 @@ def export_excel(inventory_id):
     inventory = PhysicalInventory.query.get_or_404(inventory_id)
 
     rows = (
-        PhysicalInventoryLine.query
-        .options(joinedload(PhysicalInventoryLine.article))
-        .filter(PhysicalInventoryLine.physical_inventory_id == inventory.id)
-        .join(PhysicalInventoryLine.article)
-        .order_by(
-            db.text("atm.articles.code ASC"),
-            PhysicalInventoryLine.id.asc(),
+        db.session.query(
+            PhysicalInventoryLine,
+            Article,
+            WarehouseStock.avg_unit_cost,
+            WarehouseStock.last_unit_cost,
         )
+        .join(Article, Article.id == PhysicalInventoryLine.article_id)
+        .outerjoin(
+            WarehouseStock,
+            db.and_(
+                WarehouseStock.article_id == PhysicalInventoryLine.article_id,
+                WarehouseStock.warehouse_id == inventory.warehouse_id,
+            ),
+        )
+        .filter(
+            PhysicalInventoryLine.physical_inventory_id == inventory.id
+        )
+        .order_by(Article.code.asc())
         .all()
     )
 
@@ -635,6 +645,8 @@ def export_excel(inventory_id):
         "Conteo 2",
         "Total físico",
         "Diferencia",
+        "Costo unitario",
+        "Monto diferencia",
     ]
 
     start_row = 7
@@ -645,20 +657,50 @@ def export_excel(inventory_id):
         cell.fill = PatternFill("solid", fgColor="1F4E78")
         cell.alignment = Alignment(horizontal="center")
 
-    for row_idx, line in enumerate(rows, start=start_row + 1):
-        ws.cell(row=row_idx, column=1, value=line.article.code if line.article else "")
-        ws.cell(row=row_idx, column=2, value=line.article.name if line.article else "")
+    total_difference_amount = Decimal("0")
+
+    for row_idx, row_data in enumerate(rows, start=start_row + 1):
+        line, article, avg_unit_cost, last_unit_cost = row_data
+
+        unit_cost = avg_unit_cost or last_unit_cost or Decimal("0")
+        difference_quantity = line.difference_quantity or Decimal("0")
+        difference_amount = difference_quantity * unit_cost
+
+        total_difference_amount += difference_amount
+
+        ws.cell(row=row_idx, column=1, value=article.code if article else "")
+        ws.cell(row=row_idx, column=2, value=article.name if article else "")
         ws.cell(row=row_idx, column=3, value=float(line.system_quantity or 0))
         ws.cell(row=row_idx, column=4, value=float(line.count_1_quantity) if line.count_1_quantity is not None else None)
         ws.cell(row=row_idx, column=5, value=float(line.count_2_quantity) if line.count_2_quantity is not None else None)
         ws.cell(row=row_idx, column=6, value=float(line.physical_quantity) if line.physical_quantity is not None else None)
         ws.cell(row=row_idx, column=7, value=float(line.difference_quantity) if line.difference_quantity is not None else None)
+        ws.cell(row=row_idx, column=8, value=float(unit_cost))
+
+        if difference_quantity != 0:
+            ws.cell(row=row_idx, column=9, value=float(difference_amount))
+        else:
+            ws.cell(row=row_idx, column=9, value=None)
+
+    total_row = start_row + len(rows) + 1
+
+    ws.cell(row=total_row, column=8, value="Total monto diferencia")
+    ws.cell(row=total_row, column=8).font = Font(bold=True)
+
+    ws.cell(row=total_row, column=9, value=float(total_difference_amount))
+    ws.cell(row=total_row, column=9).font = Font(bold=True)
+
+    money_format = '₡#,##0.00'
+
+    for row_idx in range(start_row + 1, total_row + 1):
+        ws.cell(row=row_idx, column=8).number_format = money_format
+        ws.cell(row=row_idx, column=9).number_format = money_format
 
     thin = Side(style="thin", color="D9D9D9")
 
     for row in ws.iter_rows(
         min_row=start_row,
-        max_row=start_row + len(rows),
+        max_row=total_row,
         min_col=1,
         max_col=len(headers),
     ):
@@ -674,13 +716,15 @@ def export_excel(inventory_id):
         5: 12,
         6: 14,
         7: 14,
+        8: 16,
+        9: 18,
     }
 
     for col_idx, width in widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = width
 
     ws.freeze_panes = "A8"
-    ws.auto_filter.ref = f"A{start_row}:G{start_row + len(rows)}"
+    ws.auto_filter.ref = f"A{start_row}:I{start_row + len(rows)}"
 
     output = BytesIO()
     wb.save(output)
