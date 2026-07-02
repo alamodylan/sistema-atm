@@ -17,7 +17,7 @@ class InventoryAdjustmentServiceError(Exception):
     pass
 
 
-def _to_decimal(value, field_name="cantidad"):
+def _to_decimal(value, field_name="cantidad", allow_decimals=False):
     try:
         decimal_value = Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
@@ -26,7 +26,7 @@ def _to_decimal(value, field_name="cantidad"):
     if decimal_value < 0:
         raise InventoryAdjustmentServiceError(f"La {field_name} no puede ser negativa.")
 
-    if decimal_value != decimal_value.to_integral_value():
+    if not allow_decimals and decimal_value != decimal_value.to_integral_value():
         raise InventoryAdjustmentServiceError(f"La {field_name} debe ser un número entero.")
 
     return decimal_value.quantize(Decimal("0.00"))
@@ -160,7 +160,32 @@ def create_inventory_adjustment(
                 f"El artículo con ID {article_id} no existe."
             )
 
-        quantity_after_decimal = _to_decimal(quantity_after, "cantidad nueva")
+        unit_code = None
+
+        if article.unit_id:
+            unit_row = db.session.execute(
+                db.text("""
+                    SELECT code
+                    FROM atm.units
+                    WHERE id = :unit_id
+                """),
+                {"unit_id": article.unit_id},
+            ).first()
+
+            if unit_row:
+                unit_code = str(unit_row.code or "").strip().upper()
+
+        allow_decimals = unit_code in {
+            "METRO",
+            "LITRO",
+            "GALON",
+        }
+
+        quantity_after_decimal = _to_decimal(
+            quantity_after,
+            "cantidad nueva",
+            allow_decimals=allow_decimals,
+        )
 
         clean_lines.append({
             "article": article,
@@ -229,13 +254,11 @@ def create_inventory_adjustment(
 
             db.session.add(adjustment_line)
 
-            # Siempre dejamos el stock en la cantidad final indicada.
             stock.quantity_on_hand = quantity_after
 
             if hasattr(stock, "updated_at"):
                 stock.updated_at = datetime.now(UTC)
 
-            # Si no hay diferencia, NO se crea ledger porque la BD no permite quantity_change = 0.
             if difference == Decimal("0.00"):
                 skipped_count += 1
                 skipped_lines.append(
