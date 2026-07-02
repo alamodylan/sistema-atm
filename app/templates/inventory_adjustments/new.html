@@ -134,14 +134,18 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function formatNumber(value) {
+
         const number = Number(value);
+
         if (Number.isNaN(number)) {
-            return "0";
+            return "0.00";
         }
+
         return number.toLocaleString("es-CR", {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
         });
+
     }
 
     function updateDifference(row) {
@@ -204,9 +208,9 @@ document.addEventListener("DOMContentLoaded", function () {
                        name="quantity_after[]"
                        class="form-control form-control-sm text-end quantity-after-input"
                        min="0"
-                       step="1"
+                       step="0.01"
                        required
-                       value="${formatNumber(currentQuantity).replace(/\D/g, '')}">
+                       value="${currentQuantity}"
             </td>
 
             <td class="text-end difference-cell fw-semibold text-success">
@@ -298,9 +302,9 @@ document.addEventListener("DOMContentLoaded", function () {
             const input = row.querySelector(".quantity-after-input");
             const value = Number(input.value);
 
-            if (Number.isNaN(value) || value < 0 || !Number.isInteger(value)) {
+            if (Number.isNaN(value) || value < 0) {
                 event.preventDefault();
-                alert("Todas las cantidades nuevas deben ser enteras y no negativas.");
+                alert("Todas las cantidades nuevas deben ser números positivos.");
                 input.focus();
                 return;
             }
