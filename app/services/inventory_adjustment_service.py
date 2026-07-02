@@ -112,16 +112,6 @@ def create_inventory_adjustment(
     lines,
     notes=None,
 ):
-    """
-    Crea un ajuste manual de inventario.
-
-    Este método:
-    1. Crea encabezado inventory_adjustments.
-    2. Crea líneas inventory_adjustment_lines.
-    3. Actualiza warehouse_stock.
-    4. Registra inventory_ledger con quantity_change positivo o negativo.
-    """
-
     if not site_id:
         raise InventoryAdjustmentServiceError("No se recibió el predio del ajuste.")
 
@@ -172,12 +162,10 @@ def create_inventory_adjustment(
 
         quantity_after_decimal = _to_decimal(quantity_after, "cantidad nueva")
 
-        clean_lines.append(
-            {
-                "article": article,
-                "quantity_after": quantity_after_decimal,
-            }
-        )
+        clean_lines.append({
+            "article": article,
+            "quantity_after": quantity_after_decimal,
+        })
 
     try:
         adjustment = InventoryAdjustment(
@@ -191,6 +179,10 @@ def create_inventory_adjustment(
 
         db.session.add(adjustment)
         db.session.flush()
+
+        applied_count = 0
+        skipped_count = 0
+        skipped_lines = []
 
         for item in clean_lines:
             article = item["article"]
@@ -212,6 +204,10 @@ def create_inventory_adjustment(
                     article_id=article.id,
                     quantity_on_hand=Decimal("0.00"),
                     reserved_quantity=Decimal("0.00"),
+                    last_unit_cost=Decimal("0.00"),
+                    avg_unit_cost=Decimal("0.00"),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 )
                 db.session.add(stock)
                 db.session.flush()
@@ -233,7 +229,20 @@ def create_inventory_adjustment(
 
             db.session.add(adjustment_line)
 
+            # Siempre dejamos el stock en la cantidad final indicada.
             stock.quantity_on_hand = quantity_after
+
+            if hasattr(stock, "updated_at"):
+                stock.updated_at = datetime.now(UTC)
+
+            # Si no hay diferencia, NO se crea ledger porque la BD no permite quantity_change = 0.
+            if difference == Decimal("0.00"):
+                skipped_count += 1
+                skipped_lines.append(
+                    f"{article.code}: sin diferencia. "
+                    f"Cantidad anterior {quantity_before}, cantidad nueva {quantity_after}."
+                )
+                continue
 
             ledger = InventoryLedger(
                 movement_type="AJUSTE_MANUAL",
@@ -258,8 +267,14 @@ def create_inventory_adjustment(
             )
 
             db.session.add(ledger)
+            applied_count += 1
 
         db.session.commit()
+
+        adjustment.applied_count = applied_count
+        adjustment.skipped_count = skipped_count
+        adjustment.skipped_lines = skipped_lines
+
         return adjustment
 
     except IntegrityError as exc:
