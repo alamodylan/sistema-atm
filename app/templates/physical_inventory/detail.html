@@ -190,7 +190,9 @@
                 <tr data-barcode="{{ line.article.barcode or '' }}"
                     data-code="{{ line.article.code or '' }}"
                     data-name="{{ line.article.name or '' }}"
-                    data-system="{{ line.system_quantity }}">
+                    data-system="{{ line.system_quantity }}"
+                    data-counted="{% if line.count_1_quantity is not none or line.count_2_quantity is not none %}1{% else %}0{% endif %}"
+                    data-diff="{{ line.difference_quantity or 0 }}">
 
                     <td>{{ line.article.code }}</td>
                     <td>{{ line.article.name }}</td>
@@ -270,6 +272,7 @@
     let scanBuffer = "";
     let scanTimer = null;
     let lastSyncTime = null;
+    let inventoryRows = null;
 
     // =====================================================
     // NORMALIZAR CÓDIGO
@@ -398,8 +401,16 @@
         const showWithoutDiff =
             document.getElementById("filterWithoutDiff")?.checked === true;
 
-        const rows =
-            document.querySelectorAll("tbody tr[data-code]");
+        if (!inventoryRows) {
+
+            inventoryRows =
+                document.querySelectorAll(
+                    "tbody tr[data-code]"
+                );
+
+        }
+
+        const rows = inventoryRows;
 
         rows.forEach(row => {
 
@@ -412,27 +423,14 @@
             const name =
                 normalizeCode(row.dataset.name);
 
-            const qtyInputs =
-                row.querySelectorAll(".count-input");
-
-            let hasPhysicalInfo = false;
-
-            qtyInputs.forEach(input => {
-                if (String(input.value || "").trim() !== "") {
-                    hasPhysicalInfo = true;
-                }
-            });
-
-            const diffCell =
-                row.querySelector(".diff");
-
-            const diffText =
-                String(diffCell ? diffCell.innerText : "")
-                    .trim()
-                    .replace(",", ".");
+            const hasPhysicalInfo =
+                row.dataset.counted === "1";
 
             const diffValue =
-                parseFloat(diffText || "0");
+                Number(
+                    String(row.dataset.diff || "0")
+                        .replace(",", ".")
+                );
 
             const hasValidDiff =
                 Number.isFinite(diffValue);
@@ -623,12 +621,34 @@
 
         const diff = physical - system;
 
+        
+
+        const hasCountedValue =
+            Array.from(countInputs).some(countInput => {
+                return String(countInput.value || "").trim() !== "";
+            });
+
+        row.dataset.counted =
+            hasCountedValue ? "1" : "0";
+
+        row.dataset.diff =
+            Number.isFinite(diff)
+                ? diff.toFixed(2)
+                : "0";
+
         const cell = row.querySelector(".diff");
 
         cell.innerText =
             Number.isFinite(diff)
                 ? diff.toFixed(2)
                 : "";
+
+        row.dataset.diff =
+            Number.isFinite(diff)
+                ? diff.toFixed(2)
+                : "0";
+
+        row.dataset.counted = "1";
 
         cell.classList.remove(
             "text-success",
@@ -1107,6 +1127,19 @@
                 serverLine.difference_quantity || "";
         }
 
+        if (row) {
+            row.dataset.diff =
+                serverLine.difference_quantity || "0";
+
+            row.dataset.counted =
+                (
+                    serverLine.count_1_quantity
+                    || serverLine.count_2_quantity
+                )
+                    ? "1"
+                    : "0";
+        }
+
         updateDifferenceVisual(inputs[0]);
 
         if (!row) {
@@ -1231,11 +1264,18 @@
 
     if (inventoryFilterInput) {
 
+        let inventoryFilterTimer = null;
+
         inventoryFilterInput.addEventListener(
             "input",
             function () {
 
-                applyInventoryFilters();
+                clearTimeout(inventoryFilterTimer);
+
+                inventoryFilterTimer = setTimeout(() => {
+                    applyInventoryFilters();
+                }, 250);
+
             }
         );
 
