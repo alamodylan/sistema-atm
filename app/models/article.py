@@ -10,7 +10,7 @@ class Article(db.Model):
     id = db.Column(db.BigInteger, primary_key=True)
 
     code = db.Column(db.String(50), unique=True, nullable=False, index=True)
-    name = db.Column(db.String(200), nullable=False, index=True)
+    name = db.Column(db.Text, nullable=False)
     description = db.Column(db.Text, nullable=True)
 
     category_id = db.Column(

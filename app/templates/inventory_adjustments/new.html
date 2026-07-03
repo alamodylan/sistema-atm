@@ -188,6 +188,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const row = document.createElement("tr");
         row.dataset.articleId = article.id;
         row.dataset.currentQuantity = currentQuantity;
+        row.dataset.unit = article.unit_code || "";
 
         row.innerHTML = `
             <td class="fw-semibold">

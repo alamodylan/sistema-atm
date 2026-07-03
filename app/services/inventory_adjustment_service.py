@@ -95,12 +95,28 @@ def find_article_for_adjustment(warehouse_id, code_or_barcode):
     if stock:
         current_quantity = Decimal(str(stock.quantity_on_hand or 0)).quantize(Decimal("0.00"))
 
+    unit_code = None
+
+    if article.unit_id:
+        unit = db.session.execute(
+            db.text("""
+                SELECT code
+                FROM atm.units
+                WHERE id = :id
+            """),
+            {"id": article.unit_id},
+        ).first()
+
+        if unit:
+            unit_code = unit.code
+
     return {
         "article_id": article.id,
         "code": article.code,
         "barcode": article.barcode,
         "name": article.name,
         "current_quantity": current_quantity,
+        "unit_code": unit_code,
     }
 
 
