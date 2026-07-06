@@ -621,8 +621,6 @@
 
         const diff = physical - system;
 
-        
-
         const hasCountedValue =
             Array.from(countInputs).some(countInput => {
                 return String(countInput.value || "").trim() !== "";
@@ -642,13 +640,6 @@
             Number.isFinite(diff)
                 ? diff.toFixed(2)
                 : "";
-
-        row.dataset.diff =
-            Number.isFinite(diff)
-                ? diff.toFixed(2)
-                : "0";
-
-        row.dataset.counted = "1";
 
         cell.classList.remove(
             "text-success",
@@ -763,6 +754,13 @@
                     Number.isFinite(diff)
                         ? diff.toFixed(2)
                         : result.difference_quantity;
+
+                row.dataset.diff =
+                    Number.isFinite(diff)
+                        ? diff.toFixed(2)
+                        : "0";
+
+                row.dataset.counted = "1";
             }
 
             input.classList.remove(
@@ -1027,28 +1025,6 @@
             );
 
             // =====================================
-            // INPUT
-            // =====================================
-
-            input.addEventListener(
-                "input",
-                function () {
-                    triggerAutosave(this);
-                }
-            );
-
-            // =====================================
-            // TOUCH
-            // =====================================
-
-            input.addEventListener(
-                "touchend",
-                function () {
-                    triggerAutosave(this);
-                }
-            );
-
-            // =====================================
             // FOCUS
             // =====================================
 
@@ -1159,7 +1135,6 @@
             row.classList.remove("table-success");
         }, 2000);
 
-        applyInventoryFilters();
     }
 
     // =====================================================
@@ -1382,8 +1357,23 @@
     // =====================================================
 
     setInterval(() => {
+
+        const active = document.activeElement;
+
+        if (
+            active &&
+            (
+                active.id === "inventoryFilter"
+                || active.id === "participants"
+                || active.classList.contains("qty-input")
+            )
+        ) {
+            return;
+        }
+
         syncChanges();
-    }, 7000);
+
+    }, 60000);
 
 })();
 </script>

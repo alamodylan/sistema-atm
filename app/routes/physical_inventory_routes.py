@@ -399,6 +399,7 @@ def get_changes(inventory_id: int):
     lines = (
         query
         .order_by(PhysicalInventoryLine.counted_at.asc())
+        .limit(300)
         .all()
     )
 
