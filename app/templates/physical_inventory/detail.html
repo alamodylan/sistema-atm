@@ -956,7 +956,9 @@
 
                             clearScanBuffer();
 
-                        }, 50);
+                            resetSearchAndFocus();
+
+                        }, 150);
 
                         return;
                     }
@@ -1246,11 +1248,18 @@
     const inventoryFilterInput =
         document.getElementById("inventoryFilter");
 
-    const inventorySearchForm =
-        document.getElementById("inventorySearchForm");
-
     const statusFilterInput =
         document.getElementById("statusFilterInput");
+
+    function resetSearchAndFocus() {
+        if (!inventoryFilterInput) {
+            return;
+        }
+
+        inventoryFilterInput.value = "";
+        inventoryFilterInput.focus();
+        inventoryFilterInput.select();
+    }
 
     async function searchInventoryCode(value) {
         const cleanCode = normalizeCode(value);
@@ -1279,23 +1288,43 @@
             return;
         }
 
-        await processScannedCode(cleanCode);
+        try {
+            const response = await fetch(
+                "{{ url_for('physical_inventory.find_line', inventory_id=inventory.id) }}?code="
+                + encodeURIComponent(cleanCode)
+            );
+
+            const result = await response.json();
+
+            if (!result.ok) {
+                alert(result.message || "Artículo no encontrado.");
+                resetSearchAndFocus();
+                return;
+            }
+
+            const url = new URL(window.location.href);
+
+            url.searchParams.set("page", result.page);
+            url.searchParams.set("focus_code", cleanCode);
+            url.searchParams.delete("q");
+
+            window.location.href = url.toString();
+
+        } catch (error) {
+            alert("Error buscando el artículo.");
+            resetSearchAndFocus();
+        }
     }
 
     if (inventoryFilterInput) {
-
-        let inventoryFilterTimer = null;
-
         inventoryFilterInput.addEventListener(
             "keydown",
             function (event) {
-
                 if (event.key !== "Enter") {
                     return;
                 }
 
                 event.preventDefault();
-
                 searchInventoryCode(this.value);
             }
         );
@@ -1303,20 +1332,21 @@
         inventoryFilterInput.addEventListener(
             "input",
             function () {
+                if (this.value.trim()) {
+                    return;
+                }
 
-                clearTimeout(inventoryFilterTimer);
+                const url = new URL(window.location.href);
 
-                inventoryFilterTimer = setTimeout(() => {
-
-                    if (!this.value.trim()) {
-                        const url = new URL(window.location.href);
-                        url.searchParams.delete("q");
-                        url.searchParams.delete("focus_code");
-                        url.searchParams.set("page", "1");
-                        window.location.href = url.toString();
-                    }
-
-                }, 500);
+                if (
+                    url.searchParams.has("q")
+                    || url.searchParams.has("focus_code")
+                ) {
+                    url.searchParams.delete("q");
+                    url.searchParams.delete("focus_code");
+                    url.searchParams.set("page", "1");
+                    window.location.href = url.toString();
+                }
             }
         );
     }
@@ -1360,9 +1390,11 @@
                     }
 
                     const url = new URL(window.location.href);
+
                     url.searchParams.set("page", "1");
                     url.searchParams.set("status", status);
                     url.searchParams.delete("focus_code");
+                    url.searchParams.delete("q");
 
                     window.location.href = url.toString();
                 }
