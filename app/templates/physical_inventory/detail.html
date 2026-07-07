@@ -66,14 +66,25 @@
                 Buscar artículo
             </label>
 
-            <input
-                type="text"
-                id="inventoryFilter"
-                class="form-control"
-                placeholder="Digite código, código de barras o nombre del artículo..."
-                autocomplete="off"
-                inputmode="numeric"
-                pattern="[0-9]*">
+            <form method="GET"
+                action="{{ url_for('physical_inventory.detail', inventory_id=inventory.id) }}"
+                id="inventorySearchForm">
+
+                <input
+                    type="text"
+                    id="inventoryFilter"
+                    name="q"
+                    value="{{ q or '' }}"
+                    class="form-control"
+                    placeholder="Digite código, código de barras o nombre del artículo..."
+                    autocomplete="off">
+
+                <input type="hidden"
+                    name="status"
+                    id="statusFilterInput"
+                    value="{{ status_filter or '' }}">
+
+            </form>
 
             <small class="text-muted">
                 Al escribir un código se mostrará únicamente la línea encontrada.
@@ -242,7 +253,7 @@
                 <div class="btn-group">
                     {% if pagination.has_prev %}
                     <a class="btn btn-outline-secondary btn-sm"
-                       href="{{ url_for('physical_inventory.detail', inventory_id=inventory.id, page=pagination.prev_num) }}">
+                       href="{{ url_for('physical_inventory.detail', inventory_id=inventory.id, page=pagination.prev_num, q=q, status=status_filter) }}"
                         Anterior
                     </a>
                     {% else %}
@@ -251,7 +262,7 @@
 
                     {% if pagination.has_next %}
                     <a class="btn btn-outline-secondary btn-sm"
-                       href="{{ url_for('physical_inventory.detail', inventory_id=inventory.id, page=pagination.next_num) }}">
+                       href="{{ url_for('physical_inventory.detail', inventory_id=inventory.id, page=pagination.next_num, q=q, status=status_filter) }}"
                         Siguiente
                     </a>
                     {% else %}
@@ -1229,13 +1240,31 @@
     }
 
     // =====================================================
-    // BUSCADOR Y FILTROS
+    // BUSCADOR Y FILTROS GLOBALES
     // =====================================================
 
     const inventoryFilterInput =
-        document.getElementById(
-            "inventoryFilter"
-        );
+        document.getElementById("inventoryFilter");
+
+    const inventorySearchForm =
+        document.getElementById("inventorySearchForm");
+
+    const statusFilterInput =
+        document.getElementById("statusFilterInput");
+
+    function submitInventorySearch() {
+        if (!inventorySearchForm) {
+            return;
+        }
+
+        const pageInput = inventorySearchForm.querySelector('input[name="page"]');
+
+        if (pageInput) {
+            pageInput.value = "1";
+        }
+
+        inventorySearchForm.submit();
+    }
 
     if (inventoryFilterInput) {
 
@@ -1248,9 +1277,8 @@
                 clearTimeout(inventoryFilterTimer);
 
                 inventoryFilterTimer = setTimeout(() => {
-                    applyInventoryFilters();
-                }, 250);
-
+                    submitInventorySearch();
+                }, 650);
             }
         );
 
@@ -1263,31 +1291,7 @@
                 }
 
                 event.preventDefault();
-
-                const row =
-                    findRowByScannedCode(
-                        this.value
-                    );
-
-                if (!row) {
-                    return;
-                }
-
-                markRow(row);
-
-                const input =
-                    row.querySelector(
-                        ".qty-input"
-                    );
-
-                if (
-                    input
-                    && !input.disabled
-                ) {
-
-                    input.focus();
-                    input.select();
-                }
+                submitInventorySearch();
             }
         );
     }
@@ -1299,7 +1303,42 @@
             filter.addEventListener(
                 "change",
                 function () {
-                    applyInventoryFilters();
+
+                    const showCounted =
+                        document.getElementById("filterCounted")?.checked === true;
+
+                    const showNotCounted =
+                        document.getElementById("filterNotCounted")?.checked === true;
+
+                    const showWithDiff =
+                        document.getElementById("filterWithDiff")?.checked === true;
+
+                    const showWithoutDiff =
+                        document.getElementById("filterWithoutDiff")?.checked === true;
+
+                    let status = "";
+
+                    if (showCounted && !showNotCounted) {
+                        status = "counted";
+                    }
+
+                    if (!showCounted && showNotCounted) {
+                        status = "pending";
+                    }
+
+                    if (showWithDiff && !showWithoutDiff) {
+                        status = "diff";
+                    }
+
+                    if (!showWithDiff && showWithoutDiff) {
+                        status = "no_diff";
+                    }
+
+                    if (statusFilterInput) {
+                        statusFilterInput.value = status;
+                    }
+
+                    submitInventorySearch();
                 }
             );
         });

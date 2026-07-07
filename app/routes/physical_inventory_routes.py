@@ -224,19 +224,65 @@ def detail(inventory_id: int):
         return redirect(url_for("physical_inventory.index"))
 
     page = request.args.get("page", 1, type=int)
-    per_page = 5000
+    q = (request.args.get("q") or "").strip()
+    status_filter = (request.args.get("status") or "").strip()
 
-    pagination = (
+    per_page = 500
+
+    query = (
         PhysicalInventoryLine.query
         .options(joinedload(PhysicalInventoryLine.article))
         .filter(PhysicalInventoryLine.physical_inventory_id == inventory.id)
         .join(PhysicalInventoryLine.article)
+    )
+
+    # Búsqueda GLOBAL: código, nombre o código de barras
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            db.or_(
+                Article.code.ilike(like),
+                Article.name.ilike(like),
+                Article.barcode.ilike(like),
+            )
+        )
+
+    # Filtros manuales globales
+    if status_filter == "pending":
+        query = query.filter(
+            PhysicalInventoryLine.physical_quantity.is_(None)
+        )
+
+    elif status_filter == "counted":
+        query = query.filter(
+            PhysicalInventoryLine.physical_quantity.isnot(None)
+        )
+
+    elif status_filter == "diff":
+        query = query.filter(
+            PhysicalInventoryLine.difference_quantity.isnot(None),
+            PhysicalInventoryLine.difference_quantity != 0,
+        )
+
+    elif status_filter == "no_diff":
+        query = query.filter(
+            PhysicalInventoryLine.difference_quantity.isnot(None),
+            PhysicalInventoryLine.difference_quantity == 0,
+        )
+
+    pagination = (
+        query
         .order_by(
-            db.text("atm.articles.code ASC"),
+            Article.code.asc(),
             PhysicalInventoryLine.id.asc(),
         )
-        .paginate(page=page, per_page=per_page, error_out=False)
+        .paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False,
+        )
     )
+
     lines = pagination.items
 
     return render_template(
@@ -244,6 +290,9 @@ def detail(inventory_id: int):
         inventory=inventory,
         lines=lines,
         pagination=pagination,
+        q=q,
+        status_filter=status_filter,
+        per_page=per_page,
     )
 
 @physical_inventory_bp.route("/<int:inventory_id>/find-line")
@@ -251,37 +300,42 @@ def detail(inventory_id: int):
 def find_line(inventory_id: int):
     inventory = PhysicalInventory.query.get_or_404(inventory_id)
 
+    active_site_id = session.get("active_site_id")
+    if active_site_id and inventory.site_id != int(active_site_id):
+        return jsonify({
+            "ok": False,
+            "message": "Este inventario físico no pertenece al predio activo.",
+        }), 403
+
     code = (request.args.get("code") or "").strip().upper()
 
     if not code:
-        return jsonify({"ok": False, "message": "Código vacío."}), 400
+        return jsonify({
+            "ok": False,
+            "message": "Código vacío.",
+        }), 400
 
-    per_page = 5000
+    per_page = 500
 
-    query = (
+    base_query = (
         PhysicalInventoryLine.query
-        .filter(PhysicalInventoryLine.physical_inventory_id == inventory.id)
         .join(PhysicalInventoryLine.article)
-        .order_by(
-            db.text("atm.articles.code ASC"),
-            PhysicalInventoryLine.id.asc(),
-        )
+        .filter(PhysicalInventoryLine.physical_inventory_id == inventory.id)
     )
 
-    all_ids = [
-        row.id
-        for row in query.with_entities(PhysicalInventoryLine.id).all()
-    ]
-
     target_line = (
-        query
+        base_query
+        .options(joinedload(PhysicalInventoryLine.article))
         .filter(
             db.or_(
-                db.text("UPPER(atm.articles.code) = :code"),
-                db.text("UPPER(atm.articles.barcode) = :code"),
+                db.func.upper(Article.code) == code,
+                db.func.upper(Article.barcode) == code,
             )
         )
-        .params(code=code)
+        .order_by(
+            Article.code.asc(),
+            PhysicalInventoryLine.id.asc(),
+        )
         .first()
     )
 
@@ -291,15 +345,23 @@ def find_line(inventory_id: int):
             "message": "Artículo no encontrado.",
         })
 
-    try:
-        position = all_ids.index(target_line.id)
-    except ValueError:
-        return jsonify({
-            "ok": False,
-            "message": "No se pudo ubicar la línea.",
-        })
+    target_article_code = target_line.article.code if target_line.article else ""
 
-    page = (position // per_page) + 1
+    position = (
+        base_query
+        .filter(
+            db.or_(
+                Article.code < target_article_code,
+                db.and_(
+                    Article.code == target_article_code,
+                    PhysicalInventoryLine.id <= target_line.id,
+                ),
+            )
+        )
+        .count()
+    )
+
+    page = ((position - 1) // per_page) + 1
 
     return jsonify({
         "ok": True,
