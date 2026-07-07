@@ -227,7 +227,7 @@ def detail(inventory_id: int):
     q = (request.args.get("q") or "").strip()
     status_filter = (request.args.get("status") or "").strip()
 
-    per_page = 500
+    per_page = 5000
 
     query = (
         PhysicalInventoryLine.query
@@ -315,7 +315,7 @@ def find_line(inventory_id: int):
             "message": "Código vacío.",
         }), 400
 
-    per_page = 500
+    per_page = 5000
 
     base_query = (
         PhysicalInventoryLine.query
