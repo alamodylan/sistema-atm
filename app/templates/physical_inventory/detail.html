@@ -1204,6 +1204,37 @@
         }
     }
 
+    function showOnlyRow(row) {
+        document
+            .querySelectorAll("tbody tr[data-code]")
+            .forEach(item => {
+                item.style.display = item === row ? "" : "none";
+            });
+    }
+
+    function showAllRows() {
+        document
+            .querySelectorAll("tbody tr[data-code]")
+            .forEach(item => {
+                item.style.display = "";
+            });
+    }
+
+    function focusQuantityInput(row) {
+        const input = row.querySelector(".qty-input");
+
+        if (!input || input.disabled) {
+            return;
+        }
+
+        input.setAttribute("type", "number");
+        input.setAttribute("inputmode", "decimal");
+        input.setAttribute("pattern", "[0-9]*");
+
+        input.focus();
+        input.select();
+    }
+
     // =====================================================
     // FOCUS CODE
     // =====================================================
@@ -1228,15 +1259,9 @@
 
             markRow(row);
 
-            const input =
-                row.querySelector(".qty-input");
-
-            if (input && !input.disabled) {
-
-                input.focus();
-
-                input.select();
-            }
+            showOnlyRow(row);
+            markRow(row);
+            focusQuantityInput(row);
 
         }, 400);
     }
@@ -1276,15 +1301,9 @@
         const row = findRowByScannedCode(cleanCode);
 
         if (row) {
+            showOnlyRow(row);
             markRow(row);
-
-            const input = row.querySelector(".qty-input");
-
-            if (input && !input.disabled) {
-                input.focus();
-                input.select();
-            }
-
+            focusQuantityInput(row);
             return;
         }
 
