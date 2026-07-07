@@ -1252,35 +1252,39 @@
     const statusFilterInput =
         document.getElementById("statusFilterInput");
 
-    function submitInventorySearch() {
-        if (!inventorySearchForm) {
+    async function searchInventoryCode(value) {
+        const cleanCode = normalizeCode(value);
+
+        if (!cleanCode) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("q");
+            url.searchParams.delete("focus_code");
+            url.searchParams.set("page", "1");
+            window.location.href = url.toString();
             return;
         }
 
-        const pageInput = inventorySearchForm.querySelector('input[name="page"]');
+        const row = findRowByScannedCode(cleanCode);
 
-        if (pageInput) {
-            pageInput.value = "1";
+        if (row) {
+            markRow(row);
+
+            const input = row.querySelector(".qty-input");
+
+            if (input && !input.disabled) {
+                input.focus();
+                input.select();
+            }
+
+            return;
         }
 
-        inventorySearchForm.submit();
+        await processScannedCode(cleanCode);
     }
 
     if (inventoryFilterInput) {
 
         let inventoryFilterTimer = null;
-
-        inventoryFilterInput.addEventListener(
-            "input",
-            function () {
-
-                clearTimeout(inventoryFilterTimer);
-
-                inventoryFilterTimer = setTimeout(() => {
-                    submitInventorySearch();
-                }, 650);
-            }
-        );
 
         inventoryFilterInput.addEventListener(
             "keydown",
@@ -1291,7 +1295,28 @@
                 }
 
                 event.preventDefault();
-                submitInventorySearch();
+
+                searchInventoryCode(this.value);
+            }
+        );
+
+        inventoryFilterInput.addEventListener(
+            "input",
+            function () {
+
+                clearTimeout(inventoryFilterTimer);
+
+                inventoryFilterTimer = setTimeout(() => {
+
+                    if (!this.value.trim()) {
+                        const url = new URL(window.location.href);
+                        url.searchParams.delete("q");
+                        url.searchParams.delete("focus_code");
+                        url.searchParams.set("page", "1");
+                        window.location.href = url.toString();
+                    }
+
+                }, 500);
             }
         );
     }
@@ -1334,11 +1359,12 @@
                         status = "no_diff";
                     }
 
-                    if (statusFilterInput) {
-                        statusFilterInput.value = status;
-                    }
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("page", "1");
+                    url.searchParams.set("status", status);
+                    url.searchParams.delete("focus_code");
 
-                    submitInventorySearch();
+                    window.location.href = url.toString();
                 }
             );
         });
