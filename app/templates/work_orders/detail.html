@@ -196,9 +196,13 @@
         const repairTypeSelect = document.getElementById("repairTypeSelect");
         const mechanicSelect = document.getElementById("mechanicSelect");
 
-        const repairTypeMechanicsMap = JSON.parse(
-            '{{ repair_type_mechanics_map | default({}) | tojson | safe }}'
-        );
+        const mapScript =
+            document.getElementById("repairTypeMechanicsMapJson");
+
+        const repairTypeMechanicsMap =
+            mapScript
+                ? JSON.parse(mapScript.textContent || "{}")
+                : {};
 
         if (!repairTypeSelect || !mechanicSelect) {
             return;
@@ -361,7 +365,9 @@
 
             tasksContainer.innerHTML = html;
 
-            initRepairTypeMechanics();
+            requestAnimationFrame(() => {
+                initRepairTypeMechanics();
+            });
 
         })
         .catch(function (error) {

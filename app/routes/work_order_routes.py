@@ -412,6 +412,10 @@ def get_work_order(work_order_id: int):
         if not work_order:
             raise ValueError("Orden de trabajo no encontrada.")
 
+        repair_types, repair_type_mechanics_map = _build_repair_type_mechanics_map(
+            site_id=work_order.site_id
+        )
+
         return render_template(
             "work_orders/detail.html",
             title="Detalle de Orden de Trabajo",
