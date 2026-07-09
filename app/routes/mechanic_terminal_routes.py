@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required, current_user
+import re
 
 from app.extensions import db
 from app.models.mechanic import Mechanic
@@ -48,7 +49,13 @@ def index():
 @login_required
 def scan():
     data = request.get_json(silent=True) or {}
-    code = (data.get("code") or "").strip()
+
+    raw_code = data.get("code") or ""
+
+    # Limpia caracteres invisibles que algunos lectores envían:
+    # Enter, tab, saltos de línea, retorno de carro, etc.
+    code = re.sub(r"[\x00-\x1F\x7F]", "", str(raw_code)).strip().upper()
+
     active_site_id = session.get("active_site_id")
 
     if not code:
@@ -57,11 +64,15 @@ def scan():
     if not active_site_id:
         return jsonify({"error": "No hay predio activo seleccionado"}), 400
 
-    mechanic = Mechanic.query.filter_by(
-        code=code,
-        site_id=active_site_id,
-        is_active=True,
-    ).first()
+    mechanic = (
+        Mechanic.query
+        .filter(
+            Mechanic.site_id == int(active_site_id),
+            Mechanic.is_active.is_(True),
+            db.func.upper(db.func.trim(Mechanic.code)) == code,
+        )
+        .first()
+    )
 
     if not mechanic:
         return jsonify({"error": "Mecánico no encontrado"}), 404
@@ -71,7 +82,7 @@ def scan():
         .join(WorkOrder, WorkOrder.id == WorkOrderTaskLine.work_order_id)
         .filter(
             WorkOrderTaskLine.assigned_mechanic_id == mechanic.id,
-            WorkOrder.site_id == active_site_id,
+            WorkOrder.site_id == int(active_site_id),
             WorkOrder.status == "EN_PROCESO",
             WorkOrderTaskLine.status.in_(
                 [
