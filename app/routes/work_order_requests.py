@@ -9,6 +9,9 @@ from datetime import datetime, UTC
 from app.extensions import db
 from app.models.tool_loan import ToolLoan
 from app.services.inventory_service import add_stock, InventoryServiceError
+from sqlalchemy.orm import joinedload
+from app.models.article import Article
+from app.models.work_order_request import WorkOrderRequest
 
 from app.services.work_order_request_service import (
     WorkOrderRequestServiceError,
@@ -148,49 +151,44 @@ def cancel_request_line_action(line_id: int):
 @login_required
 def approve_request_line_action(line_id: int):
     try:
-        # =========================
-        # OBTENER LÍNEA
-        # =========================
-        line = WorkOrderRequestLine.query.get_or_404(line_id)
+        line = (
+            WorkOrderRequestLine.query
+            .options(
+                joinedload(WorkOrderRequestLine.article)
+                    .joinedload(Article.unit),
+                joinedload(WorkOrderRequestLine.work_order_request)
+                    .joinedload(WorkOrderRequest.work_order),
+            )
+            .filter(WorkOrderRequestLine.id == line_id)
+            .first_or_404()
+        )
 
         qty = Decimal(request.form.get("quantity") or "0")
 
-        # =========================
-        # OBTENER STOCK REAL
-        # =========================
         stock = (
             WarehouseStock.query
-            .filter_by(
-                article_id=line.article_id,
-                warehouse_id=line.work_order_request.work_order.warehouse_id,
+            .filter(
+                WarehouseStock.article_id == line.article_id,
+                WarehouseStock.warehouse_id == line.work_order_request.work_order.warehouse_id,
             )
             .first()
         )
 
         available_qty = Decimal(str(stock.available_quantity if stock else 0))
 
-        # =========================
-        # VALIDACIONES
-        # =========================
-
-        # 1. Mayor que cero
         if qty <= 0:
             raise ValueError("La cantidad debe ser mayor a cero.")
 
-        # 2. No mayor al stock
         if qty > available_qty:
             raise ValueError("No se puede aprobar más que el stock disponible.")
 
-        # 3. No decimales en UND
         unit_code = line.article.unit.code if line.article and line.article.unit else ""
 
-        if unit_code == "UND":
-            if qty != qty.to_integral_value():
-                raise ValueError("Este artículo usa unidad UND, solo permite cantidades enteras.")
+        if unit_code == "UND" and qty != qty.to_integral_value():
+            raise ValueError(
+                "Este artículo usa unidad UND, solo permite cantidades enteras."
+            )
 
-        # =========================
-        # APLICAR APROBACIÓN
-        # =========================
         update_request_line_requested_quantity(
             request_line_id=line_id,
             quantity_requested=qty,

@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from app.extensions import db
 from app.models.mechanic import Mechanic
@@ -8,9 +8,6 @@ from app.models.repair_type_specialty import RepairTypeSpecialty
 from app.models.work_order import WorkOrder
 from app.models.work_order_task_line import WorkOrderTaskLine
 from app.models.work_order_task_line_assignment import WorkOrderTaskLineAssignment
-from datetime import datetime, UTC
-from app.models.work_order_task_line import WorkOrderTaskLine
-from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 
 
 class WorkOrderTaskServiceError(Exception):
@@ -28,6 +25,7 @@ def create_task_line(
     commit: bool = True,
 ):
     work_order = db.session.get(WorkOrder, work_order_id)
+
     if not work_order:
         raise WorkOrderTaskServiceError("La OT no existe.")
 
@@ -35,13 +33,14 @@ def create_task_line(
         raise WorkOrderTaskServiceError("Solo se pueden agregar trabajos a una OT en proceso.")
 
     repair_type = (
-        RepairType.query
+        db.session.query(RepairType.id)
         .filter(
             RepairType.id == repair_type_id,
             RepairType.is_active.is_(True),
         )
         .first()
     )
+
     if not repair_type:
         raise WorkOrderTaskServiceError("El tipo de reparación no existe o está inactivo.")
 
@@ -50,7 +49,7 @@ def create_task_line(
 
     task_line = WorkOrderTaskLine(
         work_order_id=work_order.id,
-        repair_type_id=repair_type.id,
+        repair_type_id=repair_type_id,
         title=title.strip(),
         description=(description or "").strip() or None,
         status="PENDIENTE",
@@ -69,11 +68,7 @@ def create_task_line(
         )
 
     if commit:
-        try:
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            raise
+        db.session.commit()
 
     return task_line
 
@@ -85,6 +80,7 @@ def assign_mechanic_to_task_line(
     commit: bool = True,
 ):
     task_line = db.session.get(WorkOrderTaskLine, task_line_id)
+
     if not task_line:
         raise WorkOrderTaskServiceError("La línea de trabajo no existe.")
 
@@ -95,33 +91,41 @@ def assign_mechanic_to_task_line(
         raise WorkOrderTaskServiceError("La línea no tiene un tipo de reparación asignado.")
 
     mechanic = db.session.get(Mechanic, mechanic_id)
+
     if not mechanic:
         raise WorkOrderTaskServiceError("El mecánico no existe.")
 
     if not mechanic.is_active:
         raise WorkOrderTaskServiceError("El mecánico está inactivo.")
 
-    if task_line.work_order and mechanic.site_id != task_line.work_order.site_id:
+    work_order = db.session.get(WorkOrder, task_line.work_order_id)
+
+    if work_order and mechanic.site_id != work_order.site_id:
         raise WorkOrderTaskServiceError("El mecánico no pertenece al predio de la OT.")
 
-    allowed_specialty_ids = {
-        row.specialty_id
-        for row in RepairTypeSpecialty.query.filter_by(
-            repair_type_id=task_line.repair_type_id
-        ).all()
-    }
+    allowed_specialty_exists = (
+        db.session.query(RepairTypeSpecialty.id)
+        .filter(RepairTypeSpecialty.repair_type_id == task_line.repair_type_id)
+        .limit(1)
+        .first()
+    )
 
-    if not allowed_specialty_ids:
+    if not allowed_specialty_exists:
         raise WorkOrderTaskServiceError(
             "El tipo de reparación no tiene especialidades configuradas."
         )
 
     has_valid_specialty = (
-        MechanicSpecialtyAssignment.query
-        .filter(
-            MechanicSpecialtyAssignment.mechanic_id == mechanic.id,
-            MechanicSpecialtyAssignment.specialty_id.in_(allowed_specialty_ids),
+        db.session.query(MechanicSpecialtyAssignment.id)
+        .join(
+            RepairTypeSpecialty,
+            RepairTypeSpecialty.specialty_id == MechanicSpecialtyAssignment.specialty_id,
         )
+        .filter(
+            RepairTypeSpecialty.repair_type_id == task_line.repair_type_id,
+            MechanicSpecialtyAssignment.mechanic_id == mechanic.id,
+        )
+        .limit(1)
         .first()
     )
 
@@ -132,7 +136,10 @@ def assign_mechanic_to_task_line(
 
     current_assignment = (
         WorkOrderTaskLineAssignment.query
-        .filter_by(task_line_id=task_line.id, ended_at=None)
+        .filter(
+            WorkOrderTaskLineAssignment.task_line_id == task_line.id,
+            WorkOrderTaskLineAssignment.ended_at.is_(None),
+        )
         .first()
     )
 
@@ -144,8 +151,9 @@ def assign_mechanic_to_task_line(
 
         if current_assignment.started_at:
             seconds = int((now - current_assignment.started_at).total_seconds())
-            current_assignment.seconds_worked = max(seconds, 0)
-            task_line.effective_seconds = (task_line.effective_seconds or 0) + max(seconds, 0)
+            seconds = max(seconds, 0)
+            current_assignment.seconds_worked = seconds
+            task_line.effective_seconds = (task_line.effective_seconds or 0) + seconds
 
     new_assignment = WorkOrderTaskLineAssignment(
         task_line_id=task_line.id,
@@ -163,10 +171,6 @@ def assign_mechanic_to_task_line(
         task_line.started_at = now
 
     if commit:
-        try:
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            raise
+        db.session.commit()
 
     return task_line

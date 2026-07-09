@@ -275,14 +275,14 @@ def create_work_order_action():
         if not mechanic_ids:
             raise ValueError("Debe asignar mecánicos a los trabajos.")
 
-        first_repair_type = RepairType.query.get(int(repair_type_ids[0]))
+        first_repair_type = db.session.get(RepairType, int(repair_type_ids[0]))
         task_title = first_repair_type.name if first_repair_type else "Trabajo"
 
         if not task_title:
             raise ValueError("Debe indicar el trabajo a realizar.")
 
         if equipment_type_id:
-            equipment_type = EquipmentType.query.get(int(equipment_type_id))
+            equipment_type = db.session.get(EquipmentType, int(equipment_type_id))
 
             if equipment_type and equipment_type.code == "CONTENEDOR":
                 if not re.match(r"^[A-Z]{4}-\d{6}-\d{1}$", container_number):
@@ -304,7 +304,7 @@ def create_work_order_action():
             description=description,
             equipment_id=int(equipment_id) if equipment_id else None,
             equipment_code_snapshot=equipment_code_snapshot,
-            commit=True,
+            commit=False,
         )
 
         for i in range(1, len(repair_type_ids)):
@@ -314,7 +314,7 @@ def create_work_order_action():
             if not rt_id or not mech_id:
                 continue
 
-            repair_type = RepairType.query.get(int(rt_id))
+            repair_type = db.session.get(RepairType, int(rt_id))
             title = repair_type.name if repair_type else "Trabajo"
 
             create_task_line(
@@ -324,17 +324,21 @@ def create_work_order_action():
                 description=None,
                 assigned_mechanic_id=int(mech_id),
                 created_by_user_id=current_user.id,
-                commit=True,
+                commit=False,
             )
+
+        db.session.commit()
 
         flash(f"Orden de trabajo {work_order.number} creada correctamente.", "success")
         return redirect(url_for("work_orders.get_work_order", work_order_id=work_order.id))
 
     except (WorkOrderServiceError, WorkOrderTaskServiceError, ValueError) as exc:
+        db.session.rollback()
         flash(str(exc), "danger")
         return redirect(url_for("work_orders.create_work_order_page"))
 
     except Exception as exc:
+        db.session.rollback()
         print(f"[CREATE OT ERROR] {exc}")
         flash("Error interno al crear la OT.", "danger")
         return redirect(url_for("work_orders.create_work_order_page"))

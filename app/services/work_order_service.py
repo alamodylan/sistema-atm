@@ -3,15 +3,19 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from sqlalchemy import BigInteger, cast
+from sqlalchemy.orm import joinedload
+
 from app.extensions import db
 from app.models.tool_loan import ToolLoan
 from app.models.work_order import WorkOrder
 from app.models.work_order_line import WorkOrderLine
+from app.models.work_order_request import WorkOrderRequest
 from app.models.work_order_request_line import WorkOrderRequestLine
+from app.models.work_order_task_line import WorkOrderTaskLine
 from app.services.audit_service import log_action
 from app.services.inventory_service import InventoryServiceError, subtract_stock
 from app.services.work_order_task_service import create_task_line
-from app.models.work_order_task_line import WorkOrderTaskLine
 
 
 class WorkOrderServiceError(Exception):
@@ -19,29 +23,21 @@ class WorkOrderServiceError(Exception):
 
 
 def _generate_next_work_order_number() -> str:
-    last_work_order = WorkOrder.query.order_by(WorkOrder.id.desc()).first()
-
-    if not last_work_order:
-        return "1"
-
-    last_number = (last_work_order.number or "").strip()
-
-    if last_number.isdigit():
-        return str(int(last_number) + 1)
-
-    numeric_orders = (
-        WorkOrder.query
-        .filter(WorkOrder.number.isnot(None))
-        .order_by(WorkOrder.id.desc())
-        .all()
+    last_numeric_number = (
+        db.session.query(WorkOrder.number)
+        .filter(
+            WorkOrder.number.isnot(None),
+            WorkOrder.number.op("~")(r"^[0-9]+$"),
+        )
+        .order_by(cast(WorkOrder.number, BigInteger).desc())
+        .limit(1)
+        .scalar()
     )
 
-    for work_order in numeric_orders:
-        current_number = (work_order.number or "").strip()
-        if current_number.isdigit():
-            return str(int(current_number) + 1)
+    if not last_numeric_number:
+        return "1"
 
-    return "1"
+    return str(int(last_numeric_number) + 1)
 
 
 def create_work_order(
@@ -80,7 +76,12 @@ def create_work_order(
     if not task_title or not task_title.strip():
         raise WorkOrderServiceError("Debe indicar el trabajo a realizar.")
 
-    existing = WorkOrder.query.filter_by(number=generated_number).first()
+    existing = (
+        db.session.query(WorkOrder.id)
+        .filter(WorkOrder.number == generated_number)
+        .first()
+    )
+
     if existing:
         raise WorkOrderServiceError("Ya existe una orden de trabajo con ese número.")
 
@@ -109,9 +110,6 @@ def create_work_order(
         commit=False,
     )
 
-    if commit:
-        db.session.commit()
-
     log_action(
         user_id=created_by_user_id,
         action="CREATE_WORK_ORDER",
@@ -127,8 +125,11 @@ def create_work_order(
             "mechanic_id": mechanic_id,
             "task_title": task_title,
         },
-        commit=commit,
+        commit=False,
     )
+
+    if commit:
+        db.session.commit()
 
     return work_order
 
@@ -141,8 +142,16 @@ def deliver_from_request_line(
     received_by_user_id: int | None = None,
     commit: bool = True,
 ) -> WorkOrderLine:
+    request_line = (
+        WorkOrderRequestLine.query
+        .options(
+            joinedload(WorkOrderRequestLine.work_order_request)
+            .joinedload(WorkOrderRequest.work_order)
+        )
+        .filter(WorkOrderRequestLine.id == request_line_id)
+        .first()
+    )
 
-    request_line = WorkOrderRequestLine.query.get(request_line_id)
     if not request_line:
         raise WorkOrderServiceError("La línea de solicitud no existe.")
 
@@ -152,10 +161,12 @@ def deliver_from_request_line(
         raise WorkOrderServiceError("La OT no está en proceso.")
 
     qty = Decimal(str(quantity))
+
     if qty <= 0:
         raise WorkOrderServiceError("Cantidad inválida.")
 
     remaining = request_line.quantity_requested - request_line.quantity_attended
+
     if qty > remaining:
         raise WorkOrderServiceError("No puede entregar más de lo solicitado.")
 
@@ -197,9 +208,7 @@ def deliver_from_request_line(
     )
 
     db.session.add(line)
-
-    if commit:
-        db.session.commit()
+    db.session.flush()
 
     log_action(
         user_id=delivered_by_user_id,
@@ -210,8 +219,11 @@ def deliver_from_request_line(
             "request_line_id": request_line.id,
             "quantity": str(qty),
         },
-        commit=commit,
+        commit=False,
     )
+
+    if commit:
+        db.session.commit()
 
     return line
 
@@ -222,58 +234,46 @@ def finalize_work_order(
     performed_by_user_id: int,
     commit: bool = True,
 ) -> WorkOrder:
-
-    work_order = WorkOrder.query.get(work_order_id)
+    work_order = db.session.get(WorkOrder, work_order_id)
 
     if not work_order:
         raise WorkOrderServiceError("La OT no existe.")
 
     if work_order.status != "EN_PROCESO":
-        raise WorkOrderServiceError(
-            "Solo se puede finalizar una OT en proceso."
-        )
+        raise WorkOrderServiceError("Solo se puede finalizar una OT en proceso.")
 
-    # =====================================================
-    # VALIDAR HERRAMIENTAS PENDIENTES
-    # =====================================================
-
-    pending_tool_loans = (
-        ToolLoan.query
+    pending_tool_loan = (
+        db.session.query(ToolLoan.id)
         .filter(
             ToolLoan.work_order_id == work_order_id,
             ToolLoan.loan_status != "DEVUELTA",
         )
-        .count()
+        .limit(1)
+        .first()
     )
 
-    if pending_tool_loans > 0:
+    if pending_tool_loan:
         raise WorkOrderServiceError(
             "No se puede finalizar la OT porque tiene herramientas pendientes de devolución."
         )
 
-    # =====================================================
-    # VALIDAR TRABAJOS PENDIENTES
-    # =====================================================
-
-    pending_tasks_count = (
+    pending_task = (
         db.session.query(WorkOrderTaskLine.id)
         .filter(
             WorkOrderTaskLine.work_order_id == work_order_id,
             WorkOrderTaskLine.status.notin_(("FINALIZADA", "CANCELADA")),
         )
-        .count()
+        .limit(1)
+        .first()
     )
 
-    if pending_tasks_count > 0:
+    if pending_task:
         raise WorkOrderServiceError(
             "No se puede finalizar la OT porque tiene trabajos pendientes."
         )
 
     work_order.status = "FINALIZADA"
     work_order.finalized_at = datetime.now(UTC)
-
-    if commit:
-        db.session.commit()
 
     log_action(
         user_id=performed_by_user_id,
@@ -282,10 +282,13 @@ def finalize_work_order(
         record_id=str(work_order.id),
         details={
             "status": work_order.status,
-            "pending_tool_loans": pending_tool_loans,
+            "pending_tool_loans": 0,
         },
-        commit=commit,
+        commit=False,
     )
+
+    if commit:
+        db.session.commit()
 
     return work_order
 
@@ -296,8 +299,8 @@ def close_work_order(
     performed_by_user_id: int,
     commit: bool = True,
 ) -> WorkOrder:
+    work_order = db.session.get(WorkOrder, work_order_id)
 
-    work_order = WorkOrder.query.get(work_order_id)
     if not work_order:
         raise WorkOrderServiceError("La OT no existe.")
 
@@ -307,16 +310,16 @@ def close_work_order(
     work_order.status = "CERRADA"
     work_order.closed_at = datetime.now(UTC)
 
-    if commit:
-        db.session.commit()
-
     log_action(
         user_id=performed_by_user_id,
         action="CLOSE_WORK_ORDER",
         table_name="work_orders",
         record_id=str(work_order.id),
         details={"status": work_order.status},
-        commit=commit,
+        commit=False,
     )
+
+    if commit:
+        db.session.commit()
 
     return work_order
