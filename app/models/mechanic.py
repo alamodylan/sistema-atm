@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+from werkzeug.security import check_password_hash, generate_password_hash
+
 from app.extensions import db
 
 
@@ -19,7 +21,16 @@ class Mechanic(db.Model):
     code = db.Column(db.String(50), nullable=False, index=True)
     name = db.Column(db.String(150), nullable=False, index=True)
 
-    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    pin_hash = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+
+    is_active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+    )
 
     created_at = db.Column(
         db.DateTime(timezone=True),
@@ -70,6 +81,33 @@ class Mechanic(db.Model):
         back_populates="requested_by_mechanic",
         lazy="selectin",
     )
+
+    def set_pin(self, pin: str | None) -> None:
+        normalized_pin = (pin or "").strip()
+
+        if not normalized_pin:
+            self.pin_hash = None
+            return
+
+        if not normalized_pin.isdigit() or len(normalized_pin) != 4:
+            raise ValueError("El PIN debe contener exactamente 4 dígitos.")
+
+        self.pin_hash = generate_password_hash(normalized_pin)
+
+    def check_pin(self, pin: str | None) -> bool:
+        normalized_pin = (pin or "").strip()
+
+        if not self.pin_hash:
+            return False
+
+        if not normalized_pin.isdigit() or len(normalized_pin) != 4:
+            return False
+
+        return check_password_hash(self.pin_hash, normalized_pin)
+
+    @property
+    def has_pin(self) -> bool:
+        return bool(self.pin_hash)
 
     def __repr__(self) -> str:
         return f"<Mechanic site={self.site_id} code={self.code} - {self.name}>"

@@ -72,18 +72,28 @@ def create():
 
         name = (request.form.get("name") or "").strip()
         code = (request.form.get("code") or "").strip()
+        pin = (request.form.get("pin") or "").strip()
+
         specialty_ids = request.form.getlist("specialty_ids")
 
         if not name or not code:
             flash("Nombre y código son obligatorios.", "danger")
             return redirect(url_for("mechanics.index"))
 
-        existing = Mechanic.query.filter(
-            Mechanic.site_id == active_site_id,
-            Mechanic.code == code,
-        ).first()
+        existing = (
+            Mechanic.query
+            .filter(
+                Mechanic.site_id == active_site_id,
+                Mechanic.code == code,
+            )
+            .first()
+        )
+
         if existing:
-            flash("Ya existe un mecánico con ese código en el predio activo.", "danger")
+            flash(
+                "Ya existe un mecánico con ese código en el predio activo.",
+                "danger",
+            )
             return redirect(url_for("mechanics.index"))
 
         mechanic = Mechanic(
@@ -92,21 +102,31 @@ def create():
             code=code,
         )
 
+        # El PIN es opcional.
+        # Si viene informado, el modelo valida que tenga exactamente 4 dígitos
+        # y lo guarda de manera segura como hash.
+        if pin:
+            mechanic.set_pin(pin)
+
         db.session.add(mechanic)
         db.session.flush()
 
         valid_specialty_ids = set()
+
         for specialty_id in specialty_ids:
             try:
                 sid = int(specialty_id)
             except (TypeError, ValueError):
                 continue
+
             valid_specialty_ids.add(sid)
 
         if valid_specialty_ids:
-            specialties = MechanicSpecialty.query.filter(
-                MechanicSpecialty.id.in_(valid_specialty_ids)
-            ).all()
+            specialties = (
+                MechanicSpecialty.query
+                .filter(MechanicSpecialty.id.in_(valid_specialty_ids))
+                .all()
+            )
 
             for specialty in specialties:
                 db.session.add(
@@ -117,15 +137,18 @@ def create():
                 )
 
         db.session.commit()
+
         flash("Mecánico creado correctamente.", "success")
         return redirect(url_for("mechanics.index"))
 
     except ValueError as exc:
+        db.session.rollback()
         flash(str(exc), "danger")
         return redirect(url_for("mechanics.index"))
 
-    except Exception:
+    except Exception as exc:
         db.session.rollback()
+        print(f"[CREATE MECHANIC ERROR] {exc}")
         flash("Error al crear el mecánico.", "danger")
         return redirect(url_for("mechanics.index"))
 
@@ -284,3 +307,122 @@ def mechanic_badge_pdf(mechanic_id: int):
     response.headers["Content-Type"] = "application/pdf"
     response.headers["Content-Disposition"] = f'inline; filename="gafete_{mechanic.code}.pdf"'
     return response
+
+@mechanic_bp.route("/<int:mechanic_id>/pin", methods=["POST"])
+@login_required
+def update_pin(mechanic_id: int):
+    try:
+        active_site_id = _get_active_site_id()
+
+        mechanic = _get_mechanic_for_active_site_or_404(
+            mechanic_id,
+            active_site_id,
+        )
+
+        pin = (request.form.get("pin") or "").strip()
+        confirm_pin = (request.form.get("confirm_pin") or "").strip()
+
+        if not pin:
+            raise ValueError("Debe ingresar el nuevo PIN.")
+
+        if pin != confirm_pin:
+            raise ValueError("La confirmación del PIN no coincide.")
+
+        mechanic.set_pin(pin)
+
+        db.session.commit()
+
+        flash(
+            f"PIN de {mechanic.name} actualizado correctamente.",
+            "success",
+        )
+
+        return redirect(
+            url_for(
+                "mechanics.detail",
+                mechanic_id=mechanic.id,
+            )
+        )
+
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+
+        return redirect(
+            url_for(
+                "mechanics.detail",
+                mechanic_id=mechanic_id,
+            )
+        )
+
+    except Exception as exc:
+        db.session.rollback()
+        print(f"[UPDATE MECHANIC PIN ERROR] {exc}")
+
+        flash(
+            "Error al actualizar el PIN del mecánico.",
+            "danger",
+        )
+
+        return redirect(
+            url_for(
+                "mechanics.detail",
+                mechanic_id=mechanic_id,
+            )
+        )
+
+@mechanic_bp.route("/<int:mechanic_id>/pin/remove", methods=["POST"])
+@login_required
+def remove_pin(mechanic_id: int):
+    try:
+        active_site_id = _get_active_site_id()
+
+        mechanic = _get_mechanic_for_active_site_or_404(
+            mechanic_id,
+            active_site_id,
+        )
+
+        if not mechanic.has_pin:
+            flash(
+                "El mecánico no tiene un PIN configurado.",
+                "warning",
+            )
+
+            return redirect(
+                url_for(
+                    "mechanics.detail",
+                    mechanic_id=mechanic.id,
+                )
+            )
+
+        mechanic.set_pin(None)
+
+        db.session.commit()
+
+        flash(
+            f"PIN de {mechanic.name} eliminado correctamente.",
+            "success",
+        )
+
+        return redirect(
+            url_for(
+                "mechanics.detail",
+                mechanic_id=mechanic.id,
+            )
+        )
+
+    except Exception as exc:
+        db.session.rollback()
+        print(f"[REMOVE MECHANIC PIN ERROR] {exc}")
+
+        flash(
+            "Error al eliminar el PIN del mecánico.",
+            "danger",
+        )
+
+        return redirect(
+            url_for(
+                "mechanics.detail",
+                mechanic_id=mechanic_id,
+            )
+        )

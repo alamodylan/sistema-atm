@@ -1,19 +1,60 @@
 # site.py
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from app.extensions import db
 
 
 class Site(db.Model):
     __tablename__ = "sites"
-    __table_args__ = {"schema": "atm"}
+    __table_args__ = (
+        db.CheckConstraint(
+            "mechanic_terminal_mode IN ('BARCODE', 'PROFILES_PIN')",
+            name="ck_sites_mechanic_terminal_mode",
+        ),
+        {"schema": "atm"},
+    )
+
+    TERMINAL_MODE_BARCODE = "BARCODE"
+    TERMINAL_MODE_PROFILES_PIN = "PROFILES_PIN"
+
+    TERMINAL_MODES = [
+        TERMINAL_MODE_BARCODE,
+        TERMINAL_MODE_PROFILES_PIN,
+    ]
 
     id = db.Column(db.BigInteger, primary_key=True)
 
-    code = db.Column(db.String(30), unique=True, nullable=False, index=True)
-    name = db.Column(db.String(100), unique=True, nullable=False, index=True)
-    description = db.Column(db.Text, nullable=True)
-    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    code = db.Column(
+        db.String(30),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    name = db.Column(
+        db.String(100),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    description = db.Column(
+        db.Text,
+        nullable=True,
+    )
+
+    is_active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    mechanic_terminal_mode = db.Column(
+        db.String(30),
+        nullable=False,
+        default=TERMINAL_MODE_BARCODE,
+        server_default=TERMINAL_MODE_BARCODE,
+    )
 
     created_at = db.Column(
         db.DateTime(timezone=True),
@@ -98,6 +139,14 @@ class Site(db.Model):
         lazy="dynamic",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def uses_mechanic_profiles(self) -> bool:
+        return self.mechanic_terminal_mode == self.TERMINAL_MODE_PROFILES_PIN
+
+    @property
+    def uses_mechanic_barcode(self) -> bool:
+        return self.mechanic_terminal_mode == self.TERMINAL_MODE_BARCODE
 
     def __repr__(self) -> str:
         return f"<Site {self.code} - {self.name}>"

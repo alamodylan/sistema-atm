@@ -1,17 +1,67 @@
 {% extends 'base.html' %}
 
+{% extends 'base.html' %}
+
 {% block content %}
 <div class="container py-4">
+
     <div class="text-center mb-4">
         <h3 class="mb-1 fw-bold">Terminal de Taller</h3>
-        <p class="text-muted mb-0">Escanee el código del mecánico para continuar.</p>
+
+        {% if terminal_mode == "PROFILES_PIN" %}
+            <p class="text-muted mb-0">
+                Seleccione el perfil del mecánico para continuar.
+            </p>
+        {% else %}
+            <p class="text-muted mb-0">
+                Escanee el código del mecánico para continuar.
+            </p>
+        {% endif %}
     </div>
 
-    <input id="scanner" autofocus style="opacity:0; position:absolute; left:-9999px;">
+    {% if terminal_configuration_error %}
+        <div class="alert alert-danger rounded-4 shadow-sm border-0">
+            {{ terminal_configuration_error }}
+        </div>
+    {% endif %}
+
+    <input
+        id="scanner"
+        autofocus
+        style="opacity:0; position:absolute; left:-9999px;">
 
     <div class="alert alert-info text-center rounded-4 shadow-sm border-0" id="scanStatus">
         Esperando escaneo...
     </div>
+
+    {% if terminal_mode == "PROFILES_PIN" %}
+    <div id="mechanicProfilesSection" class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div>
+                    <h5 class="fw-bold mb-1">Perfiles de mecánicos</h5>
+                    <div class="small text-muted">
+                        Seleccione su perfil para ingresar al Terminal Taller.
+                    </div>
+                </div>
+
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm rounded-3"
+                    id="reloadMechanicProfilesBtn"
+                >
+                    Actualizar
+                </button>
+            </div>
+
+            <div id="mechanicProfilesList" class="row g-3"></div>
+
+            <div id="noMechanicProfiles" class="text-muted d-none">
+                No existen mecánicos activos en este predio.
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <div id="terminalContent" class="d-none">
 
@@ -23,7 +73,11 @@
                     <small id="mechanicCode" class="text-muted"></small>
                 </div>
                 <button type="button" class="btn btn-outline-secondary rounded-3" id="resetTerminalBtn">
-                    Nuevo escaneo
+                    {% if terminal_mode == "PROFILES_PIN" %}
+                        Cambiar mecánico
+                    {% else %}
+                        Nuevo escaneo
+                    {% endif %}
                 </button>
             </div>
         </div>
@@ -193,9 +247,86 @@
     </div>
 </div>
 
+<div
+    class="modal fade"
+    id="receptionPinModal"
+    tabindex="-1"
+    aria-labelledby="receptionPinModalLabel"
+    aria-hidden="true"
+>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-0">
+                <div>
+                    <h5 class="modal-title fw-bold" id="receptionPinModalLabel">
+                        Confirmar recepción
+                    </h5>
+
+                    <div class="small text-muted" id="receptionPinDescription">
+                        Ingrese su PIN de cuatro dígitos.
+                    </div>
+                </div>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                    aria-label="Cerrar"
+                ></button>
+            </div>
+
+            <div class="modal-body">
+                <label for="receptionPinInput" class="form-label fw-semibold">
+                    PIN
+                </label>
+
+                <input
+                    type="password"
+                    id="receptionPinInput"
+                    class="form-control form-control-lg text-center rounded-3"
+                    inputmode="numeric"
+                    pattern="[0-9]{4}"
+                    minlength="4"
+                    maxlength="4"
+                    autocomplete="off"
+                    placeholder="••••"
+                >
+
+                <div
+                    id="receptionPinError"
+                    class="text-danger small mt-2 d-none"
+                ></div>
+            </div>
+
+            <div class="modal-footer border-0">
+                <button
+                    type="button"
+                    class="btn btn-light border rounded-3"
+                    data-bs-dismiss="modal"
+                >
+                    Cancelar
+                </button>
+
+                <button
+                    type="button"
+                    class="btn btn-success rounded-3"
+                    id="confirmReceptionPinBtn"
+                >
+                    Confirmar recepción
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+const terminalMode = "{{ terminal_mode|e }}";
+const usesMechanicProfiles = terminalMode === "PROFILES_PIN";
+const usesBarcodeScanner = terminalMode === "BARCODE";
+
 let scannerInput = "";
 let currentMechanic = null;
+let receptionPinModal = null;
 let currentWorkOrders = [];
 let selectedWorkOrder = null;
 let currentItems = [];
@@ -226,6 +357,10 @@ function pauseScannerFocus(ms) {
 }
 
 function canForceScannerFocus() {
+    if (!usesBarcodeScanner) {
+        return false;
+    }
+
     if (Date.now() < scannerFocusPausedUntil) {
         return false;
     }
@@ -304,6 +439,12 @@ function getToolWarehouseId() {
     return null;
 }
 
+function escapeHtml(value) {
+    const div = document.createElement("div");
+    div.textContent = value == null ? "" : String(value);
+    return div.innerHTML;
+}
+
 function resetTerminal() {
     scannerInput = "";
     currentMechanic = null;
@@ -338,7 +479,6 @@ function resetTerminal() {
 
     quantitySection.classList.add("d-none");
     receptionScanHint.classList.add("d-none");
-    scanStatus.innerText = "Esperando escaneo...";
 
     document.getElementById("workOrdersList").innerHTML = "";
     document.getElementById("itemsList").innerHTML = "";
@@ -350,14 +490,84 @@ function resetTerminal() {
         itemsSearch.value = "";
     }
 
-    scannerEl.focus({ preventScroll: true });
+    const profilesSection =
+        document.getElementById("mechanicProfilesSection");
+
+    if (usesMechanicProfiles) {
+        if (profilesSection) {
+            profilesSection.classList.remove("d-none");
+        }
+
+        scanStatus.innerText =
+            "Seleccione un perfil para continuar.";
+
+        loadMechanicProfiles();
+
+    } else {
+        scanStatus.innerText =
+            "Esperando escaneo...";
+
+        scannerEl.focus({
+            preventScroll: true
+        });
+    }
+}
+
+async function processMechanic(data, successMessage) {
+    currentMechanic = data;
+    currentWorkOrders = data.work_orders || [];
+    selectedWorkOrder = null;
+    currentItems = [];
+    currentTasks = [];
+    cart = [];
+    cartMode = "articles";
+    pendingReceptionRequestId = null;
+    receptionMode = false;
+
+    document.getElementById("terminalContent").classList.remove("d-none");
+    document.getElementById("toolsSection").classList.remove("d-none");
+
+    document.getElementById("mechanicName").innerText =
+        data.mechanic || "";
+
+    document.getElementById("mechanicCode").innerText =
+        data.code || "";
+
+    scanStatus.innerText =
+        successMessage || "Mecánico seleccionado correctamente.";
+
+    const profilesSection =
+        document.getElementById("mechanicProfilesSection");
+
+    if (profilesSection) {
+        profilesSection.classList.add("d-none");
+    }
+
+    document.getElementById("workOrdersList").innerHTML = "";
+    document.getElementById("receptionList").innerHTML = "";
+    document.getElementById("taskList").innerHTML = "";
+
+    renderWorkOrders();
+    await loadPendingReceptions();
+
+    document.getElementById("terminalContent").scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+    });
 }
 
 async function handleScannerEnter() {
+    if (!usesBarcodeScanner) {
+        scannerInput = "";
+        return;
+    }
+
     if (receptionMode && pendingReceptionRequestId) {
         const res = await fetch("/terminal/confirm-reception", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify({
                 request_id: pendingReceptionRequestId,
                 code: scannerInput
@@ -367,49 +577,201 @@ async function handleScannerEnter() {
         const data = await res.json();
 
         if (data.ok) {
-            scanStatus.innerText = "Recepción confirmada correctamente.";
+            scanStatus.innerText =
+                "Recepción confirmada correctamente.";
+
             await loadPendingReceptions();
         } else {
-            scanStatus.innerText = data.error || "Error al recibir";
+            scanStatus.innerText =
+                data.error || "Error al recibir";
         }
 
         receptionMode = false;
         pendingReceptionRequestId = null;
         receptionScanHint.classList.add("d-none");
         scannerInput = "";
+
         focusScannerWithoutScroll();
+        return;
+    }
+
+    if (!scannerInput.trim()) {
         return;
     }
 
     const res = await fetch("/terminal/scan", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: scannerInput })
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            code: scannerInput
+        })
     });
 
     const data = await res.json();
 
     if (res.ok) {
-        currentMechanic = data;
-        currentWorkOrders = data.work_orders || [];
-
-        document.getElementById("terminalContent").classList.remove("d-none");
-        document.getElementById("toolsSection").classList.remove("d-none");
-        document.getElementById("mechanicName").innerText = data.mechanic;
-        document.getElementById("mechanicCode").innerText = data.code;
-        scanStatus.innerText = "Escaneo correcto.";
-
-        renderWorkOrders();
-        await loadPendingReceptions();
+        await processMechanic(
+            data,
+            "Escaneo correcto."
+        );
     } else {
-        scanStatus.innerText = data.error || "Error al escanear mecánico.";
+        scanStatus.innerText =
+            data.error || "Error al escanear mecánico.";
     }
 
     scannerInput = "";
+
     focusScannerWithoutScroll();
 }
 
+async function loadMechanicProfiles() {
+    const container =
+        document.getElementById("mechanicProfilesList");
+
+    const emptyMessage =
+        document.getElementById("noMechanicProfiles");
+
+    if (!container || !usesMechanicProfiles) {
+        return;
+    }
+
+    container.innerHTML =
+        '<div class="col-12 text-center py-4 text-muted">' +
+            'Cargando perfiles...' +
+        '</div>';
+
+    if (emptyMessage) {
+        emptyMessage.classList.add("d-none");
+    }
+
+    try {
+        const res = await fetch("/terminal/mechanics");
+        const data = await res.json();
+
+        container.innerHTML = "";
+
+        if (!res.ok) {
+            scanStatus.innerText =
+                data.error || "Error al cargar los mecánicos.";
+
+            return;
+        }
+
+        const mechanics = data.items || [];
+
+        if (!mechanics.length) {
+            if (emptyMessage) {
+                emptyMessage.classList.remove("d-none");
+            }
+
+            return;
+        }
+
+        mechanics.forEach(function (mechanic) {
+            const col = document.createElement("div");
+
+            col.className =
+                "col-12 col-sm-6 col-lg-4";
+
+            const pinBadge = mechanic.has_pin
+                ? '<span class="badge text-bg-success">PIN configurado</span>'
+                : '<span class="badge text-bg-warning text-dark">Sin PIN</span>';
+
+            col.innerHTML =
+                '<div class="card border rounded-4 h-100 shadow-sm">' +
+                    '<div class="card-body p-4 text-center">' +
+
+                        '<div class="rounded-circle bg-light border d-inline-flex ' +
+                            'align-items-center justify-content-center mb-3" ' +
+                            'style="width:72px;height:72px;font-size:32px;">' +
+                            '👨‍🔧' +
+                        '</div>' +
+
+                        '<h5 class="fw-bold mb-1">' +
+                            escapeHtml(mechanic.name) +
+                        '</h5>' +
+
+                        '<div class="text-muted mb-3">' +
+                            escapeHtml(mechanic.code) +
+                        '</div>' +
+
+                        '<div class="mb-3">' +
+                            pinBadge +
+                        '</div>' +
+
+                        '<button type="button" ' +
+                            'class="btn btn-primary w-100 rounded-3 select-mechanic-btn">' +
+                            'Ingresar' +
+                        '</button>' +
+
+                    '</div>' +
+                '</div>';
+
+            col
+                .querySelector(".select-mechanic-btn")
+                .addEventListener("click", async function () {
+                    await selectMechanicProfile(mechanic.id);
+                });
+
+            container.appendChild(col);
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        container.innerHTML = "";
+
+        scanStatus.innerText =
+            "Error de conexión al cargar los mecánicos.";
+    }
+}
+
+
+async function selectMechanicProfile(mechanicId) {
+    scanStatus.innerText =
+        "Abriendo perfil del mecánico...";
+
+    try {
+        const res = await fetch(
+            "/terminal/mechanics/" + mechanicId + "/select",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({})
+            }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            scanStatus.innerText =
+                data.error || "No se pudo abrir el perfil.";
+
+            return;
+        }
+
+        await processMechanic(
+            data,
+            "Perfil abierto correctamente."
+        );
+
+    } catch (error) {
+        console.error(error);
+
+        scanStatus.innerText =
+            "Error de conexión al abrir el perfil.";
+    }
+}
+
 document.addEventListener("keydown", async function (e) {
+    if (!usesBarcodeScanner) {
+        return;
+    }
+
     const activeEl = document.activeElement;
     const writingInInput =
         activeEl &&
@@ -419,7 +781,7 @@ document.addEventListener("keydown", async function (e) {
             activeEl.tagName === "TEXTAREA" ||
             activeEl.tagName === "SELECT"
         );
-
+    
     if (writingInInput) {
         return;
     }
@@ -497,6 +859,146 @@ function renderWorkOrders() {
     });
 }
 
+function openReceptionPinModal(requestId) {
+    if (!currentMechanic || !currentMechanic.mechanic_id) {
+        alert("No hay un mecánico seleccionado.");
+        return;
+    }
+
+    pendingReceptionRequestId = requestId;
+
+    const input =
+        document.getElementById("receptionPinInput");
+
+    const error =
+        document.getElementById("receptionPinError");
+
+    const description =
+        document.getElementById("receptionPinDescription");
+
+    input.value = "";
+
+    error.innerText = "";
+    error.classList.add("d-none");
+
+    description.innerText =
+        "Ingrese el PIN de " +
+        (currentMechanic.mechanic || "este mecánico") +
+        " para confirmar la solicitud #" +
+        requestId +
+        ".";
+
+    if (!receptionPinModal) {
+        receptionPinModal = new bootstrap.Modal(
+            document.getElementById("receptionPinModal")
+        );
+    }
+
+    receptionPinModal.show();
+
+    setTimeout(function () {
+        input.focus();
+    }, 250);
+}
+
+
+async function confirmReceptionWithPin() {
+    const input =
+        document.getElementById("receptionPinInput");
+
+    const error =
+        document.getElementById("receptionPinError");
+
+    const button =
+        document.getElementById("confirmReceptionPinBtn");
+
+    const pin = input.value
+        .replace(/\D/g, "")
+        .slice(0, 4);
+
+    input.value = pin;
+
+    if (!pendingReceptionRequestId) {
+        error.innerText =
+            "No hay una solicitud seleccionada.";
+
+        error.classList.remove("d-none");
+        return;
+    }
+
+    if (!currentMechanic || !currentMechanic.mechanic_id) {
+        error.innerText =
+            "No hay un mecánico seleccionado.";
+
+        error.classList.remove("d-none");
+        return;
+    }
+
+    if (pin.length !== 4) {
+        error.innerText =
+            "Ingrese exactamente cuatro dígitos.";
+
+        error.classList.remove("d-none");
+        return;
+    }
+
+    button.disabled = true;
+    button.innerText = "Confirmando...";
+
+    try {
+        const res = await fetch(
+            "/terminal/confirm-reception-pin",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    request_id: pendingReceptionRequestId,
+                    mechanic_id: currentMechanic.mechanic_id,
+                    pin: pin
+                })
+            }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            error.innerText =
+                data.error || "No se pudo confirmar la recepción.";
+
+            error.classList.remove("d-none");
+
+            input.value = "";
+            input.focus();
+            return;
+        }
+
+        scanStatus.innerText =
+            data.message || "Recepción confirmada correctamente.";
+
+        pendingReceptionRequestId = null;
+
+        if (receptionPinModal) {
+            receptionPinModal.hide();
+        }
+
+        await loadPendingReceptions();
+
+    } catch (requestError) {
+        console.error(requestError);
+
+        error.innerText =
+            "Error de conexión al confirmar la recepción.";
+
+        error.classList.remove("d-none");
+
+    } finally {
+        button.disabled = false;
+        button.innerText = "Confirmar recepción";
+    }
+}
+
 async function loadPendingReceptions() {
     if (!currentMechanic || !currentMechanic.mechanic_id) {
         return;
@@ -546,11 +1048,24 @@ async function loadPendingReceptions() {
             e.preventDefault();
             e.stopPropagation();
 
+            if (usesMechanicProfiles) {
+                openReceptionPinModal(item.request_id);
+                return;
+            }
+
             pendingReceptionRequestId = item.request_id;
             receptionMode = true;
+
             receptionScanHint.classList.remove("d-none");
-            scanStatus.innerText = "Escanee para firmar recepción de la solicitud #" + item.request_id + ".";
-            scannerEl.focus({ preventScroll: true });
+
+            scanStatus.innerText =
+                "Escanee para firmar recepción de la solicitud #" +
+                item.request_id +
+                ".";
+
+            scannerEl.focus({
+                preventScroll: true
+            });
         };
 
         container.appendChild(row);
@@ -1452,6 +1967,59 @@ itemsSearch.addEventListener("input", function () {
     }, 350);
 });
 
-scannerEl.focus({ preventScroll: true });
+document.addEventListener("DOMContentLoaded", function () {
+    const pinInput =
+        document.getElementById("receptionPinInput");
+
+    const confirmPinButton =
+        document.getElementById("confirmReceptionPinBtn");
+
+    const reloadProfilesButton =
+        document.getElementById("reloadMechanicProfilesBtn");
+
+    if (pinInput) {
+        pinInput.addEventListener("input", function () {
+            this.value = this.value
+                .replace(/\D/g, "")
+                .slice(0, 4);
+        });
+
+        pinInput.addEventListener("keydown", async function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                await confirmReceptionWithPin();
+            }
+        });
+    }
+
+    if (confirmPinButton) {
+        confirmPinButton.addEventListener(
+            "click",
+            confirmReceptionWithPin
+        );
+    }
+
+    if (reloadProfilesButton) {
+        reloadProfilesButton.addEventListener(
+            "click",
+            loadMechanicProfiles
+        );
+    }
+
+    if (usesMechanicProfiles) {
+        scanStatus.innerText =
+            "Seleccione un perfil para continuar.";
+
+        loadMechanicProfiles();
+
+    } else {
+        scanStatus.innerText =
+            "Esperando escaneo...";
+
+        scannerEl.focus({
+            preventScroll: true
+        });
+    }
+});
 </script>
 {% endblock %}

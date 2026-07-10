@@ -203,6 +203,127 @@ Configuración de solicitudes
         </div>
     </div>
 
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+
+        <div class="card-body p-4">
+
+            <h5 class="fw-semibold mb-2">
+                Configuración del Terminal Taller
+            </h5>
+
+            <p class="text-muted mb-4">
+                Configure el método de identificación que utilizarán los mecánicos
+                en cada predio.
+            </p>
+
+            <form
+                method="POST"
+                action="{{ url_for('request_routing.save_terminal_mode') }}"
+            >
+
+                <div class="row g-3 align-items-end">
+
+                    <div class="col-lg-5">
+
+                        <label class="form-label fw-semibold">
+                            Predio
+                        </label>
+
+                        <select
+                            name="site_id"
+                            class="form-select"
+                            required
+                        >
+
+                            <option value="">
+                                Seleccione...
+                            </option>
+
+                            {% for site in sites %}
+
+                            <option value="{{ site.id }}">
+
+                                {{ site.name }}
+
+                            </option>
+
+                            {% endfor %}
+
+                        </select>
+
+                    </div>
+
+                    <div class="col-lg-5">
+
+                        <label class="form-label fw-semibold">
+                            Método de identificación
+                        </label>
+
+                        <select
+                            name="mechanic_terminal_mode"
+                            class="form-select"
+                            required
+                        >
+
+                            {% for mode in terminal_modes %}
+
+                            <option value="{{ mode.value }}">
+
+                                {{ mode.label }}
+
+                            </option>
+
+                            {% endfor %}
+
+                        </select>
+
+                    </div>
+
+                    <div class="col-lg-2 d-grid">
+
+                        <button
+                            class="btn btn-primary"
+                            type="submit"
+                        >
+                            Guardar
+                        </button>
+
+                    </div>
+
+                </div>
+
+                <div class="mt-4">
+
+                    <div class="alert alert-light border mb-0">
+
+                        <strong>Código de barras</strong>
+
+                        <br>
+
+                        El mecánico ingresa escaneando su gafete y confirma la
+                        recepción de artículos escaneando nuevamente.
+
+                        <hr>
+
+                        <strong>Perfiles + PIN</strong>
+
+                        <br>
+
+                        El Terminal muestra todos los mecánicos activos del predio.
+
+                        El mecánico selecciona su perfil y confirma las recepciones
+                        mediante un PIN de cuatro dígitos.
+
+                    </div>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
     <!-- ================================================== -->
     <!-- TABLA -->
     <!-- ================================================== -->

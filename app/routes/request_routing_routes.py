@@ -13,6 +13,7 @@ from app.extensions import db
 from app.models.site import Site
 from app.models.request_routing_rule import RequestRoutingRule
 from sqlalchemy import text
+from app.models.mechanic import Mechanic
 
 
 request_routing_bp = Blueprint(
@@ -119,13 +120,113 @@ def index():
 
     sites = _get_sites()
 
+    terminal_modes = [
+        {
+            "value": Site.TERMINAL_MODE_BARCODE,
+            "label": "Código de barras",
+            "description": (
+                "El mecánico accede escaneando su gafete y confirma "
+                "la recepción escaneando nuevamente."
+            ),
+        },
+        {
+            "value": Site.TERMINAL_MODE_PROFILES_PIN,
+            "label": "Perfiles de mecánicos con PIN",
+            "description": (
+                "El Terminal muestra los perfiles de los mecánicos y "
+                "la recepción se confirma con un PIN de cuatro dígitos."
+            ),
+        },
+    ]
+
     return render_template(
         "request_routing/index.html",
         rules=rules,
         sites=sites,
         request_types=RequestRoutingRule.REQUEST_TYPES,
         routing_modes=RequestRoutingRule.ROUTING_MODES,
+        terminal_modes=terminal_modes,
     )
+
+# =========================================================
+# CONFIGURAR MODO DEL TERMINAL TALLER POR PREDIO
+# =========================================================
+
+@request_routing_bp.route("/terminal-mode/save", methods=["POST"])
+@login_required
+def save_terminal_mode():
+    _require_superuser()
+
+    site_id = request.form.get("site_id", type=int)
+    terminal_mode = (
+        request.form.get("mechanic_terminal_mode") or ""
+    ).strip().upper()
+
+    if not site_id:
+        flash("Debe seleccionar un predio.", "danger")
+        return redirect(url_for("request_routing.index"))
+
+    if terminal_mode not in Site.TERMINAL_MODES:
+        flash("El modo seleccionado para el Terminal Taller no es válido.", "danger")
+        return redirect(url_for("request_routing.index"))
+
+    site = (
+        Site.query
+        .filter(
+            Site.id == site_id,
+            Site.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if not site:
+        flash("El predio seleccionado no existe o está inactivo.", "danger")
+        return redirect(url_for("request_routing.index"))
+
+    try:
+        site.mechanic_terminal_mode = terminal_mode
+        db.session.commit()
+
+        if terminal_mode == Site.TERMINAL_MODE_PROFILES_PIN:
+            mechanics_without_pin = (
+                db.session.query(Mechanic.id)
+                .filter(
+                    Mechanic.site_id == site.id,
+                    Mechanic.is_active.is_(True),
+                    Mechanic.pin_hash.is_(None),
+                )
+                .count()
+            )
+
+            if mechanics_without_pin > 0:
+                flash(
+                    (
+                        f"Modo de perfiles con PIN activado para {site.name}. "
+                        f"Hay {mechanics_without_pin} mecánico(s) activo(s) "
+                        "sin PIN configurado."
+                    ),
+                    "warning",
+                )
+            else:
+                flash(
+                    f"Modo de perfiles con PIN activado para {site.name}.",
+                    "success",
+                )
+        else:
+            flash(
+                f"Modo tradicional por código de barras activado para {site.name}.",
+                "success",
+            )
+
+    except Exception as exc:
+        db.session.rollback()
+        print(f"[SAVE TERMINAL MODE ERROR] {exc}")
+        flash(
+            "No se pudo guardar el modo del Terminal Taller.",
+            "danger",
+        )
+
+    return redirect(url_for("request_routing.index"))
 
 
 # =========================================================

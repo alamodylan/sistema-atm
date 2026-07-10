@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required, current_user
 import re
-
+from app.models.site import Site
 from app.extensions import db
 from app.models.mechanic import Mechanic
 from app.models.work_order import WorkOrder
@@ -39,47 +39,15 @@ def _is_tool_article_code(code: str) -> bool:
     except Exception:
         return False
 
-@terminal_bp.route("/")
-@login_required
-def index():
-    return render_template("mechanic_terminal/index.html")
-
-
-@terminal_bp.route("/scan", methods=["POST"])
-@login_required
-def scan():
-    data = request.get_json(silent=True) or {}
-
-    raw_code = data.get("code") or ""
-
-    # Limpia caracteres invisibles que algunos lectores envían:
-    # Enter, tab, saltos de línea, retorno de carro, etc.
-    code = re.sub(r"[\x00-\x1F\x7F]", "", str(raw_code)).strip().upper()
-
+def _build_mechanic_terminal_payload(mechanic: Mechanic) -> dict:
     active_site_id = session.get("active_site_id")
-
-    if not code:
-        return jsonify({"error": "Código de mecánico requerido"}), 400
-
-    if not active_site_id:
-        return jsonify({"error": "No hay predio activo seleccionado"}), 400
-
-    mechanic = (
-        Mechanic.query
-        .filter(
-            Mechanic.site_id == int(active_site_id),
-            Mechanic.is_active.is_(True),
-            db.func.upper(db.func.trim(Mechanic.code)) == code,
-        )
-        .first()
-    )
-
-    if not mechanic:
-        return jsonify({"error": "Mecánico no encontrado"}), 404
 
     task_lines = (
         WorkOrderTaskLine.query
-        .join(WorkOrder, WorkOrder.id == WorkOrderTaskLine.work_order_id)
+        .join(
+            WorkOrder,
+            WorkOrder.id == WorkOrderTaskLine.work_order_id,
+        )
         .filter(
             WorkOrderTaskLine.assigned_mechanic_id == mechanic.id,
             WorkOrder.site_id == int(active_site_id),
@@ -111,14 +79,152 @@ def scan():
                 "equipment_code_snapshot": work_order.equipment_code_snapshot,
             }
 
-    work_orders = list(work_orders_map.values())
-
-    return jsonify({
+    return {
         "mechanic_id": mechanic.id,
         "mechanic": mechanic.name,
         "code": mechanic.code,
-        "work_orders": work_orders,
+        "work_orders": list(work_orders_map.values()),
+    }
+
+@terminal_bp.route("/")
+@login_required
+def index():
+    active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return render_template(
+            "mechanic_terminal/index.html",
+            terminal_mode=Site.TERMINAL_MODE_BARCODE,
+            terminal_configuration_error="No hay predio activo seleccionado.",
+        )
+
+    site = db.session.get(Site, int(active_site_id))
+
+    if not site or not site.is_active:
+        return render_template(
+            "mechanic_terminal/index.html",
+            terminal_mode=Site.TERMINAL_MODE_BARCODE,
+            terminal_configuration_error="El predio activo no existe o está inactivo.",
+        )
+
+    return render_template(
+        "mechanic_terminal/index.html",
+        terminal_mode=site.mechanic_terminal_mode,
+        terminal_configuration_error=None,
+    )
+
+@terminal_bp.route("/mechanics", methods=["GET"])
+@login_required
+def list_terminal_mechanics():
+    active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return jsonify({
+            "error": "No hay predio activo seleccionado"
+        }), 400
+
+    mechanics = (
+        Mechanic.query
+        .filter(
+            Mechanic.site_id == int(active_site_id),
+            Mechanic.is_active.is_(True),
+        )
+        .order_by(
+            Mechanic.name.asc(),
+            Mechanic.id.asc(),
+        )
+        .all()
+    )
+
+    items = [
+        {
+            "id": mechanic.id,
+            "code": mechanic.code,
+            "name": mechanic.name,
+            "has_pin": mechanic.has_pin,
+        }
+        for mechanic in mechanics
+    ]
+
+    return jsonify({
+        "items": items
     })
+
+@terminal_bp.route("/mechanics/<int:mechanic_id>/select", methods=["POST"])
+@login_required
+def select_terminal_mechanic(mechanic_id: int):
+    active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return jsonify({
+            "error": "No hay predio activo seleccionado"
+        }), 400
+
+    mechanic = (
+        Mechanic.query
+        .filter(
+            Mechanic.id == mechanic_id,
+            Mechanic.site_id == int(active_site_id),
+            Mechanic.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if not mechanic:
+        return jsonify({
+            "error": "Mecánico no encontrado"
+        }), 404
+
+    return jsonify(
+        _build_mechanic_terminal_payload(mechanic)
+    )
+
+
+@terminal_bp.route("/scan", methods=["POST"])
+@login_required
+def scan():
+    data = request.get_json(silent=True) or {}
+
+    raw_code = data.get("code") or ""
+
+    code = re.sub(
+        r"[\x00-\x1F\x7F]",
+        "",
+        str(raw_code),
+    ).strip().upper()
+
+    active_site_id = session.get("active_site_id")
+
+    if not code:
+        return jsonify({
+            "error": "Código de mecánico requerido"
+        }), 400
+
+    if not active_site_id:
+        return jsonify({
+            "error": "No hay predio activo seleccionado"
+        }), 400
+
+    mechanic = (
+        Mechanic.query
+        .filter(
+            Mechanic.site_id == int(active_site_id),
+            Mechanic.is_active.is_(True),
+            db.func.upper(
+                db.func.trim(Mechanic.code)
+            ) == code,
+        )
+        .first()
+    )
+
+    if not mechanic:
+        return jsonify({
+            "error": "Mecánico no encontrado"
+        }), 404
+
+    return jsonify(
+        _build_mechanic_terminal_payload(mechanic)
+    )
 
 
 @terminal_bp.route("/articles/<int:warehouse_id>")
@@ -920,6 +1026,148 @@ def confirm_reception():
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": str(exc)}), 400
+
+@terminal_bp.route("/confirm-reception-pin", methods=["POST"])
+@login_required
+def confirm_reception_pin():
+    data = request.get_json(silent=True) or {}
+
+    request_id = data.get("request_id")
+    mechanic_id = data.get("mechanic_id")
+    pin = (data.get("pin") or "").strip()
+
+    active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return jsonify({
+            "error": "No hay predio activo seleccionado"
+        }), 400
+
+    if not request_id or not mechanic_id or not pin:
+        return jsonify({
+            "error": "Datos incompletos"
+        }), 400
+
+    if not pin.isdigit() or len(pin) != 4:
+        return jsonify({
+            "error": "El PIN debe contener exactamente 4 dígitos"
+        }), 400
+
+    mechanic = (
+        Mechanic.query
+        .filter(
+            Mechanic.id == int(mechanic_id),
+            Mechanic.site_id == int(active_site_id),
+            Mechanic.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if not mechanic:
+        return jsonify({
+            "error": "Mecánico no encontrado"
+        }), 404
+
+    if not mechanic.has_pin:
+        return jsonify({
+            "error": "El mecánico no tiene un PIN configurado"
+        }), 400
+
+    if not mechanic.check_pin(pin):
+        return jsonify({
+            "error": "PIN incorrecto"
+        }), 400
+
+    request_obj = (
+        WorkOrderRequest.query
+        .join(
+            WorkOrder,
+            WorkOrder.id == WorkOrderRequest.work_order_id,
+        )
+        .filter(
+            WorkOrderRequest.id == int(request_id),
+            WorkOrder.site_id == int(active_site_id),
+        )
+        .first()
+    )
+
+    if not request_obj:
+        return jsonify({
+            "error": "Solicitud no existe"
+        }), 404
+
+    if request_obj.mechanic_id != mechanic.id:
+        return jsonify({
+            "error": "Este mecánico no fue quien solicitó esta entrega"
+        }), 400
+
+    request_line_ids = [
+        line.id
+        for line in request_obj.lines
+        if line.line_status == "ENTREGADA"
+    ]
+
+    if not request_line_ids:
+        return jsonify({
+            "error": "La solicitud no tiene entregas pendientes por recibir"
+        }), 400
+
+    existing_request_line_ids = {
+        row[0]
+        for row in (
+            db.session.query(WorkOrderLine.request_line_id)
+            .filter(
+                WorkOrderLine.request_line_id.in_(request_line_ids)
+            )
+            .all()
+        )
+    }
+
+    delivered_lines = [
+        line
+        for line in request_obj.lines
+        if (
+            line.line_status == "ENTREGADA"
+            and line.id not in existing_request_line_ids
+        )
+    ]
+
+    if not delivered_lines:
+        return jsonify({
+            "error": "La solicitud no tiene entregas pendientes por recibir"
+        }), 400
+
+    try:
+        for line in delivered_lines:
+            confirm_request_line_to_work_order(
+                request_line_id=line.id,
+                delivered_by_user_id=current_user.id,
+                received_by_user_id=current_user.id,
+                commit=False,
+            )
+
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "message": "Recepción confirmada correctamente.",
+        })
+
+    except WorkOrderRequestServiceError as exc:
+        db.session.rollback()
+
+        return jsonify({
+            "error": str(exc)
+        }), 400
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(f"[CONFIRM RECEPTION PIN ERROR] {exc}")
+
+        return jsonify({
+            "error": "Error al confirmar la recepción"
+        }), 500
 
 @terminal_bp.route("/articles-tree/<int:warehouse_id>")
 @login_required
