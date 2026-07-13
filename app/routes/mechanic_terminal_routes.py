@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-
+from time import perf_counter
 from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required, current_user
 import re
@@ -110,29 +110,83 @@ def _build_mechanic_terminal_payload(
 @terminal_bp.route("/")
 @login_required
 def index():
+    started_at = perf_counter()
+
     active_site_id = session.get("active_site_id")
 
     if not active_site_id:
-        return render_template(
+        html = render_template(
             "mechanic_terminal/index.html",
             terminal_mode=Site.TERMINAL_MODE_BARCODE,
-            terminal_configuration_error="No hay predio activo seleccionado.",
+            terminal_configuration_error=(
+                "No hay predio activo seleccionado."
+            ),
         )
 
-    site = db.session.get(Site, int(active_site_id))
+        elapsed_ms = (perf_counter() - started_at) * 1000
+
+        print(
+            f"[TERMINAL_INDEX] sin predio activo "
+            f"total_ms={elapsed_ms:.2f}"
+        )
+
+        return html
+
+    site_query_started_at = perf_counter()
+
+    site = db.session.get(
+        Site,
+        int(active_site_id),
+    )
+
+    site_query_ms = (
+        perf_counter() - site_query_started_at
+    ) * 1000
 
     if not site or not site.is_active:
-        return render_template(
+        html = render_template(
             "mechanic_terminal/index.html",
             terminal_mode=Site.TERMINAL_MODE_BARCODE,
-            terminal_configuration_error="El predio activo no existe o está inactivo.",
+            terminal_configuration_error=(
+                "El predio activo no existe o está inactivo."
+            ),
         )
 
-    return render_template(
+        total_ms = (perf_counter() - started_at) * 1000
+
+        print(
+            f"[TERMINAL_INDEX] predio inválido "
+            f"site_query_ms={site_query_ms:.2f} "
+            f"total_ms={total_ms:.2f}"
+        )
+
+        return html
+
+    render_started_at = perf_counter()
+
+    html = render_template(
         "mechanic_terminal/index.html",
         terminal_mode=site.mechanic_terminal_mode,
         terminal_configuration_error=None,
     )
+
+    render_ms = (
+        perf_counter() - render_started_at
+    ) * 1000
+
+    total_ms = (
+        perf_counter() - started_at
+    ) * 1000
+
+    print(
+        f"[TERMINAL_INDEX] "
+        f"site_id={active_site_id} "
+        f"site_query_ms={site_query_ms:.2f} "
+        f"render_ms={render_ms:.2f} "
+        f"total_ms={total_ms:.2f}"
+    )
+
+    return html
 
 @terminal_bp.route("/mechanics", methods=["GET"])
 @login_required
