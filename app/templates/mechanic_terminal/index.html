@@ -139,8 +139,20 @@
                     <h5 id="selectedWorkOrderLabel" class="fw-bold mb-3"></h5>
 
                     <div class="d-flex flex-wrap gap-2">
-                        <button type="button" class="btn btn-primary rounded-3" id="loadArticlesBtn">
+                        <button
+                            type="button"
+                            class="btn btn-primary rounded-3"
+                            id="loadArticlesBtn"
+                        >
                             Solicitar artículo
+                        </button>
+
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary rounded-3"
+                            id="loadArticleCategoriesBtn"
+                        >
+                            Ver categorías
                         </button>
                     </div>
                 </div>
@@ -349,6 +361,8 @@ const receptionScanHint = document.getElementById("receptionScanHint");
 const scanStatus = document.getElementById("scanStatus");
 const itemsSearch = document.getElementById("itemsSearch");
 const returnAllToolsBtn = document.getElementById("returnAllToolsBtn");
+const loadArticleCategoriesBtn =
+    document.getElementById("loadArticleCategoriesBtn");
 
 function pauseScannerFocus(ms) {
     scannerFocusPausedUntil = Date.now() + ms;
@@ -522,8 +536,13 @@ async function processMechanic(data, successMessage) {
     pendingReceptionRequestId = null;
     receptionMode = false;
 
-    document.getElementById("terminalContent").classList.remove("d-none");
-    document.getElementById("toolsSection").classList.remove("d-none");
+    document
+        .getElementById("terminalContent")
+        .classList.remove("d-none");
+
+    document
+        .getElementById("toolsSection")
+        .classList.remove("d-none");
 
     document.getElementById("mechanicName").innerText =
         data.mechanic || "";
@@ -545,12 +564,22 @@ async function processMechanic(data, successMessage) {
     document.getElementById("receptionList").innerHTML = "";
     document.getElementById("taskList").innerHTML = "";
 
+    /*
+     * Primero mostramos inmediatamente las OT.
+     * Las recepciones se cargan después sin bloquear la pantalla.
+     */
     renderWorkOrders();
-    await loadPendingReceptions();
 
     document.getElementById("terminalContent").scrollIntoView({
         behavior: "smooth",
         block: "start"
+    });
+
+    loadPendingReceptions().catch(function (error) {
+        console.error(
+            "Error al cargar recepciones pendientes:",
+            error
+        );
     });
 }
 
@@ -1002,72 +1031,134 @@ async function loadPendingReceptions() {
         return;
     }
 
-    const res = await fetch("/terminal/pending-receptions/" + currentMechanic.mechanic_id);
-    const data = await res.json();
+    const container =
+        document.getElementById("receptionList");
 
-    const container = document.getElementById("receptionList");
+    const receptionSection =
+        document.getElementById("receptionSection");
+
+    const noReception =
+        document.getElementById("noReception");
+
     container.innerHTML = "";
 
-    document.getElementById("receptionSection").classList.remove("d-none");
+    receptionSection.classList.remove("d-none");
+    noReception.classList.add("d-none");
 
-    if (!res.ok) {
-        document.getElementById("noReception").classList.remove("d-none");
-        return;
-    }
-
-    if (!data.items || !data.items.length) {
-        document.getElementById("noReception").classList.remove("d-none");
-        return;
-    }
-
-    document.getElementById("noReception").classList.add("d-none");
-
-    data.items.forEach(function (item) {
-        const articlesHtml = item.articles.map(function (article) {
-            return (
-                '<div class="small text-muted">' +
-                    article.article + ' | Cantidad: ' + article.quantity +
-                '</div>'
-            );
-        }).join("");
-
-        const row = document.createElement("div");
-        row.className = "border rounded-3 p-3 mb-2 d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 bg-white";
-
-        row.innerHTML =
-            '<div>' +
-                '<div class="fw-semibold">Solicitud #' + item.request_id + '</div>' +
-                '<div class="small mb-1">OT ' + item.work_order + ' | Equipo: ' + item.equipment + '</div>' +
-                articlesHtml +
-            '</div>' +
-            '<button type="button" class="btn btn-sm btn-success rounded-3">Recibir solicitud</button>';
-
-        row.querySelector("button").onclick = function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-
-            if (usesMechanicProfiles) {
-                openReceptionPinModal(item.request_id);
-                return;
+    try {
+        const res = await fetch(
+            "/terminal/pending-receptions/" +
+            currentMechanic.mechanic_id,
+            {
+                headers: {
+                    "Accept": "application/json"
+                }
             }
+        );
 
-            pendingReceptionRequestId = item.request_id;
-            receptionMode = true;
+        const contentType =
+            res.headers.get("content-type") || "";
 
-            receptionScanHint.classList.remove("d-none");
+        if (!contentType.includes("application/json")) {
+            throw new Error(
+                "La respuesta de recepciones no es JSON."
+            );
+        }
 
-            scanStatus.innerText =
-                "Escanee para firmar recepción de la solicitud #" +
-                item.request_id +
-                ".";
+        const data = await res.json();
 
-            scannerEl.focus({
-                preventScroll: true
-            });
-        };
+        if (!res.ok) {
+            noReception.classList.remove("d-none");
+            return;
+        }
 
-        container.appendChild(row);
-    });
+        const items = data.items || [];
+
+        if (!items.length) {
+            noReception.classList.remove("d-none");
+            return;
+        }
+
+        items.forEach(function (item) {
+            const articlesHtml = (item.articles || [])
+                .map(function (article) {
+                    return (
+                        '<div class="small text-muted">' +
+                            escapeHtml(article.article) +
+                            ' | Cantidad: ' +
+                            escapeHtml(article.quantity) +
+                        '</div>'
+                    );
+                })
+                .join("");
+
+            const row = document.createElement("div");
+
+            row.className =
+                "border rounded-3 p-3 mb-2 " +
+                "d-flex flex-column flex-md-row " +
+                "justify-content-between align-items-md-start " +
+                "gap-3 bg-white";
+
+            row.innerHTML =
+                '<div>' +
+                    '<div class="fw-semibold">' +
+                        'Solicitud #' +
+                        escapeHtml(item.request_id) +
+                    '</div>' +
+                    '<div class="small mb-1">' +
+                        'OT ' +
+                        escapeHtml(item.work_order) +
+                        ' | Equipo: ' +
+                        escapeHtml(item.equipment) +
+                    '</div>' +
+                    articlesHtml +
+                '</div>' +
+                '<button type="button" ' +
+                    'class="btn btn-sm btn-success rounded-3">' +
+                    'Recibir solicitud' +
+                '</button>';
+
+            row.querySelector("button").onclick = function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (usesMechanicProfiles) {
+                    openReceptionPinModal(item.request_id);
+                    return;
+                }
+
+                pendingReceptionRequestId = item.request_id;
+                receptionMode = true;
+
+                receptionScanHint.classList.remove("d-none");
+
+                scanStatus.innerText =
+                    "Escanee para firmar recepción de la solicitud #" +
+                    item.request_id +
+                    ".";
+
+                scannerEl.focus({
+                    preventScroll: true
+                });
+            };
+
+            container.appendChild(row);
+        });
+
+    } catch (error) {
+        console.error(
+            "Error al cargar recepciones pendientes:",
+            error
+        );
+
+        container.innerHTML = "";
+
+        noReception.innerText =
+            "No se pudieron cargar las recepciones pendientes.";
+
+        noReception.classList.remove("d-none");
+    }
 }
 
 async function loadMyTasks() {
@@ -1269,6 +1360,10 @@ async function loadItems(url, title) {
     const isToolsScreen =
         title === "Solicitar herramienta" ||
         title === "Herramientas prestadas";
+
+    if (isToolsScreen) {
+        navigationLevel = "loaded-items";
+    }
 
     if (!selectedWorkOrder && !isToolsScreen) {
         alert("Debe seleccionar una OT.");
@@ -1773,16 +1868,80 @@ document.getElementById("loadArticlesBtn").onclick = function (e) {
     e.preventDefault();
     e.stopPropagation();
 
+    if (!selectedWorkOrder) {
+        alert("Debe seleccionar una OT.");
+        return;
+    }
+
     cartMode = "articles";
     cart = [];
+    currentItems = [];
+    itemsTree = {};
+    currentCategory = null;
+    currentSubcategory = null;
+    navigationLevel = "search";
+
     renderCart();
 
     if (returnAllToolsBtn) {
         returnAllToolsBtn.classList.add("d-none");
     }
 
-    loadItemsTree(selectedWorkOrder.warehouse_id);
+    document.getElementById("itemsTitle").innerText =
+        "Buscar artículo";
+
+    document.getElementById("itemsList").innerHTML =
+        '<div class="text-muted">' +
+            'Escriba al menos dos caracteres para buscar por código o nombre.' +
+        '</div>';
+
+    document
+        .getElementById("noItemsMessage")
+        .classList.add("d-none");
+
+    document
+        .getElementById("itemsSection")
+        .classList.remove("d-none");
+
+    if (itemsSearch) {
+        itemsSearch.value = "";
+    }
+
+    document.getElementById("itemsSection").scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+    });
+
+    focusItemsSearch();
 };
+
+if (loadArticleCategoriesBtn) {
+    loadArticleCategoriesBtn.onclick = function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!selectedWorkOrder) {
+            alert("Debe seleccionar una OT.");
+            return;
+        }
+
+        cartMode = "articles";
+        cart = [];
+        currentItems = [];
+        itemsTree = {};
+        currentCategory = null;
+        currentSubcategory = null;
+        navigationLevel = "categories";
+
+        renderCart();
+
+        if (returnAllToolsBtn) {
+            returnAllToolsBtn.classList.add("d-none");
+        }
+
+        loadItemsTree(selectedWorkOrder.warehouse_id);
+    };
+}
 
 document.getElementById("loadToolsBtn").onclick = function (e) {
     e.preventDefault();
@@ -1888,12 +2047,20 @@ itemsSearch.addEventListener("input", function () {
 
         if (!term) {
             if (navigationLevel === "search") {
-                navigationLevel = "categories";
-                currentCategory = null;
-                currentSubcategory = null;
                 currentItems = [];
-                document.getElementById("itemsTitle").innerText = "Seleccionar categoría";
-                renderCategories();
+
+                document.getElementById("itemsTitle").innerText =
+                    "Buscar artículo";
+
+                document.getElementById("itemsList").innerHTML =
+                    '<div class="text-muted">' +
+                        'Escriba al menos dos caracteres para buscar por código o nombre.' +
+                    '</div>';
+
+                document
+                    .getElementById("noItemsMessage")
+                    .classList.add("d-none");
+
                 return;
             }
 
@@ -1904,6 +2071,11 @@ itemsSearch.addEventListener("input", function () {
 
             if (navigationLevel === "subcategories") {
                 renderSubcategories();
+                return;
+            }
+
+            if (navigationLevel === "articles") {
+                renderArticlesFromTree();
                 return;
             }
 

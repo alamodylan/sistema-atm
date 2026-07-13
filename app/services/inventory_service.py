@@ -703,3 +703,236 @@ def get_inventory_with_warehouse_info(warehouse_id: int) -> dict:
         },
         "items": items,
     }
+
+def search_available_inventory_articles(
+    warehouse_id: int,
+    search: str,
+    *,
+    limit: int = 20,
+) -> list[dict]:
+    """
+    Busca artículos disponibles directamente en PostgreSQL.
+
+    Mantiene el comportamiento actual:
+    1. Primero busca códigos que comiencen por el texto.
+    2. Si no encuentra, busca coincidencias dentro del nombre.
+    3. Excluye herramientas 19000-19999.
+    4. Devuelve como máximo `limit` resultados.
+    """
+    warehouse = db.session.get(Warehouse, warehouse_id)
+
+    if not warehouse:
+        raise InventoryServiceError("La bodega no existe.")
+
+    search = (search or "").strip()
+
+    if len(search) < 2:
+        return []
+
+    normalized_search = search.upper()
+    safe_limit = max(1, min(int(limit or 20), 100))
+
+    base_query = (
+        db.session.query(WarehouseStock, Article)
+        .join(
+            Article,
+            Article.id == WarehouseStock.article_id,
+        )
+        .filter(
+            WarehouseStock.warehouse_id == warehouse_id,
+            WarehouseStock.quantity_on_hand > 0,
+        )
+    )
+
+    # Primero se conserva la prioridad por código.
+    code_rows = (
+        base_query
+        .filter(
+            db.func.upper(Article.code).like(
+                f"{normalized_search}%"
+            )
+        )
+        .order_by(
+            Article.code.asc(),
+            Article.name.asc(),
+        )
+        .limit(safe_limit)
+        .all()
+    )
+
+    rows = code_rows
+
+    # Solo busca por nombre cuando no hubo resultados por código.
+    if not rows and len(normalized_search) >= 3:
+        rows = (
+            base_query
+            .filter(
+                db.func.upper(Article.name).like(
+                    f"%{normalized_search}%"
+                )
+            )
+            .order_by(
+                Article.name.asc(),
+                Article.code.asc(),
+            )
+            .limit(safe_limit)
+            .all()
+        )
+
+    results = []
+
+    for stock, article in rows:
+        try:
+            article_number = int(str(article.code).strip())
+        except (TypeError, ValueError):
+            article_number = None
+
+        if article_number is not None and 19000 <= article_number <= 19999:
+            continue
+
+        results.append(
+            {
+                "article_id": article.id,
+                "code": article.code,
+                "name": article.name,
+                "stock": str(stock.quantity_on_hand or 0),
+            }
+        )
+
+        if len(results) >= safe_limit:
+            break
+
+    return results
+
+def get_available_inventory_items(
+    warehouse_id: int,
+    *,
+    tools_only: bool = False,
+) -> list[dict]:
+    """
+    Devuelve artículos con existencia positiva.
+
+    tools_only=False:
+        Excluye códigos numéricos entre 19000 y 19999.
+
+    tools_only=True:
+        Devuelve únicamente códigos numéricos entre 19000 y 19999.
+    """
+    warehouse = db.session.get(Warehouse, warehouse_id)
+
+    if not warehouse:
+        raise InventoryServiceError("La bodega no existe.")
+
+    rows = (
+        db.session.query(WarehouseStock, Article)
+        .join(
+            Article,
+            Article.id == WarehouseStock.article_id,
+        )
+        .filter(
+            WarehouseStock.warehouse_id == warehouse_id,
+            WarehouseStock.quantity_on_hand > 0,
+        )
+        .order_by(
+            Article.name.asc(),
+            Article.id.asc(),
+        )
+        .all()
+    )
+
+    items = []
+
+    for stock, article in rows:
+        try:
+            article_number = int(str(article.code).strip())
+            is_tool = 19000 <= article_number <= 19999
+        except (TypeError, ValueError):
+            is_tool = False
+
+        if tools_only and not is_tool:
+            continue
+
+        if not tools_only and is_tool:
+            continue
+
+        items.append(
+            {
+                "article_id": article.id,
+                "code": article.code,
+                "name": article.name,
+                "stock": str(stock.quantity_on_hand or 0),
+            }
+        )
+
+    return items
+
+def get_available_inventory_tree(
+    warehouse_id: int,
+) -> dict:
+    """
+    Construye el árbol de artículos disponibles con una sola consulta
+    principal y las relaciones de categoría precargadas.
+    """
+    warehouse = db.session.get(Warehouse, warehouse_id)
+
+    if not warehouse:
+        raise InventoryServiceError("La bodega no existe.")
+
+    rows = (
+        db.session.query(WarehouseStock, Article)
+        .join(
+            Article,
+            Article.id == WarehouseStock.article_id,
+        )
+        .options(
+            joinedload(Article.category),
+            joinedload(Article.subcategory),
+        )
+        .filter(
+            WarehouseStock.warehouse_id == warehouse_id,
+            WarehouseStock.quantity_on_hand > 0,
+        )
+        .order_by(
+            Article.name.asc(),
+            Article.id.asc(),
+        )
+        .all()
+    )
+
+    data = {}
+
+    for stock, article in rows:
+        try:
+            article_number = int(str(article.code).strip())
+            is_tool = 19000 <= article_number <= 19999
+        except (TypeError, ValueError):
+            is_tool = False
+
+        if is_tool:
+            continue
+
+        category_name = (
+            article.category.name
+            if article.category
+            else "Sin categoría"
+        )
+
+        subcategory_name = (
+            article.subcategory.name
+            if article.subcategory
+            else "Sin subcategoría"
+        )
+
+        data.setdefault(category_name, {})
+        data[category_name].setdefault(subcategory_name, [])
+
+        data[category_name][subcategory_name].append(
+            {
+                "article_id": article.id,
+                "code": article.code,
+                "name": article.name,
+                "stock": str(stock.quantity_on_hand or 0),
+            }
+        )
+
+    return data

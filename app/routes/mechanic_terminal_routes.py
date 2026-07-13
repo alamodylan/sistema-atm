@@ -14,8 +14,14 @@ from app.models.work_order_request_line import WorkOrderRequestLine
 from app.models.work_order_task_line import WorkOrderTaskLine
 from app.models.work_order_task_line_assignment import WorkOrderTaskLineAssignment
 from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
+from sqlalchemy.orm import joinedload, selectinload
 from app.services.work_order_request_service import confirm_request_line_to_work_order
-from app.services.inventory_service import get_inventory_by_warehouse, InventoryServiceError
+from app.services.inventory_service import (
+    InventoryServiceError,
+    get_available_inventory_items,
+    get_available_inventory_tree,
+    search_available_inventory_articles,
+)
 from app.models.article import Article
 from app.services.work_order_request_service import (
     WorkOrderRequestServiceError,
@@ -39,11 +45,24 @@ def _is_tool_article_code(code: str) -> bool:
     except Exception:
         return False
 
-def _build_mechanic_terminal_payload(mechanic: Mechanic) -> dict:
+def _build_mechanic_terminal_payload(
+    mechanic: Mechanic,
+) -> dict:
     active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return {
+            "mechanic_id": mechanic.id,
+            "mechanic": mechanic.name,
+            "code": mechanic.code,
+            "work_orders": [],
+        }
 
     task_lines = (
         WorkOrderTaskLine.query
+        .options(
+            joinedload(WorkOrderTaskLine.work_order),
+        )
         .join(
             WorkOrder,
             WorkOrder.id == WorkOrderTaskLine.work_order_id,
@@ -76,7 +95,9 @@ def _build_mechanic_terminal_payload(mechanic: Mechanic) -> dict:
                 "id": work_order.id,
                 "number": work_order.number,
                 "warehouse_id": work_order.warehouse_id,
-                "equipment_code_snapshot": work_order.equipment_code_snapshot,
+                "equipment_code_snapshot": (
+                    work_order.equipment_code_snapshot
+                ),
             }
 
     return {
@@ -231,20 +252,23 @@ def scan():
 @login_required
 def get_articles(warehouse_id):
     try:
-        items = get_inventory_by_warehouse(warehouse_id)
+        items = get_available_inventory_items(
+            warehouse_id=warehouse_id,
+            tools_only=False,
+        )
 
-        filtered = [
+        return jsonify(
             {
-                "article_id": i["article_id"],
-                "code": i["code"],
-                "name": i["name"],
+                "items": [
+                    {
+                        "article_id": item["article_id"],
+                        "code": item["code"],
+                        "name": item["name"],
+                    }
+                    for item in items
+                ]
             }
-            for i in items
-            if float(i["quantity_on_hand"]) > 0
-            and not _is_tool_article_code(i["code"])
-        ]
-
-        return jsonify({"items": filtered})
+        )
 
     except InventoryServiceError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -254,20 +278,23 @@ def get_articles(warehouse_id):
 @login_required
 def get_tools(warehouse_id):
     try:
-        items = get_inventory_by_warehouse(warehouse_id)
+        items = get_available_inventory_items(
+            warehouse_id=warehouse_id,
+            tools_only=True,
+        )
 
-        tools = [
+        return jsonify(
             {
-                "article_id": i["article_id"],
-                "code": i["code"],
-                "name": i["name"],
+                "items": [
+                    {
+                        "article_id": item["article_id"],
+                        "code": item["code"],
+                        "name": item["name"],
+                    }
+                    for item in items
+                ]
             }
-            for i in items
-            if float(i["quantity_on_hand"]) > 0
-            and _is_tool_article_code(i["code"])
-        ]
-
-        return jsonify({"items": tools})
+        )
 
     except InventoryServiceError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -405,18 +432,27 @@ def get_borrowed_tools(work_order_id):
     active_site_id = session.get("active_site_id")
 
     if not active_site_id:
-        return jsonify({"error": "No hay predio activo seleccionado"}), 400
+        return jsonify(
+            {"error": "No hay predio activo seleccionado"}
+        ), 400
 
-    work_order = WorkOrder.query.filter_by(
-        id=work_order_id,
-        site_id=active_site_id,
-    ).first()
+    work_order = (
+        WorkOrder.query
+        .filter_by(
+            id=work_order_id,
+            site_id=int(active_site_id),
+        )
+        .first()
+    )
 
     if not work_order:
         return jsonify({"error": "OT no encontrada"}), 404
 
     loans = (
         ToolLoan.query
+        .options(
+            joinedload(ToolLoan.article),
+        )
         .filter(
             ToolLoan.work_order_id == work_order_id,
             ToolLoan.loan_status.in_(
@@ -424,7 +460,7 @@ def get_borrowed_tools(work_order_id):
                     "PRESTADA",
                     "DEVOLUCION_SOLICITADA",
                 ]
-            )
+            ),
         )
         .all()
     )
@@ -437,7 +473,11 @@ def get_borrowed_tools(work_order_id):
             "name": loan.article.name if loan.article else "",
             "quantity": str(loan.quantity),
             "loan_status": loan.loan_status,
-            "loaned_at": loan.loaned_at.isoformat() if loan.loaned_at else None,
+            "loaned_at": (
+                loan.loaned_at.isoformat()
+                if loan.loaned_at
+                else None
+            ),
         }
         for loan in loans
     ]
@@ -582,55 +622,92 @@ def request_return_all_tools():
             "error": str(exc)
         }), 500
 
-@terminal_bp.route("/work-order/<int:work_order_id>/tasks/<int:mechanic_id>")
+@terminal_bp.route(
+    "/work-order/<int:work_order_id>/tasks/<int:mechanic_id>"
+)
 @login_required
 def get_my_tasks(work_order_id, mechanic_id):
     active_site_id = session.get("active_site_id")
 
     if not active_site_id:
-        return jsonify({"error": "No hay predio activo seleccionado"}), 400
+        return jsonify(
+            {"error": "No hay predio activo seleccionado"}
+        ), 400
 
-    mechanic = Mechanic.query.filter_by(
-        id=mechanic_id,
-        site_id=active_site_id,
-        is_active=True,
-    ).first()
+    mechanic = (
+        Mechanic.query
+        .filter_by(
+            id=mechanic_id,
+            site_id=int(active_site_id),
+            is_active=True,
+        )
+        .first()
+    )
 
     if not mechanic:
         return jsonify({"error": "Mecánico no encontrado"}), 404
 
-    work_order = WorkOrder.query.filter_by(
-        id=work_order_id,
-        site_id=active_site_id,
-    ).first()
+    work_order = (
+        WorkOrder.query
+        .filter_by(
+            id=work_order_id,
+            site_id=int(active_site_id),
+        )
+        .first()
+    )
 
     if not work_order:
         return jsonify({"error": "OT no encontrada"}), 404
 
     task_lines = (
         WorkOrderTaskLine.query
+        .options(
+            joinedload(WorkOrderTaskLine.repair_type),
+        )
         .filter(
             WorkOrderTaskLine.work_order_id == work_order.id,
             WorkOrderTaskLine.assigned_mechanic_id == mechanic.id,
         )
-        .order_by(WorkOrderTaskLine.created_at.asc())
+        .order_by(
+            WorkOrderTaskLine.created_at.asc()
+        )
         .all()
     )
 
     items = []
 
     for task_line in task_lines:
-        items.append({
-            "task_id": task_line.id,
-            "title": task_line.title,
-            "description": task_line.description,
-            "status": task_line.status,
-            "repair_type": task_line.repair_type.name if task_line.repair_type else "",
-            "started_at": task_line.started_at.isoformat() if task_line.started_at else None,
-            "finish_requested_at": task_line.finish_requested_at.isoformat() if task_line.finish_requested_at else None,
-            "approved_finished_at": task_line.approved_finished_at.isoformat() if task_line.approved_finished_at else None,
-            "effective_seconds": task_line.effective_seconds or 0,
-        })
+        items.append(
+            {
+                "task_id": task_line.id,
+                "title": task_line.title,
+                "description": task_line.description,
+                "status": task_line.status,
+                "repair_type": (
+                    task_line.repair_type.name
+                    if task_line.repair_type
+                    else ""
+                ),
+                "started_at": (
+                    task_line.started_at.isoformat()
+                    if task_line.started_at
+                    else None
+                ),
+                "finish_requested_at": (
+                    task_line.finish_requested_at.isoformat()
+                    if task_line.finish_requested_at
+                    else None
+                ),
+                "approved_finished_at": (
+                    task_line.approved_finished_at.isoformat()
+                    if task_line.approved_finished_at
+                    else None
+                ),
+                "effective_seconds": (
+                    task_line.effective_seconds or 0
+                ),
+            }
+        )
 
     return jsonify({"items": items})
 
@@ -1173,29 +1250,9 @@ def confirm_reception_pin():
 @login_required
 def get_articles_tree(warehouse_id):
     try:
-        items = get_inventory_by_warehouse(warehouse_id)
-
-        data = {}
-
-        for i in items:
-            if float(i["quantity_on_hand"]) <= 0:
-                continue
-
-            if _is_tool_article_code(i["code"]):
-                continue
-
-            category = i.get("category_name") or "Sin categoría"
-            subcategory = i.get("subcategory_name") or "Sin subcategoría"
-
-            data.setdefault(category, {})
-            data[category].setdefault(subcategory, [])
-
-            data[category][subcategory].append({
-                "article_id": i["article_id"],
-                "code": i["code"],
-                "name": i["name"],
-                "stock": i["quantity_on_hand"],
-            })
+        data = get_available_inventory_tree(
+            warehouse_id=warehouse_id,
+        )
 
         return jsonify({"data": data})
 
@@ -1206,58 +1263,16 @@ def get_articles_tree(warehouse_id):
 @login_required
 def search_articles(warehouse_id):
     try:
-        q = (request.args.get("q") or "").strip().upper()
+        q = (request.args.get("q") or "").strip()
 
         if not q or len(q) < 2:
             return jsonify({"items": []})
 
-        items = get_inventory_by_warehouse(warehouse_id)
-
-        results = []
-
-        for i in items:
-            if float(i["quantity_on_hand"]) <= 0:
-                continue
-
-            if _is_tool_article_code(i["code"]):
-                continue
-
-            code = str(i["code"] or "").upper()
-            name = str(i["name"] or "").upper()
-
-            # Prioridad: que el código empiece igual
-            if code.startswith(q):
-                results.append({
-                    "article_id": i["article_id"],
-                    "code": i["code"],
-                    "name": i["name"],
-                    "stock": i["quantity_on_hand"],
-                })
-
-            if len(results) >= 20:
-                break
-
-        # Si no encontró por código, busca por nombre
-        if not results and len(q) >= 3:
-            for i in items:
-                if float(i["quantity_on_hand"]) <= 0:
-                    continue
-
-                if _is_tool_article_code(i["code"]):
-                    continue
-
-                name = str(i["name"] or "").upper()
-
-                if q in name:
-                    results.append({
-                        "article_id": i["article_id"],
-                        "code": i["code"],
-                        "name": i["name"],
-                        "stock": i["quantity_on_hand"],
-                    })
-
-                if len(results) >= 20:
-                    break
+        results = search_available_inventory_articles(
+            warehouse_id=warehouse_id,
+            search=q,
+            limit=20,
+        )
 
         return jsonify({"items": results})
 
