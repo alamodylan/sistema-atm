@@ -410,34 +410,39 @@ def get_work_order(work_order_id: int):
         )
 
         if not work_order:
-            raise ValueError("Orden de trabajo no encontrada.")
-
-        repair_types, repair_type_mechanics_map = _build_repair_type_mechanics_map(
-            site_id=work_order.site_id
-        )
+            raise ValueError(
+                "Orden de trabajo no encontrada."
+            )
 
         return render_template(
             "work_orders/detail.html",
             title="Detalle de Orden de Trabajo",
-            subtitle="Consulte la información general, líneas y acciones de la OT.",
+            subtitle=(
+                "Consulte la información general, "
+                "líneas y acciones de la OT."
+            ),
             work_order=work_order,
-            available_articles=[],
-            visible_requests=[],
-            repair_types=[],
-            repair_type_mechanics_map={},
-            task_lines=[],
-            latest_delete_request_map={},
             source=source,
         )
 
     except ValueError as exc:
         flash(str(exc), "danger")
-        return redirect(url_for("work_orders.list_work_orders"))
+
+        return redirect(
+            url_for("work_orders.list_work_orders")
+        )
 
     except Exception as exc:
         print(f"[ERROR OT DETAIL] {exc}")
-        flash("Error al cargar la orden de trabajo.", "danger")
-        return redirect(url_for("work_orders.list_work_orders"))
+
+        flash(
+            "Error al cargar la orden de trabajo.",
+            "danger",
+        )
+
+        return redirect(
+            url_for("work_orders.list_work_orders")
+        )
 
 @work_order_bp.route("/<int:work_order_id>/partial/lines", methods=["GET"])
 @login_required

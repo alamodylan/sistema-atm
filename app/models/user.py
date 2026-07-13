@@ -149,19 +149,38 @@ class User(UserMixin, db.Model):
         if not self.is_active:
             return False
 
-        if not self.role or not self.role.is_active:
+        role = self.role
+
+        if not role or not role.is_active:
             return False
 
-        if self.role.code == "SUPER_USUARIO":
+        if role.code == "SUPER_USUARIO":
             return True
 
-        for role_permission in self.role.role_permissions:
-            permission = role_permission.permission
+        permission_code = (permission_code or "").strip()
 
-            if permission and permission.code == permission_code:
-                return True
+        if not permission_code:
+            return False
 
-        return False
+        permission_codes = getattr(
+            self,
+            "_permission_codes_cache",
+            None,
+        )
+
+        if permission_codes is None:
+            permission_codes = {
+                role_permission.permission.code
+                for role_permission in role.role_permissions
+                if (
+                    role_permission.permission
+                    and role_permission.permission.code
+                )
+            }
+
+            self._permission_codes_cache = permission_codes
+
+        return permission_code in permission_codes
 
     def can_access_site(self, site_id: int | str | None) -> bool:
         if not self.is_active:
