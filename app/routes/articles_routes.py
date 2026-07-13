@@ -3,7 +3,7 @@ from flask import Blueprint, flash, render_template, request
 from flask_login import login_required
 
 from app.models.article import Article
-from app.models.inventory import InventoryLedger, WarehouseStock
+from app.models.inventory import InventoryLedger
 from app.models.warehouse import Warehouse
 from app.services.inventory_service import (
     InventoryServiceError,
@@ -215,9 +215,4 @@ def stock_report():
 # HELPER INTERNO DE CONSULTA BASE DE ARTÍCULOS
 # =========================================================
 def db_query_articles():
-    return (
-        Article.query
-        .outerjoin(WarehouseStock, WarehouseStock.article_id == Article.id)
-        .filter(Article.is_active.is_(True))
-        .distinct()
-    )
+    return Article.query.filter(Article.is_active.is_(True))

@@ -2,11 +2,12 @@ from datetime import datetime, time
 
 from flask import Blueprint, flash, render_template, request
 from flask_login import login_required
+from sqlalchemy.orm import joinedload
 
+from app.extensions import db
 from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.services.audit_service import get_action_label, get_table_label
-from app.extensions import db
 from app.utils.permissions import permission_required
 
 
@@ -28,7 +29,9 @@ def index():
     date_from_raw = request.args.get("date_from", "", type=str).strip()
     date_to_raw = request.args.get("date_to", "", type=str).strip()
 
-    query = AuditLog.query
+    query = AuditLog.query.options(
+        joinedload(AuditLog.user)
+    )
 
     if user_id:
         query = query.filter(AuditLog.user_id == user_id)
@@ -61,6 +64,7 @@ def index():
 
     if search:
         like_search = f"%{search}%"
+
         query = query.filter(
             AuditLog.action.ilike(like_search)
             | AuditLog.table_name.ilike(like_search)
@@ -70,7 +74,10 @@ def index():
 
     logs = (
         query
-        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .order_by(
+            AuditLog.created_at.desc(),
+            AuditLog.id.desc(),
+        )
         .limit(500)
         .all()
     )
@@ -109,14 +116,20 @@ def index():
         details = log.details or {}
 
         description = details.get("description")
-        action_label = details.get("action_label") or get_action_label(log.action)
-        module_label = details.get("module_label") or get_table_label(log.table_name)
+        action_label = (
+            details.get("action_label")
+            or get_action_label(log.action)
+        )
+        module_label = (
+            details.get("module_label")
+            or get_table_label(log.table_name)
+        )
 
         enriched_logs.append(
             {
                 "id": log.id,
                 "created_at": log.created_at,
-                "user": log.user if hasattr(log, "user") else None,
+                "user": log.user,
                 "user_id": log.user_id,
                 "action": log.action,
                 "action_label": action_label,

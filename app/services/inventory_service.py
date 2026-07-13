@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
-
+from sqlalchemy.orm import joinedload
 from app.extensions import db
 from app.models.article import Article
 from app.models.inventory import InventoryLedger, WarehouseLocationStock, WarehouseStock
 from app.models.warehouse import Warehouse
 from app.services.audit_service import log_action
+from sqlalchemy.orm import joinedload
 
 
 class InventoryServiceError(Exception):
@@ -495,32 +496,64 @@ def get_article_stock_summary(article_id: int) -> list[dict]:
 
 def get_inventory_by_warehouse(warehouse_id: int) -> list[dict]:
     warehouse = Warehouse.query.get(warehouse_id)
+
     if not warehouse:
         raise InventoryServiceError("La bodega no existe.")
 
     rows = (
         db.session.query(WarehouseStock, Article)
-        .join(Article, Article.id == WarehouseStock.article_id)
-        .filter(WarehouseStock.warehouse_id == warehouse_id)
-        .order_by(Article.name.asc())
+        .join(
+            Article,
+            Article.id == WarehouseStock.article_id,
+        )
+        .options(
+            joinedload(Article.category),
+            joinedload(Article.subcategory),
+        )
+        .filter(
+            WarehouseStock.warehouse_id == warehouse_id,
+        )
+        .order_by(
+            Article.name.asc(),
+        )
         .all()
     )
 
     result = []
+
     for stock, article in rows:
-        category_name = article.category.name if article.category else None
-        subcategory_name = article.subcategory.name if article.subcategory else None
+        category_name = (
+            article.category.name
+            if article.category
+            else None
+        )
+
+        subcategory_name = (
+            article.subcategory.name
+            if article.subcategory
+            else None
+        )
 
         result.append(
             {
                 "article_id": article.id,
                 "code": article.code,
                 "name": article.name,
-                "quantity_on_hand": str(stock.quantity_on_hand),
-                "reserved_quantity": str(stock.reserved_quantity or 0),
-                "available_quantity": str(stock.available_quantity),
-                "last_unit_cost": str(stock.last_unit_cost or 0),
-                "avg_unit_cost": str(stock.avg_unit_cost or 0),
+                "quantity_on_hand": str(
+                    stock.quantity_on_hand or 0
+                ),
+                "reserved_quantity": str(
+                    stock.reserved_quantity or 0
+                ),
+                "available_quantity": str(
+                    stock.available_quantity or 0
+                ),
+                "last_unit_cost": str(
+                    stock.last_unit_cost or 0
+                ),
+                "avg_unit_cost": str(
+                    stock.avg_unit_cost or 0
+                ),
                 "category_id": article.category_id,
                 "category_name": category_name,
                 "subcategory_id": article.subcategory_id,
@@ -530,6 +563,116 @@ def get_inventory_by_warehouse(warehouse_id: int) -> list[dict]:
 
     return result
 
+
+def get_inventory_by_warehouse_paginated(
+    warehouse_id: int,
+    *,
+    page: int = 1,
+    per_page: int = 100,
+    search: str = "",
+) -> dict:
+    """
+    Devuelve el inventario de una estructura paginado.
+
+    La función get_inventory_by_warehouse() se conserva para procesos
+    que necesitan el inventario completo, como la exportación a Excel.
+    """
+    warehouse = Warehouse.query.get(warehouse_id)
+
+    if not warehouse:
+        raise InventoryServiceError("La bodega no existe.")
+
+    page = max(int(page or 1), 1)
+    per_page = max(min(int(per_page or 100), 500), 1)
+    search = (search or "").strip()
+
+    query = (
+        db.session.query(WarehouseStock, Article)
+        .join(
+            Article,
+            Article.id == WarehouseStock.article_id,
+        )
+        .options(
+            joinedload(Article.category),
+            joinedload(Article.subcategory),
+        )
+        .filter(
+            WarehouseStock.warehouse_id == warehouse_id,
+        )
+    )
+
+    if search:
+        like_search = f"%{search}%"
+
+        query = query.filter(
+            db.or_(
+                Article.code.ilike(like_search),
+                Article.name.ilike(like_search),
+                Article.barcode.ilike(like_search),
+            )
+        )
+
+    pagination = (
+        query
+        .order_by(
+            Article.name.asc(),
+            Article.id.asc(),
+        )
+        .paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False,
+        )
+    )
+
+    items = []
+
+    for stock, article in pagination.items:
+        category_name = (
+            article.category.name
+            if article.category
+            else None
+        )
+
+        subcategory_name = (
+            article.subcategory.name
+            if article.subcategory
+            else None
+        )
+
+        items.append(
+            {
+                "article_id": article.id,
+                "code": article.code,
+                "barcode": article.barcode,
+                "name": article.name,
+                "quantity_on_hand": str(
+                    stock.quantity_on_hand or 0
+                ),
+                "reserved_quantity": str(
+                    stock.reserved_quantity or 0
+                ),
+                "available_quantity": str(
+                    stock.available_quantity or 0
+                ),
+                "last_unit_cost": str(
+                    stock.last_unit_cost or 0
+                ),
+                "avg_unit_cost": str(
+                    stock.avg_unit_cost or 0
+                ),
+                "category_id": article.category_id,
+                "category_name": category_name,
+                "subcategory_id": article.subcategory_id,
+                "subcategory_name": subcategory_name,
+            }
+        )
+
+    return {
+        "items": items,
+        "pagination": pagination,
+        "search": search,
+    }
 
 def get_structures_by_site_and_type(site_id: int, warehouse_type: str) -> list[Warehouse]:
     return (

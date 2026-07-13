@@ -4,29 +4,134 @@
 
 {% block content %}
 <div class="container py-4">
+
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
         <div>
             <h2 class="mb-1">{{ warehouse.name }}</h2>
+
             <p class="text-muted mb-0">
                 {{ warehouse.code }} · {{ warehouse_type_label }}
             </p>
         </div>
 
         <div class="d-flex gap-2">
-            <a href="{{ url_for('inventory.inventory_type', warehouse_type=warehouse.warehouse_type) }}"
-               class="btn btn-outline-secondary">
+            <a
+                href="{{ url_for(
+                    'inventory.inventory_type',
+                    warehouse_type=warehouse.warehouse_type
+                ) }}"
+                class="btn btn-outline-secondary"
+            >
                 Volver
             </a>
-            <a href="{{ url_for('inventory.export_warehouse_inventory', warehouse_id=warehouse.id) }}"
-               class="btn btn-success">
+
+            <a
+                href="{{ url_for(
+                    'inventory.export_warehouse_inventory',
+                    warehouse_id=warehouse.id
+                ) }}"
+                class="btn btn-success"
+            >
                 Exportar a Excel
             </a>
         </div>
     </div>
 
+    <div class="card shadow-sm border-0 mb-3">
+        <div class="card-body">
+
+            <form
+                method="GET"
+                action="{{ url_for(
+                    'inventory.warehouse_inventory_detail',
+                    warehouse_id=warehouse.id
+                ) }}"
+                class="row g-2 align-items-end"
+            >
+                <div class="col-12 col-md-8 col-lg-6">
+                    <label
+                        for="inventory-search"
+                        class="form-label"
+                    >
+                        Buscar artículo
+                    </label>
+
+                    <input
+                        type="search"
+                        id="inventory-search"
+                        name="q"
+                        value="{{ search }}"
+                        class="form-control"
+                        placeholder="Código, nombre o código de barras"
+                        autocomplete="off"
+                    >
+                </div>
+
+                <div class="col-auto">
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                    >
+                        Buscar
+                    </button>
+                </div>
+
+                {% if search %}
+                    <div class="col-auto">
+                        <a
+                            href="{{ url_for(
+                                'inventory.warehouse_inventory_detail',
+                                warehouse_id=warehouse.id
+                            ) }}"
+                            class="btn btn-outline-secondary"
+                        >
+                            Limpiar
+                        </a>
+                    </div>
+                {% endif %}
+            </form>
+
+        </div>
+    </div>
+
     <div class="card shadow-sm border-0">
         <div class="card-body">
+
             {% if items %}
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <div class="text-muted small">
+
+                        {% set first_record =
+                            ((pagination.page - 1) * pagination.per_page) + 1
+                        %}
+
+                        {% set last_record =
+                            first_record + (items|length) - 1
+                        %}
+
+                        Mostrando
+                        <strong>{{ first_record }}</strong>
+                        a
+                        <strong>{{ last_record }}</strong>
+                        de
+                        <strong>{{ pagination.total }}</strong>
+                        artículos.
+
+                        {% if search %}
+                            Resultados para:
+                            <strong>{{ search }}</strong>
+                        {% endif %}
+                    </div>
+
+                    <div class="text-muted small">
+                        Página
+                        <strong>{{ pagination.page }}</strong>
+                        de
+                        <strong>{{ pagination.pages }}</strong>
+                    </div>
+                </div>
+
                 <div class="table-responsive">
                     <table class="table table-striped align-middle mb-0">
                         <thead>
@@ -38,24 +143,159 @@
                                 <th class="text-end">Costo promedio</th>
                             </tr>
                         </thead>
+
                         <tbody>
                             {% for item in items %}
-                            <tr>
-                                <td>{{ item.code }}</td>
-                                <td>{{ item.name }}</td>
-                                <td class="text-end">{{ "%.2f"|format((item["quantity_on_hand"] or 0)|float) }}</td>
-                                <td class="text-end">{{ "%.2f"|format((item["last_unit_cost"] or 0)|float) }}</td>
-                                <td class="text-end">{{ "%.2f"|format((item["avg_unit_cost"] or 0)|float) }}</td>
-                            </tr>
+                                <tr>
+                                    <td>{{ item["code"] }}</td>
+
+                                    <td>{{ item["name"] }}</td>
+
+                                    <td class="text-end">
+                                        {{
+                                            "%.2f"|format(
+                                                (
+                                                    item["quantity_on_hand"]
+                                                    or 0
+                                                )|float
+                                            )
+                                        }}
+                                    </td>
+
+                                    <td class="text-end">
+                                        {{
+                                            "%.2f"|format(
+                                                (
+                                                    item["last_unit_cost"]
+                                                    or 0
+                                                )|float
+                                            )
+                                        }}
+                                    </td>
+
+                                    <td class="text-end">
+                                        {{
+                                            "%.2f"|format(
+                                                (
+                                                    item["avg_unit_cost"]
+                                                    or 0
+                                                )|float
+                                            )
+                                        }}
+                                    </td>
+                                </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
+
+                {% if pagination.pages > 1 %}
+                    <nav
+                        class="mt-4"
+                        aria-label="Paginación del inventario"
+                    >
+                        <ul class="pagination justify-content-center flex-wrap mb-0">
+
+                            <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                                {% if pagination.has_prev %}
+                                    <a
+                                        class="page-link"
+                                        href="{{ url_for(
+                                            'inventory.warehouse_inventory_detail',
+                                            warehouse_id=warehouse.id,
+                                            page=pagination.prev_num,
+                                            q=search
+                                        ) }}"
+                                    >
+                                        Anterior
+                                    </a>
+                                {% else %}
+                                    <span class="page-link">
+                                        Anterior
+                                    </span>
+                                {% endif %}
+                            </li>
+
+                            {% for page_number in pagination.iter_pages(
+                                left_edge=1,
+                                left_current=2,
+                                right_current=2,
+                                right_edge=1
+                            ) %}
+
+                                {% if page_number %}
+                                    <li class="page-item {% if page_number == pagination.page %}active{% endif %}">
+                                        <a
+                                            class="page-link"
+                                            href="{{ url_for(
+                                                'inventory.warehouse_inventory_detail',
+                                                warehouse_id=warehouse.id,
+                                                page=page_number,
+                                                q=search
+                                            ) }}"
+                                        >
+                                            {{ page_number }}
+                                        </a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">
+                                            …
+                                        </span>
+                                    </li>
+                                {% endif %}
+
+                            {% endfor %}
+
+                            <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                                {% if pagination.has_next %}
+                                    <a
+                                        class="page-link"
+                                        href="{{ url_for(
+                                            'inventory.warehouse_inventory_detail',
+                                            warehouse_id=warehouse.id,
+                                            page=pagination.next_num,
+                                            q=search
+                                        ) }}"
+                                    >
+                                        Siguiente
+                                    </a>
+                                {% else %}
+                                    <span class="page-link">
+                                        Siguiente
+                                    </span>
+                                {% endif %}
+                            </li>
+
+                        </ul>
+                    </nav>
+                {% endif %}
+
             {% else %}
-                <div class="alert alert-light border mb-0">
-                    Esta estructura no tiene inventario registrado.
-                </div>
+
+                {% if search %}
+                    <div class="alert alert-light border mb-0">
+                        No se encontraron artículos que coincidan con
+                        <strong>{{ search }}</strong> en esta estructura.
+
+                        <a
+                            href="{{ url_for(
+                                'inventory.warehouse_inventory_detail',
+                                warehouse_id=warehouse.id
+                            ) }}"
+                            class="alert-link"
+                        >
+                            Mostrar todo el inventario
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="alert alert-light border mb-0">
+                        Esta estructura no tiene inventario registrado.
+                    </div>
+                {% endif %}
+
             {% endif %}
+
         </div>
     </div>
 </div>

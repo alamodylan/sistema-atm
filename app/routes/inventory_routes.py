@@ -7,6 +7,7 @@ from flask import (
     flash,
     redirect,
     render_template,
+    request,
     send_file,
     session,
     url_for,
@@ -19,6 +20,7 @@ from app.models.warehouse import Warehouse
 from app.services.inventory_service import (
     InventoryServiceError,
     get_inventory_by_warehouse,
+    get_inventory_by_warehouse_paginated,
     get_structures_by_site_and_type,
 )
 
@@ -93,20 +95,34 @@ def inventory_type(warehouse_type: str):
         active_site_id = _get_active_site_id()
         warehouse_type = _get_valid_warehouse_type(warehouse_type)
 
-        structures = get_structures_by_site_and_type(active_site_id, warehouse_type)
+        structures_by_type = {
+            "BODEGA": get_structures_by_site_and_type(
+                active_site_id,
+                "BODEGA",
+            ),
+            "MINIBODEGA": get_structures_by_site_and_type(
+                active_site_id,
+                "MINIBODEGA",
+            ),
+            "CAJA_HERRAMIENTAS": get_structures_by_site_and_type(
+                active_site_id,
+                "CAJA_HERRAMIENTAS",
+            ),
+        }
+
+        selected_structures = structures_by_type[warehouse_type]
 
         return render_template(
             "inventory/index.html",
             title="Inventario",
-            subtitle="Seleccione la estructura que desea consultar dentro del predio activo.",
+            subtitle=(
+                "Seleccione la estructura que desea consultar "
+                "dentro del predio activo."
+            ),
             active_site_id=active_site_id,
             active_type=warehouse_type,
-            structures_by_type={
-                "BODEGA": get_structures_by_site_and_type(active_site_id, "BODEGA"),
-                "MINIBODEGA": get_structures_by_site_and_type(active_site_id, "MINIBODEGA"),
-                "CAJA_HERRAMIENTAS": get_structures_by_site_and_type(active_site_id, "CAJA_HERRAMIENTAS"),
-            },
-            selected_structures=structures,
+            structures_by_type=structures_by_type,
+            selected_structures=selected_structures,
             type_labels=WAREHOUSE_TYPE_LABELS,
         )
 
@@ -129,35 +145,74 @@ def warehouse_inventory_detail(warehouse_id: int):
         active_site_id = _get_active_site_id()
 
         warehouse = Warehouse.query.get(warehouse_id)
+
         if not warehouse:
-            raise InventoryServiceError("La estructura solicitada no existe.")
+            raise InventoryServiceError(
+                "La estructura solicitada no existe."
+            )
 
         if int(warehouse.site_id) != active_site_id:
-            raise InventoryServiceError("La estructura solicitada no pertenece al predio activo.")
+            raise InventoryServiceError(
+                "La estructura solicitada no pertenece al predio activo."
+            )
 
-        items = get_inventory_by_warehouse(warehouse_id)
+        page = request.args.get(
+            "page",
+            default=1,
+            type=int,
+        )
+
+        search = (
+            request.args.get("q")
+            or ""
+        ).strip()
+
+        inventory_data = get_inventory_by_warehouse_paginated(
+            warehouse_id=warehouse_id,
+            page=page,
+            per_page=100,
+            search=search,
+        )
 
         return render_template(
             "inventory/detail.html",
             title="Inventario de estructura",
-            subtitle="Consulte el inventario real de la estructura seleccionada.",
+            subtitle=(
+                "Consulte el inventario real "
+                "de la estructura seleccionada."
+            ),
             warehouse=warehouse,
-            items=items,
+            items=inventory_data["items"],
+            pagination=inventory_data["pagination"],
+            search=inventory_data["search"],
             active_site_id=active_site_id,
             warehouse_type_label=WAREHOUSE_TYPE_LABELS.get(
-                warehouse.warehouse_type, warehouse.warehouse_type
+                warehouse.warehouse_type,
+                warehouse.warehouse_type,
             ),
         )
 
     except InventoryServiceError as exc:
         flash(str(exc), "danger")
-        return redirect(url_for("inventory.inventory_home"))
+
+        return redirect(
+            url_for("inventory.inventory_home")
+        )
 
     except Exception as exc:
-        print(f"[INVENTORY_DETAIL_ERROR] {str(exc)}")
+        print(
+            f"[INVENTORY_DETAIL_ERROR] "
+            f"{str(exc)}"
+        )
 
-        flash("Error al cargar el detalle del inventario.", "danger")
-        return redirect(url_for("inventory.inventory_home"))
+        flash(
+            "Error al cargar el detalle del inventario.",
+            "danger",
+        )
+
+        return redirect(
+            url_for("inventory.inventory_home")
+        )
 
 
 # =========================================================
