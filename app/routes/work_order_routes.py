@@ -677,22 +677,29 @@ def get_work_order_requests_partial(work_order_id: int):
         print(f"[OT REQUESTS PARTIAL ERROR] {exc}")
         return "<div class='alert alert-danger'>Error al cargar solicitudes de artículos.</div>", 500
 
-@work_order_bp.route("/<int:work_order_id>/partial/tasks", methods=["GET"])
+@work_order_bp.route(
+    "/<int:work_order_id>/partial/tasks",
+    methods=["GET"],
+)
 @login_required
 @permission_required("ot")
 def get_work_order_tasks_partial(work_order_id: int):
     try:
-        work_order = (
-            WorkOrder.query
-            .filter(WorkOrder.id == work_order_id)
-            .first()
+        work_order = db.session.get(
+            WorkOrder,
+            work_order_id,
         )
 
         if not work_order:
-            return "<div class='alert alert-danger'>Orden de trabajo no encontrada.</div>", 404
+            return (
+                "<div class='alert alert-danger'>"
+                "Orden de trabajo no encontrada."
+                "</div>",
+                404,
+            )
 
-        repair_types, repair_type_mechanics_map = _build_repair_type_mechanics_map(
-            site_id=work_order.site_id
+        can_manage_tasks = current_user.has_permission(
+            "ot_trabajos"
         )
 
         task_lines = (
@@ -710,22 +717,47 @@ def get_work_order_tasks_partial(work_order_id: int):
                 == work_order.id
             )
             .order_by(
-                WorkOrderTaskLine.created_at.asc()
+                WorkOrderTaskLine.created_at.asc(),
+                WorkOrderTaskLine.id.asc(),
             )
             .all()
         )
+
+        repair_types = []
+        repair_type_mechanics_map = {}
+
+        if can_manage_tasks:
+            (
+                repair_types,
+                repair_type_mechanics_map,
+            ) = _build_repair_type_mechanics_map(
+                site_id=work_order.site_id
+            )
 
         return render_template(
             "work_orders/partials/_tasks.html",
             work_order=work_order,
             repair_types=repair_types,
-            repair_type_mechanics_map=repair_type_mechanics_map,
+            repair_type_mechanics_map=(
+                repair_type_mechanics_map
+            ),
             task_lines=task_lines,
+            can_manage_tasks=can_manage_tasks,
         )
 
     except Exception as exc:
-        print(f"[OT TASKS PARTIAL ERROR] {exc}")
-        return "<div class='alert alert-danger'>Error al cargar trabajos de la OT.</div>", 500
+        print(
+            f"[OT TASKS PARTIAL ERROR] "
+            f"work_order_id={work_order_id} "
+            f"error={exc}"
+        )
+
+        return (
+            "<div class='alert alert-danger'>"
+            "Error al cargar trabajos de la OT."
+            "</div>",
+            500,
+        )
 # =========================================================
 # CREAR LÍNEA DE TRABAJO EN OT
 # =========================================================
