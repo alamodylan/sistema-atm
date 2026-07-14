@@ -9,7 +9,6 @@
             this.initActiveSidebarState();
             this.initGlobalSearchShortcuts();
             this.initPWAInstallPrompt();
-            this.registerServiceWorker();
             this.initNotifications();
         },
 
@@ -138,22 +137,36 @@
             });
         },
 
-        registerServiceWorker() {
-            if (!("serviceWorker" in navigator)) return;
-
-            window.addEventListener("load", async () => {
-                try {
-                    const registration = await navigator.serviceWorker.register("/static/service-worker.js");
-                    console.log("Service Worker registrado con éxito:", registration.scope);
-                } catch (error) {
-                    console.warn("No se pudo registrar el Service Worker:", error);
-                }
-            });
-        },
-
         initNotifications() {
-
             if (window.location.pathname.includes("/login")) {
+                return;
+            }
+
+            const notificationButton = document.getElementById(
+                "notificationBellButton"
+            );
+
+            const notificationContainer = document.getElementById(
+                "notificationDropdownContent"
+            );
+
+            const notificationModal = document.getElementById(
+                "transferNotificationModal"
+            );
+
+            const hasNotificationPanel = Boolean(
+                notificationButton || notificationContainer
+            );
+
+            const hasPopupNotifications = Boolean(
+                notificationModal
+            );
+
+            /*
+            * Si la página no contiene ni campana/panel ni modal,
+            * no se inicializa ninguna consulta de notificaciones.
+            */
+            if (!hasNotificationPanel && !hasPopupNotifications) {
                 return;
             }
 
@@ -161,47 +174,71 @@
             // CARGA INICIAL
             // =====================================================
 
-            this.loadNotificationPanel();
+            if (hasNotificationPanel) {
+                this.loadNotificationPanel();
+            }
 
-            this.checkPopupNotifications();
+            if (hasPopupNotifications) {
+                this.checkPopupNotifications();
+            }
 
             // =====================================================
-            // MARCAR TODAS COMO LEÍDAS
-            // AL ABRIR CAMPANA
+            // MARCAR TODAS COMO LEÍDAS AL ABRIR LA CAMPANA
             // =====================================================
-
-            const notificationButton = document.getElementById(
-                "notificationBellButton"
-            );
 
             if (notificationButton) {
-
                 notificationButton.addEventListener("click", () => {
-
                     this.markAllNotificationsRead();
-
                 });
             }
 
             // =====================================================
-            // RECARGA PANEL
+            // RECARGA DEL PANEL
+            // Cada tres minutos y solo con la pestaña visible.
             // =====================================================
 
-            window.setInterval(() => {
+            if (hasNotificationPanel) {
+                window.setInterval(() => {
+                    if (document.visibilityState !== "visible") {
+                        return;
+                    }
 
-                this.loadNotificationPanel();
-
-            }, 60000);
+                    this.loadNotificationPanel();
+                }, 180000);
+            }
 
             // =====================================================
-            // VERIFICAR POPUPS
+            // VERIFICACIÓN DE POPUPS
+            // Cada cinco minutos y solo con la pestaña visible.
             // =====================================================
 
-            window.setInterval(() => {
+            if (hasPopupNotifications) {
+                window.setInterval(() => {
+                    if (document.visibilityState !== "visible") {
+                        return;
+                    }
 
-                this.checkPopupNotifications();
+                    this.checkPopupNotifications();
+                }, 300000);
+            }
 
-            }, 120000);
+            // =====================================================
+            // ACTUALIZAR AL REGRESAR A UNA PESTAÑA
+            // =====================================================
+
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState !== "visible") {
+                    return;
+                }
+
+                if (hasNotificationPanel) {
+                    this.loadNotificationPanel();
+                }
+
+                if (hasPopupNotifications) {
+                    this.checkPopupNotifications();
+                }
+            });
         },
 
         async loadNotificationPanel() {
@@ -209,6 +246,7 @@
                 const response = await fetch(
                     "/notifications/panel",
                     {
+                        cache: "no-store",
                         headers: {
                             "X-Requested-With": "XMLHttpRequest",
                         },
@@ -316,6 +354,7 @@
                 const response = await fetch(
                     "/notifications/popup-check",
                     {
+                        cache: "no-store",
                         headers: {
                             "X-Requested-With": "XMLHttpRequest",
                         },
@@ -345,10 +384,8 @@
         },
 
         async markAllNotificationsRead() {
-
             try {
-
-                await fetch(
+                const response = await fetch(
                     "/notifications/mark-all-read",
                     {
                         method: "POST",
@@ -358,10 +395,34 @@
                     }
                 );
 
-                this.loadNotificationPanel();
+                if (!response.ok) {
+                    return;
+                }
+
+                /*
+                * Ocultar el contador localmente.
+                * Ya no se hace otra petición GET /notifications/panel.
+                */
+                const badge = document.getElementById(
+                    "notificationUnreadBadge"
+                );
+
+                if (badge) {
+                    badge.textContent = "0";
+                    badge.classList.add("d-none");
+                }
+
+                /*
+                * Quitar visualmente el fondo de no leído de los elementos
+                * ya mostrados en el panel.
+                */
+                document
+                    .querySelectorAll("[data-notification-id]")
+                    .forEach((item) => {
+                        item.classList.remove("bg-light");
+                    });
 
             } catch (error) {
-
                 console.warn(
                     "No se pudieron marcar notificaciones:",
                     error

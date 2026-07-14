@@ -260,7 +260,13 @@
         }
 
         fetch(
-            "{{ url_for('work_orders.get_work_order_lines_partial', work_order_id=work_order.id) }}"
+            "{{ url_for('work_orders.get_work_order_lines_partial', work_order_id=work_order.id) }}",
+            {
+                cache: "no-store",
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest"
+                }
+            }
         )
         .then(function (response) {
 
@@ -305,7 +311,13 @@
         }
 
         fetch(
-            "{{ url_for('work_orders.get_work_order_requests_partial', work_order_id=work_order.id, source=source) }}"
+            "{{ url_for('work_orders.get_work_order_requests_partial', work_order_id=work_order.id, source=source) }}",
+            {
+                cache: "no-store",
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest"
+                }
+            }
         )
         .then(function (response) {
 
@@ -350,7 +362,13 @@
         }
 
         fetch(
-            "{{ url_for('work_orders.get_work_order_tasks_partial', work_order_id=work_order.id) }}"
+            "{{ url_for('work_orders.get_work_order_tasks_partial', work_order_id=work_order.id) }}",
+            {
+                cache: "no-store",
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest"
+                }
+            }
         )
         .then(function (response) {
 

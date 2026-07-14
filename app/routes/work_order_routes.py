@@ -400,8 +400,6 @@ def get_work_order(work_order_id: int):
         work_order = (
             WorkOrder.query
             .options(
-                joinedload(WorkOrder.mechanics),
-                joinedload(WorkOrder.equipment),
                 joinedload(WorkOrder.warehouse),
                 joinedload(WorkOrder.responsible_user),
             )
@@ -423,6 +421,22 @@ def get_work_order(work_order_id: int):
             ),
             work_order=work_order,
             source=source,
+        )
+
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(
+            url_for("work_orders.list_work_orders")
+        )
+
+    except Exception as exc:
+        print(f"[ERROR OT DETAIL] {exc}")
+        flash(
+            "Error al cargar la orden de trabajo.",
+            "danger",
+        )
+        return redirect(
+            url_for("work_orders.list_work_orders")
         )
 
     except ValueError as exc:
@@ -453,26 +467,34 @@ def get_work_order_lines_partial(work_order_id: int):
             WorkOrder.query
             .options(
                 selectinload(WorkOrder.lines)
-                    .selectinload(WorkOrderLine.article),
+                    .joinedload(WorkOrderLine.article),
 
                 selectinload(WorkOrder.lines)
-                    .selectinload(WorkOrderLine.request_line)
-                    .selectinload(WorkOrderRequestLine.work_order_request)
-                    .selectinload(WorkOrderRequest.mechanic),
+                    .joinedload(WorkOrderLine.received_by_user),
 
                 selectinload(WorkOrder.lines)
-                    .selectinload(WorkOrderLine.request_line)
-                    .selectinload(WorkOrderRequestLine.work_order_request)
-                    .selectinload(WorkOrderRequest.approved_by_user),
+                    .joinedload(WorkOrderLine.delivered_by_user),
 
                 selectinload(WorkOrder.lines)
-                    .selectinload(WorkOrderLine.delivered_by_user),
+                    .joinedload(WorkOrderLine.request_line)
+                    .joinedload(
+                        WorkOrderRequestLine.work_order_request
+                    )
+                    .joinedload(WorkOrderRequest.mechanic),
 
                 selectinload(WorkOrder.lines)
-                    .selectinload(WorkOrderLine.received_by_user),
+                    .joinedload(WorkOrderLine.request_line)
+                    .joinedload(
+                        WorkOrderRequestLine.work_order_request
+                    )
+                    .joinedload(
+                        WorkOrderRequest.approved_by_user
+                    ),
 
                 selectinload(WorkOrder.lines)
-                    .selectinload(WorkOrderLine.delete_requests),
+                    .selectinload(
+                        WorkOrderLine.delete_requests
+                    ),
             )
             .filter(WorkOrder.id == work_order_id)
             .first()
@@ -536,10 +558,19 @@ def get_work_order_requests_partial(work_order_id: int):
             WorkOrderRequest.query
             .options(
                 selectinload(WorkOrderRequest.lines)
-                    .selectinload(WorkOrderRequestLine.article),
-                selectinload(WorkOrderRequest.requested_by_user),
-                selectinload(WorkOrderRequest.approved_by_user),
-                selectinload(WorkOrderRequest.sent_to_warehouse_by_user),
+                    .joinedload(WorkOrderRequestLine.article),
+
+                joinedload(
+                    WorkOrderRequest.requested_by_user
+                ),
+
+                joinedload(
+                    WorkOrderRequest.approved_by_user
+                ),
+
+                joinedload(
+                    WorkOrderRequest.sent_to_warehouse_by_user
+                ),
             )
             .filter(
                 WorkOrderRequest.work_order_id == work_order_id,
@@ -667,11 +698,20 @@ def get_work_order_tasks_partial(work_order_id: int):
         task_lines = (
             WorkOrderTaskLine.query
             .options(
-                selectinload(WorkOrderTaskLine.assigned_mechanic),
-                selectinload(WorkOrderTaskLine.repair_type),
+                joinedload(
+                    WorkOrderTaskLine.assigned_mechanic
+                ),
+                joinedload(
+                    WorkOrderTaskLine.repair_type
+                ),
             )
-            .filter(WorkOrderTaskLine.work_order_id == work_order.id)
-            .order_by(WorkOrderTaskLine.created_at.asc())
+            .filter(
+                WorkOrderTaskLine.work_order_id
+                == work_order.id
+            )
+            .order_by(
+                WorkOrderTaskLine.created_at.asc()
+            )
             .all()
         )
 
