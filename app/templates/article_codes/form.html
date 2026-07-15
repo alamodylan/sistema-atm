@@ -1,0 +1,669 @@
+{% extends "base.html" %}
+
+{% block title %}Nuevo código{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <!-- =====================================================
+         ENCABEZADO
+    ====================================================== -->
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">
+                Nuevo código
+            </h2>
+
+            <p class="text-muted mb-0">
+                Cree un artículo sin registrar existencias ni movimientos de inventario.
+            </p>
+        </div>
+
+        <div>
+            <a
+                href="{{ url_for('article_codes.index') }}"
+                class="btn btn-outline-secondary"
+            >
+                <i class="bi bi-arrow-left me-1"></i>
+                Volver
+            </a>
+        </div>
+    </div>
+
+    <form
+        method="POST"
+        action="{{ url_for('article_codes.create') }}"
+        id="articleCodeForm"
+        novalidate
+    >
+        <div class="row g-4">
+
+            <!-- =================================================
+                 DATOS DEL ARTÍCULO
+            ================================================== -->
+            <div class="col-12 col-xl-8">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-body p-4">
+
+                        <h5 class="fw-bold mb-4">
+                            Información del artículo
+                        </h5>
+
+                        <div class="row g-3">
+
+                            <div class="col-12 col-md-4">
+                                <label
+                                    for="articleCode"
+                                    class="form-label fw-semibold"
+                                >
+                                    Código
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <input
+                                    type="text"
+                                    id="articleCode"
+                                    name="code"
+                                    class="form-control text-uppercase"
+                                    maxlength="50"
+                                    value="{{ form_data.get('code', '') }}"
+                                    autocomplete="off"
+                                    required
+                                >
+                            </div>
+
+                            <div class="col-12 col-md-8">
+                                <label
+                                    for="articleName"
+                                    class="form-label fw-semibold"
+                                >
+                                    Nombre
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <input
+                                    type="text"
+                                    id="articleName"
+                                    name="name"
+                                    class="form-control"
+                                    value="{{ form_data.get('name', '') }}"
+                                    autocomplete="off"
+                                    required
+                                >
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label
+                                    for="articleUnit"
+                                    class="form-label fw-semibold"
+                                >
+                                    Unidad
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <select
+                                    id="articleUnit"
+                                    name="unit_id"
+                                    class="form-select"
+                                    required
+                                >
+                                    <option value="">
+                                        Seleccione...
+                                    </option>
+
+                                    {% for unit in units %}
+                                        <option
+                                            value="{{ unit.id }}"
+                                            {% if form_data.get('unit_id')|string == unit.id|string %}
+                                                selected
+                                            {% endif %}
+                                        >
+                                            {{ unit.code }} - {{ unit.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label
+                                    for="articleFamilyCode"
+                                    class="form-label fw-semibold"
+                                >
+                                    Código de familia
+                                </label>
+
+                                <input
+                                    type="text"
+                                    id="articleFamilyCode"
+                                    name="family_code"
+                                    class="form-control text-uppercase"
+                                    maxlength="20"
+                                    value="{{ form_data.get('family_code', '') }}"
+                                    autocomplete="off"
+                                >
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label
+                                    for="articleBarcode"
+                                    class="form-label fw-semibold"
+                                >
+                                    Código de barras
+                                </label>
+
+                                <input
+                                    type="text"
+                                    id="articleBarcode"
+                                    name="barcode"
+                                    class="form-control"
+                                    maxlength="100"
+                                    value="{{ form_data.get('barcode', '') }}"
+                                    autocomplete="off"
+                                >
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label
+                                    for="articleSapCode"
+                                    class="form-label fw-semibold"
+                                >
+                                    Código SAP
+                                </label>
+
+                                <input
+                                    type="text"
+                                    id="articleSapCode"
+                                    name="sap_code"
+                                    class="form-control text-uppercase"
+                                    maxlength="100"
+                                    value="{{ form_data.get('sap_code', '') }}"
+                                    autocomplete="off"
+                                >
+                            </div>
+
+                            <div class="col-12">
+                                <label
+                                    for="articleDescription"
+                                    class="form-label fw-semibold"
+                                >
+                                    Descripción
+                                </label>
+
+                                <textarea
+                                    id="articleDescription"
+                                    name="description"
+                                    class="form-control"
+                                    rows="3"
+                                >{{ form_data.get('description', '') }}</textarea>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="d-flex flex-wrap gap-4 pt-2">
+
+                                    <div class="form-check">
+                                        <input
+                                            type="checkbox"
+                                            id="isTool"
+                                            name="is_tool"
+                                            class="form-check-input"
+                                            {% if form_data.get('is_tool') == 'on' %}
+                                                checked
+                                            {% endif %}
+                                        >
+
+                                        <label
+                                            for="isTool"
+                                            class="form-check-label"
+                                        >
+                                            Es herramienta
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check">
+                                        <input
+                                            type="checkbox"
+                                            id="isActive"
+                                            name="is_active"
+                                            class="form-check-input"
+                                            {% if not form_data or form_data.get('is_active') == 'on' %}
+                                                checked
+                                            {% endif %}
+                                        >
+
+                                        <label
+                                            for="isActive"
+                                            class="form-check-label"
+                                        >
+                                            Artículo activo
+                                        </label>
+                                    </div>
+
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =================================================
+                 CATEGORÍA
+            ================================================== -->
+            <div class="col-12 col-xl-4">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-body p-4">
+
+                        <h5 class="fw-bold mb-4">
+                            Clasificación
+                        </h5>
+
+                        {% set selected_mode = form_data.get('category_mode', 'EXISTING') %}
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">
+                                Tipo de categoría
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <div class="d-flex flex-column gap-2">
+
+                                <div class="form-check">
+                                    <input
+                                        type="radio"
+                                        id="categoryModeExisting"
+                                        name="category_mode"
+                                        value="EXISTING"
+                                        class="form-check-input"
+                                        {% if selected_mode != "NEW" %}
+                                            checked
+                                        {% endif %}
+                                    >
+
+                                    <label
+                                        for="categoryModeExisting"
+                                        class="form-check-label"
+                                    >
+                                        Usar categoría existente
+                                    </label>
+                                </div>
+
+                                <div class="form-check">
+                                    <input
+                                        type="radio"
+                                        id="categoryModeNew"
+                                        name="category_mode"
+                                        value="NEW"
+                                        class="form-check-input"
+                                        {% if selected_mode == "NEW" %}
+                                            checked
+                                        {% endif %}
+                                    >
+
+                                    <label
+                                        for="categoryModeNew"
+                                        class="form-check-label"
+                                    >
+                                        Crear nueva categoría
+                                    </label>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <!-- =====================================
+                             CATEGORÍA EXISTENTE
+                        ====================================== -->
+                        <div id="existingCategorySection">
+
+                            <div class="mb-3">
+                                <label
+                                    for="categorySelect"
+                                    class="form-label fw-semibold"
+                                >
+                                    Categoría
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <select
+                                    id="categorySelect"
+                                    name="category_id"
+                                    class="form-select"
+                                >
+                                    <option value="">
+                                        Seleccione...
+                                    </option>
+
+                                    {% for category in categories %}
+                                        <option
+                                            value="{{ category.id }}"
+                                            {% if form_data.get('category_id')|string == category.id|string %}
+                                                selected
+                                            {% endif %}
+                                        >
+                                            {{ category.code }} - {{ category.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label
+                                    for="subcategorySelect"
+                                    class="form-label fw-semibold"
+                                >
+                                    Subcategoría
+                                </label>
+
+                                <select
+                                    id="subcategorySelect"
+                                    name="subcategory_id"
+                                    class="form-select"
+                                    data-selected-id="{{ form_data.get('subcategory_id', '') }}"
+                                    disabled
+                                >
+                                    <option value="">
+                                        Seleccione primero una categoría
+                                    </option>
+                                </select>
+
+                                <div
+                                    id="subcategoryLoadingMessage"
+                                    class="form-text d-none"
+                                >
+                                    Cargando subcategorías...
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- =====================================
+                             NUEVA CATEGORÍA
+                        ====================================== -->
+                        <div
+                            id="newCategorySection"
+                            class="d-none"
+                        >
+                            <div class="mb-3">
+                                <label
+                                    for="newCategoryCode"
+                                    class="form-label fw-semibold"
+                                >
+                                    Código de categoría
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <input
+                                    type="text"
+                                    id="newCategoryCode"
+                                    name="new_category_code"
+                                    class="form-control text-uppercase"
+                                    maxlength="50"
+                                    value="{{ form_data.get('new_category_code', '') }}"
+                                    autocomplete="off"
+                                >
+                            </div>
+
+                            <div class="mb-3">
+                                <label
+                                    for="newCategoryName"
+                                    class="form-label fw-semibold"
+                                >
+                                    Nombre de categoría
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <input
+                                    type="text"
+                                    id="newCategoryName"
+                                    name="new_category_name"
+                                    class="form-control"
+                                    maxlength="120"
+                                    value="{{ form_data.get('new_category_name', '') }}"
+                                    autocomplete="off"
+                                >
+                            </div>
+
+                            <div class="mb-3">
+                                <label
+                                    for="newCategoryDescription"
+                                    class="form-label fw-semibold"
+                                >
+                                    Descripción
+                                </label>
+
+                                <textarea
+                                    id="newCategoryDescription"
+                                    name="new_category_description"
+                                    class="form-control"
+                                    rows="3"
+                                >{{ form_data.get('new_category_description', '') }}</textarea>
+                            </div>
+
+                            <div class="alert alert-light border small mb-0">
+                                La categoría nueva se creará junto con el artículo.
+                                El artículo quedará inicialmente sin subcategoría.
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- =====================================================
+             ACCIONES
+        ====================================================== -->
+        <div class="d-flex flex-column flex-md-row justify-content-end gap-2 mt-4">
+            <a
+                href="{{ url_for('article_codes.index') }}"
+                class="btn btn-outline-secondary px-4"
+            >
+                Cancelar
+            </a>
+
+            <button
+                type="submit"
+                name="submit_action"
+                value="save_and_new"
+                class="btn btn-outline-primary px-4"
+            >
+                Guardar y crear otro
+            </button>
+
+            <button
+                type="submit"
+                name="submit_action"
+                value="save"
+                class="btn btn-primary px-4"
+            >
+                <i class="bi bi-check-lg me-1"></i>
+                Guardar código
+            </button>
+        </div>
+
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    "use strict";
+
+    const existingModeRadio = document.getElementById(
+        "categoryModeExisting"
+    );
+
+    const newModeRadio = document.getElementById(
+        "categoryModeNew"
+    );
+
+    const existingSection = document.getElementById(
+        "existingCategorySection"
+    );
+
+    const newSection = document.getElementById(
+        "newCategorySection"
+    );
+
+    const categorySelect = document.getElementById(
+        "categorySelect"
+    );
+
+    const subcategorySelect = document.getElementById(
+        "subcategorySelect"
+    );
+
+    const subcategoryLoadingMessage = document.getElementById(
+        "subcategoryLoadingMessage"
+    );
+
+    const newCategoryCode = document.getElementById(
+        "newCategoryCode"
+    );
+
+    const newCategoryName = document.getElementById(
+        "newCategoryName"
+    );
+
+    function updateCategoryMode() {
+        const isNewMode = newModeRadio.checked;
+
+        existingSection.classList.toggle(
+            "d-none",
+            isNewMode
+        );
+
+        newSection.classList.toggle(
+            "d-none",
+            !isNewMode
+        );
+
+        categorySelect.required = !isNewMode;
+        categorySelect.disabled = isNewMode;
+
+        newCategoryCode.required = isNewMode;
+        newCategoryName.required = isNewMode;
+
+        newCategoryCode.disabled = !isNewMode;
+        newCategoryName.disabled = !isNewMode;
+
+        document
+            .getElementById("newCategoryDescription")
+            .disabled = !isNewMode;
+
+        if (isNewMode) {
+            subcategorySelect.disabled = true;
+        } else if (categorySelect.value) {
+            loadSubcategories(
+                categorySelect.value
+            );
+        }
+    }
+
+    async function loadSubcategories(categoryId) {
+        subcategorySelect.innerHTML =
+            '<option value="">Sin subcategoría</option>';
+
+        subcategorySelect.disabled = true;
+
+        if (!categoryId) {
+            subcategorySelect.innerHTML =
+                '<option value="">Seleccione primero una categoría</option>';
+            return;
+        }
+
+        subcategoryLoadingMessage.classList.remove(
+            "d-none"
+        );
+
+        try {
+            const response = await fetch(
+                `/article-codes/categories/${categoryId}/subcategories`,
+                {
+                    cache: "no-store",
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest"
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    "No fue posible cargar las subcategorías."
+                );
+            }
+
+            const data = await response.json();
+            const items = data.items || [];
+
+            subcategorySelect.innerHTML =
+                '<option value="">Sin subcategoría</option>';
+
+            items.forEach(function (item) {
+                const option = document.createElement(
+                    "option"
+                );
+
+                option.value = item.id;
+                option.textContent = item.label;
+
+                subcategorySelect.appendChild(
+                    option
+                );
+            });
+
+            const selectedId =
+                subcategorySelect.dataset.selectedId;
+
+            if (selectedId) {
+                subcategorySelect.value = selectedId;
+            }
+
+            subcategorySelect.disabled = false;
+
+        } catch (error) {
+            console.error(error);
+
+            subcategorySelect.innerHTML =
+                '<option value="">No se pudieron cargar</option>';
+
+        } finally {
+            subcategoryLoadingMessage.classList.add(
+                "d-none"
+            );
+        }
+    }
+
+    existingModeRadio.addEventListener(
+        "change",
+        updateCategoryMode
+    );
+
+    newModeRadio.addEventListener(
+        "change",
+        updateCategoryMode
+    );
+
+    categorySelect.addEventListener(
+        "change",
+        function () {
+            subcategorySelect.dataset.selectedId = "";
+            loadSubcategories(this.value);
+        }
+    );
+
+    updateCategoryMode();
+
+    if (
+        existingModeRadio.checked
+        && categorySelect.value
+    ) {
+        loadSubcategories(
+            categorySelect.value
+        );
+    }
+});
+</script>
+{% endblock %}

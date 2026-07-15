@@ -107,6 +107,17 @@
             </a>
             {% endif %}
 
+            {% if current_user.is_authenticated
+                and current_user.role
+                and current_user.role.code == "SUPER_USUARIO" %}
+
+            <a href="{{ url_for('article_codes.index') }}"
+            class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('article_codes.') %}active{% endif %}">
+                <i class="bi bi-upc-scan me-2"></i>Creación de códigos
+            </a>
+
+            {% endif %}
+
             {% if can_use_permissions and current_user.has_permission("inventario_fisico") %}
             <a href="{{ url_for('physical_inventory.index') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('physical_inventory.') %}active{% endif %}">

@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}Creación de códigos{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <!-- =====================================================
+         ENCABEZADO
+    ====================================================== -->
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">
+                Creación de códigos
+            </h2>
+
+            <p class="text-muted mb-0">
+                Consulte y registre artículos creados manualmente.
+            </p>
+        </div>
+
+        <div>
+            <a
+                href="{{ url_for('article_codes.new') }}"
+                class="btn btn-primary rounded-3"
+            >
+                <i class="bi bi-plus-lg me-1"></i>
+                Crear nuevo código
+            </a>
+        </div>
+    </div>
+
+    <!-- =====================================================
+         FILTROS
+    ====================================================== -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4">
+
+            <form
+                method="GET"
+                action="{{ url_for('article_codes.index') }}"
+                class="row g-3 align-items-end"
+            >
+                <div class="col-12 col-lg-5">
+                    <label
+                        for="articleCodeSearch"
+                        class="form-label fw-semibold"
+                    >
+                        Buscar
+                    </label>
+
+                    <input
+                        type="search"
+                        id="articleCodeSearch"
+                        name="q"
+                        class="form-control"
+                        value="{{ search or '' }}"
+                        placeholder="Código, nombre, código de barras o SAP"
+                    >
+                </div>
+
+                <div class="col-12 col-md-6 col-lg-3">
+                    <label
+                        for="articleCodeCategory"
+                        class="form-label fw-semibold"
+                    >
+                        Categoría
+                    </label>
+
+                    <select
+                        id="articleCodeCategory"
+                        name="category_id"
+                        class="form-select"
+                    >
+                        <option value="">
+                            Todas las categorías
+                        </option>
+
+                        {% for category in categories %}
+                            <option
+                                value="{{ category.id }}"
+                                {% if selected_category_id == category.id %}
+                                    selected
+                                {% endif %}
+                            >
+                                {{ category.code }} - {{ category.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-6 col-lg-2">
+                    <label
+                        for="articleCodeStatus"
+                        class="form-label fw-semibold"
+                    >
+                        Estado
+                    </label>
+
+                    <select
+                        id="articleCodeStatus"
+                        name="active_status"
+                        class="form-select"
+                    >
+                        <option value="">
+                            Todos
+                        </option>
+
+                        <option
+                            value="ACTIVE"
+                            {% if selected_active_status == "ACTIVE" %}
+                                selected
+                            {% endif %}
+                        >
+                            Activos
+                        </option>
+
+                        <option
+                            value="INACTIVE"
+                            {% if selected_active_status == "INACTIVE" %}
+                                selected
+                            {% endif %}
+                        >
+                            Inactivos
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-12 col-lg-2">
+                    <div class="d-grid gap-2">
+                        <button
+                            type="submit"
+                            class="btn btn-outline-primary"
+                        >
+                            <i class="bi bi-search me-1"></i>
+                            Buscar
+                        </button>
+
+                        {% if search or selected_category_id or selected_active_status %}
+                            <a
+                                href="{{ url_for('article_codes.index') }}"
+                                class="btn btn-outline-secondary"
+                            >
+                                Limpiar
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </form>
+
+        </div>
+    </div>
+
+    <!-- =====================================================
+         LISTADO
+    ====================================================== -->
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+
+            {% if articles %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">Código</th>
+                                <th>Nombre</th>
+                                <th>Unidad</th>
+                                <th>Categoría</th>
+                                <th>Subcategoría</th>
+                                <th>Código de barras</th>
+                                <th>SAP</th>
+                                <th class="text-center">Herramienta</th>
+                                <th class="text-center">Estado</th>
+                                <th>Creado por</th>
+                                <th class="pe-4">Fecha</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {% for article in articles %}
+                                <tr>
+                                    <td class="ps-4">
+                                        <div class="fw-semibold">
+                                            {{ article.code }}
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        {{ article.name }}
+                                    </td>
+
+                                    <td>
+                                        {% if article.unit %}
+                                            {{ article.unit.code }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        {% if article.category %}
+                                            {{ article.category.name }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        {% if article.subcategory %}
+                                            {{ article.subcategory.name }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        {{ article.barcode or '-' }}
+                                    </td>
+
+                                    <td>
+                                        {{ article.sap_code or '-' }}
+                                    </td>
+
+                                    <td class="text-center">
+                                        {% if article.is_tool %}
+                                            <span class="badge text-bg-primary">
+                                                Sí
+                                            </span>
+                                        {% else %}
+                                            <span class="badge text-bg-light border text-dark">
+                                                No
+                                            </span>
+                                        {% endif %}
+                                    </td>
+
+                                    <td class="text-center">
+                                        {% if article.is_active %}
+                                            <span class="badge text-bg-success">
+                                                Activo
+                                            </span>
+                                        {% else %}
+                                            <span class="badge text-bg-secondary">
+                                                Inactivo
+                                            </span>
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        {% if article.created_by_user %}
+                                            {{ article.created_by_user.full_name }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <td class="pe-4 text-nowrap">
+                                        {{ article.created_at|cr_datetime if article.created_at else '-' }}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+            {% else %}
+                <div class="p-5 text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-upc-scan fs-1 text-muted"></i>
+                    </div>
+
+                    <h5 class="fw-semibold">
+                        No hay códigos manuales registrados
+                    </h5>
+
+                    <p class="text-muted mb-3">
+                        Los artículos creados desde este módulo aparecerán aquí.
+                    </p>
+
+                    <a
+                        href="{{ url_for('article_codes.new') }}"
+                        class="btn btn-primary"
+                    >
+                        Crear primer código
+                    </a>
+                </div>
+            {% endif %}
+
+        </div>
+    </div>
+
+    <!-- =====================================================
+         PAGINACIÓN
+    ====================================================== -->
+    {% if pagination and pagination.pages > 1 %}
+        <nav
+            class="mt-4"
+            aria-label="Paginación de códigos"
+        >
+            <ul class="pagination justify-content-center flex-wrap">
+
+                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                    <a
+                        class="page-link"
+                        href="{% if pagination.has_prev %}{{ url_for(
+                            'article_codes.index',
+                            page=pagination.prev_num,
+                            q=search,
+                            category_id=selected_category_id,
+                            active_status=selected_active_status
+                        ) }}{% else %}#{% endif %}"
+                    >
+                        Anterior
+                    </a>
+                </li>
+
+                {% for page_number in pagination.iter_pages(
+                    left_edge=1,
+                    right_edge=1,
+                    left_current=2,
+                    right_current=2
+                ) %}
+                    {% if page_number %}
+                        <li class="page-item {% if page_number == pagination.page %}active{% endif %}">
+                            <a
+                                class="page-link"
+                                href="{{ url_for(
+                                    'article_codes.index',
+                                    page=page_number,
+                                    q=search,
+                                    category_id=selected_category_id,
+                                    active_status=selected_active_status
+                                ) }}"
+                            >
+                                {{ page_number }}
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">…</span>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+
+                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                    <a
+                        class="page-link"
+                        href="{% if pagination.has_next %}{{ url_for(
+                            'article_codes.index',
+                            page=pagination.next_num,
+                            q=search,
+                            category_id=selected_category_id,
+                            active_status=selected_active_status
+                        ) }}{% else %}#{% endif %}"
+                    >
+                        Siguiente
+                    </a>
+                </li>
+
+            </ul>
+        </nav>
+    {% endif %}
+
+</div>
+{% endblock %}

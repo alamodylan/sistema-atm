@@ -41,6 +41,14 @@ class Article(db.Model):
     is_tool = db.Column(db.Boolean, nullable=False, default=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
+    creation_source = db.Column(
+        db.String(30),
+        nullable=False,
+        default="SYSTEM",
+        server_default="SYSTEM",
+        index=True,
+    )
+
     created_by_user_id = db.Column(
         db.BigInteger,
         db.ForeignKey("atm.users.id"),
