@@ -81,7 +81,7 @@ def create_app():
     from .routes.waste_routes import waste_bp
     from .routes.work_order_requests import work_order_request_bp
     from .routes.work_order_routes import work_order_bp
-    from.routes.article_code_routes import article_code_bp
+    from.routes.article_code_routes import article_codes_bp
 
     from app.routes.articles_routes import articles_bp
     from app.routes.audit_routes import audit_bp
@@ -164,7 +164,7 @@ def create_app():
     app.register_blueprint(tool_loans_bp)
     app.register_blueprint(request_routing_bp)
     app.register_blueprint(notification_bp)
-    app.register_blueprint(article_code_bp)
+    app.register_blueprint(article_codes_bp)
 
     # =========================================================
     # FILTROS JINJA
