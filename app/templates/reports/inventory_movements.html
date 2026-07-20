@@ -83,10 +83,27 @@
                 </select>
             </div>
 
-            <div class="col-12 col-md-1 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">
+            <div class="col-12 col-md-2 d-flex align-items-end">
+                <button
+                    type="submit"
+                    class="btn btn-primary w-100 me-2"
+                >
                     OK
                 </button>
+
+                <a
+                    href="{{ url_for(
+                        'reports.export_inventory_movements_report',
+                        date_from=date_from,
+                        date_to=date_to,
+                        article_code=article_code,
+                        warehouse_id=warehouse_id,
+                        movement_direction=movement_direction
+                    ) }}"
+                    class="btn btn-success w-100"
+                >
+                    Excel
+                </a>
             </div>
 
         </form>
