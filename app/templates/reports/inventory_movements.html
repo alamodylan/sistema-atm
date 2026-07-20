@@ -168,11 +168,28 @@
                                 </td>
 
                                 <td>
-                                    {{ movement.supplier_name_report or "-" }}
+                                    {% if movement.supplier_name_report %}
+                                        {{ movement.supplier_name_report }}
+
+                                    {% elif movement.notes and "Proveedor:" in movement.notes %}
+                                        {{ movement.notes.split("Proveedor:", 1)[1].split("|", 1)[0].strip() }}
+
+                                    {% else %}
+                                        -
+                                    {% endif %}
                                 </td>
 
                                 <td>
-                                    {{ movement.invoice_number_report or "-" }}
+                                    {% if movement.invoice_number_report %}
+                                        {{ movement.invoice_number_report }}
+
+                                    {% elif movement.reference_type == "FACTURA_COMPRA"
+                                        and movement.reference_number %}
+                                        {{ movement.reference_number }}
+
+                                    {% else %}
+                                        -
+                                    {% endif %}
                                 </td>
 
                                 <td>

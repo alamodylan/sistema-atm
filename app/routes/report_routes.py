@@ -19,6 +19,71 @@ from app.models.supplier import Supplier
 
 report_bp = Blueprint("reports", __name__)
 
+# =========================================================
+# HELPER - CONSULTA MOVIMIENTOS DE INVENTARIO
+# =========================================================
+def _build_inventory_movements_query(
+    date_from="",
+    date_to="",
+    article_code="",
+    warehouse_id="",
+    movement_direction="",
+):
+    query = (
+        InventoryLedger.query
+        .join(
+            Article,
+            Article.id == InventoryLedger.article_id,
+        )
+        .join(
+            Warehouse,
+            Warehouse.id == InventoryLedger.warehouse_id,
+        )
+    )
+
+    if date_from:
+        parsed_date_from = datetime.combine(
+            datetime.strptime(date_from, "%Y-%m-%d").date(),
+            time.min,
+        )
+
+        query = query.filter(
+            InventoryLedger.created_at >= parsed_date_from
+        )
+
+    if date_to:
+        parsed_date_to = datetime.combine(
+            datetime.strptime(date_to, "%Y-%m-%d").date(),
+            time.max,
+        )
+
+        query = query.filter(
+            InventoryLedger.created_at <= parsed_date_to
+        )
+
+    if article_code:
+        query = query.filter(
+            Article.code.ilike(f"%{article_code}%")
+        )
+
+    if warehouse_id:
+        query = query.filter(
+            InventoryLedger.warehouse_id == int(warehouse_id)
+        )
+
+    if movement_direction == "IN":
+        query = query.filter(
+            InventoryLedger.quantity_change > 0
+        )
+
+    elif movement_direction == "OUT":
+        query = query.filter(
+            InventoryLedger.quantity_change < 0
+        )
+
+    return query.order_by(
+        InventoryLedger.created_at.desc()
+    )
 
 # =========================================================
 # HOME REPORTES
@@ -47,10 +112,12 @@ def inventory_movements_report():
     page = request.args.get("page", 1, type=int)
 
     try:
-        query = (
-            InventoryLedger.query
-            .join(Article, Article.id == InventoryLedger.article_id)
-            .join(Warehouse, Warehouse.id == InventoryLedger.warehouse_id)
+        query = _build_inventory_movements_query(
+            date_from=date_from,
+            date_to=date_to,
+            article_code=article_code,
+            warehouse_id=warehouse_id,
+            movement_direction=movement_direction,
         )
 
         if date_from:
@@ -79,16 +146,11 @@ def inventory_movements_report():
         if movement_direction == "OUT":
             query = query.filter(InventoryLedger.quantity_change < 0)
 
-        pagination = (
-            query
-            .order_by(InventoryLedger.created_at.desc())
-            .paginate(
-                page=page,
-                per_page=30,
-                error_out=False,
-            )
+        pagination = query.paginate(
+            page=page,
+            per_page=30,
+            error_out=False,
         )
-
         movements = pagination.items
 
         work_order_ids = [
@@ -216,6 +278,439 @@ def inventory_movements_report():
             movement_direction=movement_direction,
         )
 
+# =========================================================
+# EXPORTAR MOVIMIENTOS DE INVENTARIO A EXCEL
+# =========================================================
+@report_bp.route("/inventory-movements/export", methods=["GET"])
+@login_required
+def export_inventory_movements_report():
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    date_from = (request.args.get("date_from") or "").strip()
+    date_to = (request.args.get("date_to") or "").strip()
+    article_code = (request.args.get("article_code") or "").strip()
+    warehouse_id = (request.args.get("warehouse_id") or "").strip()
+    movement_direction = (
+        request.args.get("movement_direction") or ""
+    ).strip()
+
+    try:
+        movements = (
+            _build_inventory_movements_query(
+                date_from=date_from,
+                date_to=date_to,
+                article_code=article_code,
+                warehouse_id=warehouse_id,
+                movement_direction=movement_direction,
+            )
+            .all()
+        )
+
+        # -------------------------------------------------
+        # OBTENER EQUIPOS DE ÓRDENES DE TRABAJO
+        # -------------------------------------------------
+        work_order_ids = {
+            movement.reference_id
+            for movement in movements
+            if movement.reference_id
+            and movement.reference_type == "WORK_ORDER"
+        }
+
+        work_orders_map = {}
+
+        if work_order_ids:
+            work_orders = (
+                WorkOrder.query
+                .filter(WorkOrder.id.in_(work_order_ids))
+                .all()
+            )
+
+            work_orders_map = {
+                work_order.id: work_order
+                for work_order in work_orders
+            }
+
+        # -------------------------------------------------
+        # OBTENER PROVEEDOR Y FACTURA DE ENTRADAS NORMALES
+        # -------------------------------------------------
+        inventory_entry_ids = {
+            movement.reference_id
+            for movement in movements
+            if movement.reference_id
+            and movement.reference_type == "INVENTORY_ENTRY"
+        }
+
+        inventory_entries_map = {}
+
+        if inventory_entry_ids:
+            inventory_entries = (
+                db.session.query(
+                    InventoryEntry.id.label("entry_id"),
+                    InventoryEntry.invoice_number.label(
+                        "invoice_number"
+                    ),
+                    func.coalesce(
+                        Supplier.commercial_name,
+                        Supplier.legal_name,
+                        Supplier.code,
+                        "-",
+                    ).label("supplier_name"),
+                )
+                .outerjoin(
+                    Supplier,
+                    Supplier.id == InventoryEntry.supplier_id,
+                )
+                .filter(
+                    InventoryEntry.id.in_(inventory_entry_ids)
+                )
+                .all()
+            )
+
+            inventory_entries_map = {
+                entry.entry_id: entry
+                for entry in inventory_entries
+            }
+
+        # -------------------------------------------------
+        # CREAR LIBRO EXCEL
+        # -------------------------------------------------
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Entradas y salidas"
+
+        # Título
+        worksheet.merge_cells("A1:M1")
+        worksheet["A1"] = "Reporte de movimientos de inventario"
+        worksheet["A1"].font = Font(
+            bold=True,
+            size=15,
+        )
+        worksheet["A1"].alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
+        worksheet.row_dimensions[1].height = 25
+
+        # Información de filtros
+        worksheet["A3"] = "Fecha de generación"
+        worksheet["B3"] = datetime.now().strftime(
+            "%d/%m/%Y %H:%M"
+        )
+
+        worksheet["A4"] = "Fecha inicial"
+        worksheet["B4"] = date_from or "Todas"
+
+        worksheet["A5"] = "Fecha final"
+        worksheet["B5"] = date_to or "Todas"
+
+        worksheet["D3"] = "Código artículo"
+        worksheet["E3"] = article_code or "Todos"
+
+        worksheet["D4"] = "Bodega"
+
+        warehouse_name = "Todas"
+
+        if warehouse_id:
+            warehouse = db.session.get(
+                Warehouse,
+                int(warehouse_id),
+            )
+
+            if warehouse:
+                warehouse_name = warehouse.name
+
+        worksheet["E4"] = warehouse_name
+
+        worksheet["D5"] = "Tipo"
+
+        movement_direction_name = {
+            "IN": "Solo entradas",
+            "OUT": "Solo salidas",
+        }.get(
+            movement_direction,
+            "Entradas y salidas",
+        )
+
+        worksheet["E5"] = movement_direction_name
+
+        for cell_reference in [
+            "A3",
+            "A4",
+            "A5",
+            "D3",
+            "D4",
+            "D5",
+        ]:
+            worksheet[cell_reference].font = Font(bold=True)
+
+        # Encabezados
+        header_row = 7
+
+        headers = [
+            "Fecha",
+            "Movimiento",
+            "Código",
+            "Artículo",
+            "Bodega",
+            "Proveedor",
+            "Factura",
+            "Equipo",
+            "Cantidad",
+            "Costo unitario",
+            "Costo total",
+            "Referencia",
+            "Usuario",
+        ]
+
+        for column_number, header in enumerate(
+            headers,
+            start=1,
+        ):
+            cell = worksheet.cell(
+                row=header_row,
+                column=column_number,
+                value=header,
+            )
+
+            cell.font = Font(
+                bold=True,
+                color="FFFFFF",
+            )
+
+            cell.fill = PatternFill(
+                fill_type="solid",
+                fgColor="1F4E78",
+            )
+
+            cell.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+            )
+
+        # -------------------------------------------------
+        # AGREGAR MOVIMIENTOS
+        # -------------------------------------------------
+        current_row = header_row + 1
+
+        for movement in movements:
+            supplier_name = "-"
+            invoice_number = "-"
+            equipment_code = "-"
+
+            # Entradas realizadas normalmente desde el sistema
+            if (
+                movement.reference_id
+                and movement.reference_type == "INVENTORY_ENTRY"
+            ):
+                inventory_entry = inventory_entries_map.get(
+                    movement.reference_id
+                )
+
+                if inventory_entry:
+                    supplier_name = (
+                        inventory_entry.supplier_name or "-"
+                    )
+
+                    invoice_number = (
+                        inventory_entry.invoice_number or "-"
+                    )
+
+            # Entradas importadas directamente desde factura
+            elif movement.reference_type == "FACTURA_COMPRA":
+                if movement.reference_number:
+                    invoice_number = movement.reference_number
+
+                notes = movement.notes or ""
+
+                if "Proveedor:" in notes:
+                    supplier_name = (
+                        notes
+                        .split("Proveedor:", 1)[1]
+                        .split("|", 1)[0]
+                        .strip()
+                    ) or "-"
+
+            # Salidas relacionadas con una OT
+            if (
+                movement.reference_id
+                and movement.reference_type == "WORK_ORDER"
+            ):
+                work_order = work_orders_map.get(
+                    movement.reference_id
+                )
+
+                if work_order:
+                    equipment_code = (
+                        work_order.equipment_code_snapshot or "-"
+                    )
+
+            reference = (
+                movement.reference_number
+                or movement.reference_type
+                or "-"
+            )
+
+            user_name = "-"
+
+            if movement.performed_by_user:
+                user_name = (
+                    movement.performed_by_user.full_name or "-"
+                )
+
+            quantity = float(
+                movement.quantity_change or 0
+            )
+
+            unit_cost = (
+                float(movement.unit_cost)
+                if movement.unit_cost is not None
+                else None
+            )
+
+            total_cost = (
+                float(movement.total_cost)
+                if movement.total_cost is not None
+                else None
+            )
+
+            worksheet.append([
+                (
+                    movement.created_at.strftime(
+                        "%d/%m/%Y %H:%M"
+                    )
+                    if movement.created_at
+                    else ""
+                ),
+                movement.movement_type or "",
+                (
+                    movement.article.code
+                    if movement.article
+                    else ""
+                ),
+                (
+                    movement.article.name
+                    if movement.article
+                    else ""
+                ),
+                (
+                    movement.warehouse.name
+                    if movement.warehouse
+                    else ""
+                ),
+                supplier_name,
+                invoice_number,
+                equipment_code,
+                quantity,
+                unit_cost,
+                total_cost,
+                reference,
+                user_name,
+            ])
+
+            worksheet.cell(
+                row=current_row,
+                column=9,
+            ).number_format = "#,##0.00"
+
+            worksheet.cell(
+                row=current_row,
+                column=10,
+            ).number_format = '₡#,##0.00'
+
+            worksheet.cell(
+                row=current_row,
+                column=11,
+            ).number_format = '₡#,##0.00'
+
+            current_row += 1
+
+        # -------------------------------------------------
+        # CONFIGURACIÓN VISUAL
+        # -------------------------------------------------
+        worksheet.freeze_panes = "A8"
+        worksheet.auto_filter.ref = (
+            f"A{header_row}:M{max(header_row, current_row - 1)}"
+        )
+
+        column_widths = {
+            "A": 19,
+            "B": 22,
+            "C": 15,
+            "D": 42,
+            "E": 25,
+            "F": 30,
+            "G": 18,
+            "H": 20,
+            "I": 13,
+            "J": 17,
+            "K": 17,
+            "L": 22,
+            "M": 25,
+        }
+
+        for column_letter, width in column_widths.items():
+            worksheet.column_dimensions[
+                column_letter
+            ].width = width
+
+        for row in worksheet.iter_rows(
+            min_row=header_row + 1,
+            max_row=max(header_row + 1, current_row - 1),
+            min_col=1,
+            max_col=len(headers),
+        ):
+            for cell in row:
+                cell.alignment = Alignment(
+                    vertical="top",
+                    wrap_text=True,
+                )
+
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+
+        filename_date = datetime.now().strftime(
+            "%Y%m%d_%H%M"
+        )
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=(
+                f"movimientos_inventario_{filename_date}.xlsx"
+            ),
+            mimetype=(
+                "application/vnd.openxmlformats-"
+                "officedocument.spreadsheetml.sheet"
+            ),
+        )
+
+    except ValueError:
+        db.session.rollback()
+
+        flash(
+            "Los filtros utilizados para exportar no son válidos.",
+            "warning",
+        )
+
+        return inventory_movements_report()
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            f"[EXPORT INVENTORY MOVEMENTS ERROR] {exc}"
+        )
+
+        flash(
+            "Error al exportar los movimientos de inventario.",
+            "danger",
+        )
+
+        return inventory_movements_report()
 
 # =========================================================
 # REPORTE DE ÓRDENES DE TRABAJO
