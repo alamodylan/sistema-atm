@@ -210,6 +210,7 @@ def inventory_movements_report():
             movement.supplier_name_report = None
             movement.invoice_number_report = None
 
+            # Salidas asociadas a órdenes de trabajo
             if (
                 movement.reference_id
                 and movement.reference_type == "WORK_ORDER"
@@ -218,9 +219,10 @@ def inventory_movements_report():
 
                 if work_order:
                     movement.equipment_code_report = (
-                        work_order.equipment_code_snapshot or "-"
+                        work_order.equipment_code_snapshot or None
                     )
 
+            # Entradas creadas normalmente desde el sistema
             if (
                 movement.reference_id
                 and movement.reference_type == "INVENTORY_ENTRY"
@@ -229,12 +231,28 @@ def inventory_movements_report():
 
                 if entry:
                     movement.invoice_number_report = (
-                        entry.invoice_number or "-"
+                        entry.invoice_number or None
                     )
 
                     movement.supplier_name_report = (
-                        entry.supplier_name or "-"
+                        entry.supplier_name or None
                     )
+
+            # Entradas importadas mediante SQL
+            if movement.reference_type == "FACTURA_COMPRA":
+                movement.invoice_number_report = (
+                    movement.reference_number or None
+                )
+
+                notes = movement.notes or ""
+
+                if "Proveedor:" in notes:
+                    movement.supplier_name_report = (
+                        notes
+                        .split("Proveedor:", 1)[1]
+                        .split("|", 1)[0]
+                        .strip()
+                    ) or None
 
         warehouses = (
             Warehouse.query
