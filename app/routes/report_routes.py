@@ -206,9 +206,9 @@ def inventory_movements_report():
             }
 
         for movement in movements:
-            movement.equipment_code_report = "-"
-            movement.supplier_name_report = "-"
-            movement.invoice_number_report = "-"
+            movement.equipment_code_report = None
+            movement.supplier_name_report = None
+            movement.invoice_number_report = None
 
             if (
                 movement.reference_id
