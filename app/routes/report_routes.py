@@ -15,6 +15,8 @@ from flask import send_file
 from sqlalchemy.orm import selectinload
 from app.models.inventory_entry import InventoryEntry
 from app.models.supplier import Supplier
+from sqlalchemy.orm import selectinload
+from datetime import timedelta
 
 
 report_bp = Blueprint("reports", __name__)
@@ -39,6 +41,11 @@ def _build_inventory_movements_query(
             Warehouse,
             Warehouse.id == InventoryLedger.warehouse_id,
         )
+        .options(
+            selectinload(InventoryLedger.article),
+            selectinload(InventoryLedger.warehouse),
+            selectinload(InventoryLedger.performed_by_user),
+        )
     )
 
     if date_from:
@@ -46,7 +53,6 @@ def _build_inventory_movements_query(
             datetime.strptime(date_from, "%Y-%m-%d").date(),
             time.min,
         )
-
         query = query.filter(
             InventoryLedger.created_at >= parsed_date_from
         )
@@ -56,7 +62,6 @@ def _build_inventory_movements_query(
             datetime.strptime(date_to, "%Y-%m-%d").date(),
             time.max,
         )
-
         query = query.filter(
             InventoryLedger.created_at <= parsed_date_to
         )
@@ -82,7 +87,8 @@ def _build_inventory_movements_query(
         )
 
     return query.order_by(
-        InventoryLedger.created_at.desc()
+        InventoryLedger.created_at.desc(),
+        InventoryLedger.id.desc(),
     )
 
 # =========================================================
@@ -148,7 +154,7 @@ def inventory_movements_report():
 
         pagination = query.paginate(
             page=page,
-            per_page=30,
+            per_page=20,
             error_out=False,
         )
         movements = pagination.items
@@ -313,6 +319,11 @@ def export_inventory_movements_report():
     movement_direction = (
         request.args.get("movement_direction") or ""
     ).strip()
+
+    if not date_from and not date_to:
+        today = datetime.now().date()
+        date_from = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+        date_to = today.strftime("%Y-%m-%d")
 
     try:
         movements = (
