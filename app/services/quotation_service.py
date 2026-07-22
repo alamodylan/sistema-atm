@@ -111,10 +111,18 @@ def _validate_quotation_line(line: QuotationLinePayload) -> None:
     if line.payment_term_months is not None and line.payment_term_months < 0:
         raise QuotationServiceError("El plazo de pago no puede ser negativo.")
 
-def list_quotation_request_groups(search: str | None = None) -> list[dict]:
+def list_quotation_request_groups(
+    search: str | None = None,
+) -> list[dict]:
     search = (search or "").strip()
 
-    result = []
+    result: list[dict] = []
+
+    allowed_request_statuses = {
+        "EN_REVISION_PROVEEDURIA",
+        "PARCIALMENTE_COTIZADA",
+        "COTIZADA",
+    }
 
     # =====================================================
     # COTIZACIONES DESDE SOLICITUD
@@ -123,28 +131,54 @@ def list_quotation_request_groups(search: str | None = None) -> list[dict]:
         db.session.query(
             PurchaseRequest.id.label("purchase_request_id"),
             PurchaseRequest.number.label("purchase_request_number"),
-            func.count(PurchaseRequestLine.id).label("total_lines"),
-            func.sum(
-                db.case(
-                    (PurchaseRequestLine.line_status == "COTIZADA", 1),
-                    else_=0,
+
+            func.count(
+                func.distinct(PurchaseRequestLine.id)
+            ).label("total_lines"),
+
+            func.count(
+                func.distinct(
+                    db.case(
+                        (
+                            PurchaseRequestLine.line_status == "COTIZADA",
+                            PurchaseRequestLine.id,
+                        ),
+                        else_=None,
+                    )
                 )
             ).label("quoted_lines"),
-            func.sum(
-                db.case(
-                    (PurchaseRequestLine.line_status != "COTIZADA", 1),
-                    else_=0,
+
+            func.count(
+                func.distinct(
+                    db.case(
+                        (
+                            PurchaseRequestLine.line_status != "COTIZADA",
+                            PurchaseRequestLine.id,
+                        ),
+                        else_=None,
+                    )
                 )
             ).label("pending_lines"),
-            func.max(QuotationLine.quote_date).label("last_quote_date"),
+
+            func.max(
+                QuotationLine.quote_date
+            ).label("last_quote_date"),
         )
         .join(
             PurchaseRequestLine,
-            PurchaseRequestLine.purchase_request_id == PurchaseRequest.id,
+            PurchaseRequestLine.purchase_request_id
+            == PurchaseRequest.id,
         )
         .outerjoin(
             QuotationLine,
-            QuotationLine.purchase_request_line_id == PurchaseRequestLine.id,
+            QuotationLine.purchase_request_line_id
+            == PurchaseRequestLine.id,
+        )
+        .filter(
+            PurchaseRequest.status.in_(
+                allowed_request_statuses
+            ),
+            PurchaseRequestLine.line_status != "CANCELADA",
         )
         .group_by(
             PurchaseRequest.id,
@@ -154,6 +188,7 @@ def list_quotation_request_groups(search: str | None = None) -> list[dict]:
 
     if search:
         like_value = f"%{search}%"
+
         query = query.filter(
             PurchaseRequest.number.ilike(like_value)
         )
@@ -161,20 +196,24 @@ def list_quotation_request_groups(search: str | None = None) -> list[dict]:
     rows = query.all()
 
     for row in rows:
-        result.append({
-            "group_type": "REQUEST",
-            "purchase_request_id": row.purchase_request_id,
-            "purchase_request_number": row.purchase_request_number,
-            "item_name": None,
-            "item_code": None,
-            "article_id": None,
-            "pending_article_id": None,
-            "total_lines": int(row.total_lines or 0),
-            "quoted_lines": int(row.quoted_lines or 0),
-            "pending_lines": int(row.pending_lines or 0),
-            "total_quotes": None,
-            "last_quote_date": row.last_quote_date,
-        })
+        result.append(
+            {
+                "group_type": "REQUEST",
+                "purchase_request_id": row.purchase_request_id,
+                "purchase_request_number": (
+                    row.purchase_request_number
+                ),
+                "item_name": None,
+                "item_code": None,
+                "article_id": None,
+                "pending_article_id": None,
+                "total_lines": int(row.total_lines or 0),
+                "quoted_lines": int(row.quoted_lines or 0),
+                "pending_lines": int(row.pending_lines or 0),
+                "total_quotes": None,
+                "last_quote_date": row.last_quote_date,
+            }
+        )
 
     # =====================================================
     # COTIZACIONES LIBRES - ARTÍCULO EXISTENTE
@@ -184,10 +223,17 @@ def list_quotation_request_groups(search: str | None = None) -> list[dict]:
             QuotationLine.article_id,
             Article.code.label("item_code"),
             Article.name.label("item_name"),
-            func.count(QuotationLine.id).label("total_quotes"),
-            func.max(QuotationLine.quote_date).label("last_quote_date"),
+            func.count(
+                QuotationLine.id
+            ).label("total_quotes"),
+            func.max(
+                QuotationLine.quote_date
+            ).label("last_quote_date"),
         )
-        .join(Article, Article.id == QuotationLine.article_id)
+        .join(
+            Article,
+            Article.id == QuotationLine.article_id,
+        )
         .filter(
             QuotationLine.purchase_request_line_id.is_(None),
             QuotationLine.article_id.isnot(None),
@@ -201,6 +247,7 @@ def list_quotation_request_groups(search: str | None = None) -> list[dict]:
 
     if search:
         like_value = f"%{search}%"
+
         free_article_rows = free_article_rows.filter(
             db.or_(
                 Article.code.ilike(like_value),
@@ -209,20 +256,22 @@ def list_quotation_request_groups(search: str | None = None) -> list[dict]:
         )
 
     for row in free_article_rows.all():
-        result.append({
-            "group_type": "FREE_ARTICLE",
-            "purchase_request_id": None,
-            "purchase_request_number": "Cotización libre",
-            "item_name": row.item_name,
-            "item_code": row.item_code,
-            "article_id": row.article_id,
-            "pending_article_id": None,
-            "total_lines": 1,
-            "quoted_lines": int(row.total_quotes or 0),
-            "pending_lines": 0,
-            "total_quotes": int(row.total_quotes or 0),
-            "last_quote_date": row.last_quote_date,
-        })
+        result.append(
+            {
+                "group_type": "FREE_ARTICLE",
+                "purchase_request_id": None,
+                "purchase_request_number": "Cotización libre",
+                "item_name": row.item_name,
+                "item_code": row.item_code,
+                "article_id": row.article_id,
+                "pending_article_id": None,
+                "total_lines": 1,
+                "quoted_lines": int(row.total_quotes or 0),
+                "pending_lines": 0,
+                "total_quotes": int(row.total_quotes or 0),
+                "last_quote_date": row.last_quote_date,
+            }
+        )
 
     # =====================================================
     # COTIZACIONES LIBRES - ARTÍCULO PENDIENTE
@@ -232,10 +281,18 @@ def list_quotation_request_groups(search: str | None = None) -> list[dict]:
             QuotationLine.pending_article_id,
             PendingArticle.provisional_code.label("item_code"),
             PendingArticle.provisional_name.label("item_name"),
-            func.count(QuotationLine.id).label("total_quotes"),
-            func.max(QuotationLine.quote_date).label("last_quote_date"),
+            func.count(
+                QuotationLine.id
+            ).label("total_quotes"),
+            func.max(
+                QuotationLine.quote_date
+            ).label("last_quote_date"),
         )
-        .join(PendingArticle, PendingArticle.id == QuotationLine.pending_article_id)
+        .join(
+            PendingArticle,
+            PendingArticle.id
+            == QuotationLine.pending_article_id,
+        )
         .filter(
             QuotationLine.purchase_request_line_id.is_(None),
             QuotationLine.pending_article_id.isnot(None),
@@ -249,35 +306,45 @@ def list_quotation_request_groups(search: str | None = None) -> list[dict]:
 
     if search:
         like_value = f"%{search}%"
+
         free_pending_rows = free_pending_rows.filter(
             db.or_(
-                PendingArticle.provisional_code.ilike(like_value),
-                PendingArticle.provisional_name.ilike(like_value),
+                PendingArticle.provisional_code.ilike(
+                    like_value
+                ),
+                PendingArticle.provisional_name.ilike(
+                    like_value
+                ),
             )
         )
 
     for row in free_pending_rows.all():
-        result.append({
-            "group_type": "FREE_PENDING",
-            "purchase_request_id": None,
-            "purchase_request_number": "Cotización libre",
-            "item_name": row.item_name,
-            "item_code": row.item_code,
-            "article_id": None,
-            "pending_article_id": row.pending_article_id,
-            "total_lines": 1,
-            "quoted_lines": int(row.total_quotes or 0),
-            "pending_lines": 0,
-            "total_quotes": int(row.total_quotes or 0),
-            "last_quote_date": row.last_quote_date,
-        })
+        result.append(
+            {
+                "group_type": "FREE_PENDING",
+                "purchase_request_id": None,
+                "purchase_request_number": "Cotización libre",
+                "item_name": row.item_name,
+                "item_code": row.item_code,
+                "article_id": None,
+                "pending_article_id": row.pending_article_id,
+                "total_lines": 1,
+                "quoted_lines": int(row.total_quotes or 0),
+                "pending_lines": 0,
+                "total_quotes": int(row.total_quotes or 0),
+                "last_quote_date": row.last_quote_date,
+            }
+        )
 
     result.sort(
-        key=lambda item: item["last_quote_date"] or datetime.min.date(),
+        key=lambda item: (
+            item["last_quote_date"] or datetime.min.date()
+        ),
         reverse=True,
     )
 
     return result
+
 def _ensure_article_supplier(
     *,
     article_id: int | None,
@@ -414,14 +481,68 @@ def _update_purchase_request_status(
 def _get_purchase_request_line_or_error(
     purchase_request_line_id: int,
 ) -> PurchaseRequestLine:
-    request_line = PurchaseRequestLine.query.get(purchase_request_line_id)
+    request_line = PurchaseRequestLine.query.get(
+        purchase_request_line_id
+    )
 
     if not request_line:
-        raise QuotationServiceError("La línea de solicitud indicada no existe.")
-
-    if request_line.line_status in {"CONVERTIDA_A_OC", "RECIBIDA", "CANCELADA"}:
         raise QuotationServiceError(
-            "Esta línea de solicitud ya no puede cotizarse porque está convertida, recibida o cancelada."
+            "La línea de solicitud indicada no existe."
+        )
+
+    if request_line.line_status in {
+        "CONVERTIDA_A_OC",
+        "RECIBIDA",
+        "CANCELADA",
+    }:
+        raise QuotationServiceError(
+            "Esta línea de solicitud ya no puede cotizarse "
+            "porque está convertida, recibida o cancelada."
+        )
+
+    purchase_request = request_line.purchase_request
+
+    if not purchase_request:
+        raise QuotationServiceError(
+            "La línea no está vinculada a una solicitud "
+            "de compra válida."
+        )
+
+    allowed_request_statuses = {
+        "EN_REVISION_PROVEEDURIA",
+        "PARCIALMENTE_COTIZADA",
+        "COTIZADA",
+    }
+
+    if purchase_request.status not in allowed_request_statuses:
+        if purchase_request.status == "ENVIADA":
+            raise QuotationServiceError(
+                "Esta solicitud todavía está pendiente de "
+                "aprobación por Jefatura y no puede cotizarse."
+            )
+
+        if purchase_request.status == "BORRADOR":
+            raise QuotationServiceError(
+                "Esta solicitud todavía está en borrador "
+                "y no puede cotizarse."
+            )
+
+        if purchase_request.status == "CANCELADA":
+            raise QuotationServiceError(
+                "Esta solicitud fue cancelada y no puede cotizarse."
+            )
+
+        if purchase_request.status in {
+            "CONVERTIDA_A_OC",
+            "CERRADA",
+        }:
+            raise QuotationServiceError(
+                "Esta solicitud ya completó su proceso "
+                "y no puede recibir nuevas cotizaciones."
+            )
+
+        raise QuotationServiceError(
+            "El estado actual de la solicitud no permite cotizar."
         )
 
     return request_line
@@ -505,8 +626,6 @@ def create_single_line_quotation(
         raise QuotationServiceError(
             "La línea de solicitud debe estar relacionada a un artículo normal o pendiente, pero no ambos."
         )
-
-    supplier = Supplier.query.get(supplier_id)
 
     if new_supplier_name:
         supplier = create_minimal_supplier_for_quotation(
@@ -723,105 +842,157 @@ def get_article_supplier_comparison(
 ) -> list[dict]:
     if bool(article_id) == bool(pending_article_id):
         raise QuotationServiceError(
-            "Debe indicar un artículo normal o un artículo pendiente para el comparativo."
+            "Debe indicar un artículo normal o un "
+            "artículo pendiente para el comparativo."
         )
 
     query = (
         db.session.query(
-            QuotationLine.supplier_id,
+            QuotationLine,
             Supplier.commercial_name,
             Supplier.legal_name,
-            func.max(QuotationLine.quote_date).label("last_quote_date"),
-            func.max(QuotationLine.created_at).label("last_created_at"),
         )
-        .join(Supplier, Supplier.id == QuotationLine.supplier_id)
+        .join(
+            Supplier,
+            Supplier.id == QuotationLine.supplier_id,
+        )
+        .filter(
+            QuotationLine.status != "DESCARTADA",
+        )
     )
 
-    if article_id:
-        query = query.filter(QuotationLine.article_id == article_id)
+    if article_id is not None:
+        query = query.filter(
+            QuotationLine.article_id == article_id
+        )
     else:
-        query = query.filter(QuotationLine.pending_article_id == pending_article_id)
+        query = query.filter(
+            QuotationLine.pending_article_id
+            == pending_article_id
+        )
 
     rows = (
         query
-        .filter(QuotationLine.status != "DESCARTADA")
-        .group_by(
-            QuotationLine.supplier_id,
-            Supplier.commercial_name,
-            Supplier.legal_name,
+        .order_by(
+            QuotationLine.supplier_id.asc(),
+            QuotationLine.quote_date.desc(),
+            QuotationLine.created_at.desc(),
+            QuotationLine.id.desc(),
         )
         .all()
     )
 
-    comparison = []
+    comparison: list[dict] = []
+    processed_supplier_ids: set[int] = set()
 
-    for row in rows:
-        last_line = get_last_price_for_supplier(
-            supplier_id=row.supplier_id,
-            article_id=article_id,
-            pending_article_id=pending_article_id,
-        )
+    for quotation_line, commercial_name, legal_name in rows:
+        supplier_id = quotation_line.supplier_id
 
-        if not last_line:
+        # Solo toma la cotización más reciente de cada proveedor.
+        if supplier_id in processed_supplier_ids:
             continue
 
-        unit_price = Decimal(str(last_line.unit_price or 0))
-        tax_pct = Decimal(str(last_line.tax_pct or 0))
-        discount_pct = Decimal(str(last_line.discount_pct or 0))
+        processed_supplier_ids.add(supplier_id)
 
-        tax_factor = Decimal("1") + (tax_pct / Decimal("100"))
+        unit_price = Decimal(
+            str(quotation_line.unit_price or 0)
+        )
 
-        if last_line.tax_included:
-            subtotal = unit_price / tax_factor if tax_pct > 0 else unit_price
+        tax_pct = Decimal(
+            str(quotation_line.tax_pct or 0)
+        )
+
+        discount_pct = Decimal(
+            str(quotation_line.discount_pct or 0)
+        )
+
+        tax_factor = (
+            Decimal("1")
+            + (tax_pct / Decimal("100"))
+        )
+
+        if quotation_line.tax_included:
+            subtotal = (
+                unit_price / tax_factor
+                if tax_pct > 0
+                else unit_price
+            )
         else:
             subtotal = unit_price
 
-        discount_amount = subtotal * (discount_pct / Decimal("100"))
+        discount_amount = (
+            subtotal
+            * (discount_pct / Decimal("100"))
+        )
+
         taxable_base = subtotal - discount_amount
-        tax_amount = taxable_base * (tax_pct / Decimal("100"))
+
+        tax_amount = (
+            taxable_base
+            * (tax_pct / Decimal("100"))
+        )
+
         total_amount = taxable_base + tax_amount
 
         comparison.append(
             {
-                "supplier_id": row.supplier_id,
-                "supplier_name": row.commercial_name or row.legal_name or "Proveedor",
-
+                "supplier_id": supplier_id,
+                "supplier_name": (
+                    commercial_name
+                    or legal_name
+                    or "Proveedor"
+                ),
                 "last_price": unit_price,
                 "subtotal": subtotal,
-
                 "discount_pct": discount_pct,
                 "discount_amount": discount_amount,
-
                 "tax_pct": tax_pct,
                 "tax_amount": tax_amount,
-                "tax_included": bool(last_line.tax_included),
-
+                "tax_included": bool(
+                    quotation_line.tax_included
+                ),
                 "taxable_base": taxable_base,
                 "total_amount": total_amount,
-
-                "last_quote_date": last_line.quote_date,
-                "currency_code": last_line.currency_code,
-
-                "payment_type": last_line.payment_type,
-                "payment_term_months": last_line.payment_term_months,
-                "origin_type": last_line.origin_type,
-
-                "brand_model": last_line.brand_model,
-                "lead_time_days": last_line.lead_time_days,
-                "notes": last_line.notes,
-
-                "quotation_line_id": last_line.id,
+                "last_quote_date": (
+                    quotation_line.quote_date
+                ),
+                "currency_code": (
+                    quotation_line.currency_code
+                ),
+                "payment_type": (
+                    quotation_line.payment_type
+                ),
+                "payment_term_months": (
+                    quotation_line.payment_term_months
+                ),
+                "origin_type": (
+                    quotation_line.origin_type
+                ),
+                "brand_model": (
+                    quotation_line.brand_model
+                ),
+                "lead_time_days": (
+                    quotation_line.lead_time_days
+                ),
+                "notes": quotation_line.notes,
+                "quotation_line_id": quotation_line.id,
                 "rank": None,
                 "is_best_price": False,
             }
         )
 
-    comparison = sorted(
-        comparison,
-        key=lambda item: item["total_amount"] or item["subtotal"] or 0,
+    comparison.sort(
+        key=lambda item: (
+            item["total_amount"]
+            or item["subtotal"]
+            or Decimal("0")
+        )
     )
 
-    for index, item in enumerate(comparison, start=1):
+    for index, item in enumerate(
+        comparison,
+        start=1,
+    ):
         item["rank"] = index
         item["is_best_price"] = index == 1
 
@@ -843,29 +1014,25 @@ def get_comparison_for_purchase_request_line(
     )
 
 
-def get_registered_suppliers_for_article(article_id: int) -> list[Supplier]:
-    supplier_ids = [
-        row.supplier_id
-        for row in (
-            ArticleSupplier.query
-            .filter(
-                ArticleSupplier.article_id == article_id,
-                ArticleSupplier.is_active.is_(True),
-            )
-            .all()
-        )
-    ]
-
-    if not supplier_ids:
-        return []
-
+def get_registered_suppliers_for_article(
+    article_id: int,
+) -> list[Supplier]:
     return (
         Supplier.query
+        .join(
+            ArticleSupplier,
+            ArticleSupplier.supplier_id
+            == Supplier.id,
+        )
         .filter(
-            Supplier.id.in_(supplier_ids),
+            ArticleSupplier.article_id == article_id,
+            ArticleSupplier.is_active.is_(True),
             Supplier.is_active.is_(True),
         )
-        .order_by(Supplier.commercial_name.asc(), Supplier.legal_name.asc())
+        .order_by(
+            Supplier.commercial_name.asc(),
+            Supplier.legal_name.asc(),
+        )
         .all()
     )
 
@@ -875,35 +1042,37 @@ def get_available_suppliers_for_article(
     article_id: int,
     exclude_supplier_ids: list[int] | None = None,
 ) -> list[Supplier]:
-    exclude_supplier_ids = exclude_supplier_ids or []
+    exclude_supplier_ids = (
+        exclude_supplier_ids or []
+    )
 
-    query = Supplier.query.filter(
-        Supplier.is_active.is_(True),
+    query = (
+        Supplier.query
+        .join(
+            ArticleSupplier,
+            ArticleSupplier.supplier_id
+            == Supplier.id,
+        )
+        .filter(
+            ArticleSupplier.article_id == article_id,
+            ArticleSupplier.is_active.is_(True),
+            Supplier.is_active.is_(True),
+        )
     )
 
     if exclude_supplier_ids:
-        query = query.filter(Supplier.id.notin_(exclude_supplier_ids))
-
-    registered_supplier_ids = [
-        row.supplier_id
-        for row in (
-            ArticleSupplier.query
-            .filter(
-                ArticleSupplier.article_id == article_id,
-                ArticleSupplier.is_active.is_(True),
+        query = query.filter(
+            Supplier.id.notin_(
+                exclude_supplier_ids
             )
-            .all()
         )
-    ]
-
-    if registered_supplier_ids:
-        query = query.filter(Supplier.id.in_(registered_supplier_ids))
-    else:
-        return []
 
     return (
         query
-        .order_by(Supplier.commercial_name.asc(), Supplier.legal_name.asc())
+        .order_by(
+            Supplier.commercial_name.asc(),
+            Supplier.legal_name.asc(),
+        )
         .all()
     )
 
@@ -944,41 +1113,241 @@ def list_quotation_batches(search: str | None = None) -> list[QuotationBatch]:
         .all()
     )
 
-def list_quotation_line_groups(search: str | None = None) -> list[dict]:
+def _get_best_quote_map_for_request_lines(
+    request_lines: list[PurchaseRequestLine],
+) -> dict[tuple[str, int], dict]:
+    """
+    Obtiene la mejor cotización para todos los artículos de una lista
+    de solicitudes utilizando una sola consulta SQL.
+
+    Para cada artículo y proveedor toma únicamente la cotización más
+    reciente, calcula su total real y conserva la opción de menor costo.
+    """
+
+    article_ids = {
+        line.article_id
+        for line in request_lines
+        if getattr(line, "article_id", None) is not None
+    }
+
+    pending_article_ids = {
+        line.pending_article_id
+        for line in request_lines
+        if getattr(line, "pending_article_id", None) is not None
+    }
+
+    if not article_ids and not pending_article_ids:
+        return {}
+
+    filters = []
+
+    if article_ids:
+        filters.append(
+            QuotationLine.article_id.in_(article_ids)
+        )
+
+    if pending_article_ids:
+        filters.append(
+            QuotationLine.pending_article_id.in_(
+                pending_article_ids
+            )
+        )
+
+    rows = (
+        db.session.query(
+            QuotationLine,
+            Supplier.commercial_name,
+            Supplier.legal_name,
+        )
+        .join(
+            Supplier,
+            Supplier.id == QuotationLine.supplier_id,
+        )
+        .filter(
+            QuotationLine.status != "DESCARTADA",
+            db.or_(*filters),
+        )
+        .order_by(
+            QuotationLine.article_id.asc(),
+            QuotationLine.pending_article_id.asc(),
+            QuotationLine.supplier_id.asc(),
+            QuotationLine.quote_date.desc(),
+            QuotationLine.created_at.desc(),
+            QuotationLine.id.desc(),
+        )
+        .all()
+    )
+
+    processed_supplier_items: set[tuple[str, int, int]] = set()
+    best_quote_map: dict[tuple[str, int], dict] = {}
+
+    for quotation_line, commercial_name, legal_name in rows:
+        if quotation_line.article_id is not None:
+            item_key = (
+                "ARTICLE",
+                quotation_line.article_id,
+            )
+        elif quotation_line.pending_article_id is not None:
+            item_key = (
+                "PENDING",
+                quotation_line.pending_article_id,
+            )
+        else:
+            continue
+
+        supplier_item_key = (
+            item_key[0],
+            item_key[1],
+            quotation_line.supplier_id,
+        )
+
+        # La primera fila es la más reciente debido al ORDER BY.
+        if supplier_item_key in processed_supplier_items:
+            continue
+
+        processed_supplier_items.add(
+            supplier_item_key
+        )
+
+        unit_price = Decimal(
+            str(quotation_line.unit_price or 0)
+        )
+
+        tax_pct = Decimal(
+            str(quotation_line.tax_pct or 0)
+        )
+
+        discount_pct = Decimal(
+            str(quotation_line.discount_pct or 0)
+        )
+
+        tax_factor = (
+            Decimal("1")
+            + (tax_pct / Decimal("100"))
+        )
+
+        if quotation_line.tax_included:
+            subtotal = (
+                unit_price / tax_factor
+                if tax_pct > 0
+                else unit_price
+            )
+        else:
+            subtotal = unit_price
+
+        discount_amount = (
+            subtotal
+            * (discount_pct / Decimal("100"))
+        )
+
+        taxable_base = subtotal - discount_amount
+
+        tax_amount = (
+            taxable_base
+            * (tax_pct / Decimal("100"))
+        )
+
+        total_amount = taxable_base + tax_amount
+
+        current_best = best_quote_map.get(item_key)
+
+        if (
+            current_best is None
+            or total_amount < current_best["total_amount"]
+        ):
+            best_quote_map[item_key] = {
+                "supplier_id": quotation_line.supplier_id,
+                "supplier_name": (
+                    commercial_name
+                    or legal_name
+                    or "Proveedor"
+                ),
+                "last_price": unit_price,
+                "total_amount": total_amount,
+                "currency_code": (
+                    quotation_line.currency_code or "CRC"
+                ),
+                "quotation_line_id": quotation_line.id,
+                "last_quote_date": quotation_line.quote_date,
+            }
+
+    return best_quote_map
+
+def list_quotation_line_groups(
+    search: str | None = None,
+) -> list[dict]:
     search = (search or "").strip()
 
     query = (
         db.session.query(
-            PurchaseRequestLine.id.label("purchase_request_line_id"),
-            PurchaseRequestLine.line_status.label("line_status"),
-            PurchaseRequestLine.quantity_requested.label("quantity_requested"),
-            PurchaseRequest.number.label("purchase_request_number"),
-            PurchaseRequest.id.label("purchase_request_id"),
-            func.count(QuotationLine.id).label("total_quotes"),
+            PurchaseRequestLine.id.label(
+                "purchase_request_line_id"
+            ),
+            PurchaseRequestLine.article_id.label(
+                "article_id"
+            ),
+            PurchaseRequestLine.pending_article_id.label(
+                "pending_article_id"
+            ),
+            PurchaseRequestLine.item_code.label(
+                "item_code"
+            ),
+            PurchaseRequestLine.item_name.label(
+                "item_name"
+            ),
+            PurchaseRequestLine.line_status.label(
+                "line_status"
+            ),
+            PurchaseRequestLine.quantity_requested.label(
+                "quantity_requested"
+            ),
+            PurchaseRequest.number.label(
+                "purchase_request_number"
+            ),
+            PurchaseRequest.id.label(
+                "purchase_request_id"
+            ),
+            func.count(
+                QuotationLine.id
+            ).label("total_quotes"),
             func.sum(
                 db.case(
-                    (QuotationLine.status == "BORRADOR", 1),
+                    (
+                        QuotationLine.status == "BORRADOR",
+                        1,
+                    ),
                     else_=0,
                 )
             ).label("draft_quotes"),
             func.sum(
                 db.case(
-                    (QuotationLine.status == "COTIZADA", 1),
+                    (
+                        QuotationLine.status == "COTIZADA",
+                        1,
+                    ),
                     else_=0,
                 )
             ).label("confirmed_quotes"),
-            func.max(QuotationLine.quote_date).label("last_quote_date"),
+            func.max(
+                QuotationLine.quote_date
+            ).label("last_quote_date"),
         )
         .join(
             QuotationLine,
-            QuotationLine.purchase_request_line_id == PurchaseRequestLine.id,
+            QuotationLine.purchase_request_line_id
+            == PurchaseRequestLine.id,
         )
         .join(
             PurchaseRequest,
-            PurchaseRequest.id == PurchaseRequestLine.purchase_request_id,
+            PurchaseRequest.id
+            == PurchaseRequestLine.purchase_request_id,
         )
         .group_by(
             PurchaseRequestLine.id,
+            PurchaseRequestLine.article_id,
+            PurchaseRequestLine.pending_article_id,
+            PurchaseRequestLine.item_code,
+            PurchaseRequestLine.item_name,
             PurchaseRequestLine.line_status,
             PurchaseRequestLine.quantity_requested,
             PurchaseRequest.number,
@@ -988,53 +1357,120 @@ def list_quotation_line_groups(search: str | None = None) -> list[dict]:
 
     if search:
         like_value = f"%{search}%"
+
         query = query.filter(
             db.or_(
                 PurchaseRequest.number.ilike(like_value),
-                QuotationLine.currency_code.ilike(like_value),
+                PurchaseRequestLine.item_code.ilike(
+                    like_value
+                ),
+                PurchaseRequestLine.item_name.ilike(
+                    like_value
+                ),
+                QuotationLine.currency_code.ilike(
+                    like_value
+                ),
             )
         )
 
     rows = (
         query
         .order_by(
-            func.max(QuotationLine.quote_date).desc(),
+            func.max(
+                QuotationLine.quote_date
+            ).desc(),
             PurchaseRequest.id.desc(),
             PurchaseRequestLine.id.desc(),
         )
         .all()
     )
 
+    if not rows:
+        return []
+
+    # Se crean objetos temporales sencillos para enviar todos los artículos
+    # al cargador masivo sin volver a consultar PurchaseRequestLine.
+    request_lines_for_comparison = []
+
+    for row in rows:
+        request_lines_for_comparison.append(
+            type(
+                "QuotationRequestLineData",
+                (),
+                {
+                    "article_id": row.article_id,
+                    "pending_article_id": row.pending_article_id,
+                },
+            )()
+        )
+
+    best_quote_map = _get_best_quote_map_for_request_lines(
+        request_lines_for_comparison
+    )
+
     groups: list[dict] = []
 
     for row in rows:
-        request_line = PurchaseRequestLine.query.get(row.purchase_request_line_id)
+        if row.article_id is not None:
+            item_key = (
+                "ARTICLE",
+                row.article_id,
+            )
+        elif row.pending_article_id is not None:
+            item_key = (
+                "PENDING",
+                row.pending_article_id,
+            )
+        else:
+            item_key = None
 
-        if not request_line:
-            continue
-
-        comparison = get_article_supplier_comparison(
-            article_id=getattr(request_line, "article_id", None),
-            pending_article_id=getattr(request_line, "pending_article_id", None),
+        best = (
+            best_quote_map.get(item_key)
+            if item_key is not None
+            else None
         )
-
-        best = comparison[0] if comparison else None
 
         groups.append(
             {
-                "purchase_request_id": row.purchase_request_id,
-                "purchase_request_number": row.purchase_request_number,
-                "purchase_request_line_id": row.purchase_request_line_id,
-                "item_code": request_line.item_code or "-",
-                "item_name": request_line.item_name or "Sin artículo",
-                "quantity_requested": row.quantity_requested,
+                "purchase_request_id": (
+                    row.purchase_request_id
+                ),
+                "purchase_request_number": (
+                    row.purchase_request_number
+                ),
+                "purchase_request_line_id": (
+                    row.purchase_request_line_id
+                ),
+                "item_code": row.item_code or "-",
+                "item_name": (
+                    row.item_name or "Sin artículo"
+                ),
+                "quantity_requested": (
+                    row.quantity_requested
+                ),
                 "line_status": row.line_status,
-                "total_quotes": int(row.total_quotes or 0),
-                "draft_quotes": int(row.draft_quotes or 0),
-                "confirmed_quotes": int(row.confirmed_quotes or 0),
-                "best_price": best.get("last_price_with_tax") or best.get("last_price") if best else None,
-                "best_supplier": best.get("supplier_name") if best else None,
-                "last_quote_date": row.last_quote_date,
+                "total_quotes": int(
+                    row.total_quotes or 0
+                ),
+                "draft_quotes": int(
+                    row.draft_quotes or 0
+                ),
+                "confirmed_quotes": int(
+                    row.confirmed_quotes or 0
+                ),
+                "best_price": (
+                    best["last_price"]
+                    if best
+                    else None
+                ),
+                "best_supplier": (
+                    best["supplier_name"]
+                    if best
+                    else None
+                ),
+                "last_quote_date": (
+                    row.last_quote_date
+                ),
             }
         )
 
