@@ -1332,6 +1332,40 @@ def save_quotation_request_categories(
     )
 
 @purchases_bp.route(
+    "/quotations/create",
+    methods=["GET", "POST"],
+)
+@login_required
+def create_quotation():
+    purchase_requests = (
+        PurchaseRequest.query
+        .options(
+            joinedload(PurchaseRequest.site),
+            joinedload(PurchaseRequest.warehouse),
+        )
+        .filter(
+            PurchaseRequest.status.in_(
+                [
+                    "EN_REVISION_PROVEEDURIA",
+                    "PARCIALMENTE_COTIZADA",
+                    "COTIZADA",
+                ]
+            )
+        )
+        .order_by(
+            PurchaseRequest.created_at.desc(),
+            PurchaseRequest.id.desc(),
+        )
+        .limit(100)
+        .all()
+    )
+
+    return render_template(
+        "purchases/quotations/create.html",
+        purchase_requests=purchase_requests,
+    )
+
+@purchases_bp.route(
     "/quotations/request/<int:request_id>/partial-lines"
 )
 @login_required
