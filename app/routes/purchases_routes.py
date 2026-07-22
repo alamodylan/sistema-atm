@@ -625,36 +625,48 @@ def list_quotations():
 @purchases_bp.route("/quotations/request/<int:request_id>")
 @login_required
 def quotation_request_lines(request_id: int):
-    purchase_request = (
-        PurchaseRequest.query
-        .filter(
-            PurchaseRequest.id == request_id
+    purchase_request = PurchaseRequest.query.get_or_404(request_id)
+
+    # =====================================================
+    # 1. CARGAR TODAS LAS LÍNEAS EN UNA SOLA CONSULTA
+    # =====================================================
+    request_lines = (
+        PurchaseRequestLine.query
+        .options(
+            joinedload(PurchaseRequestLine.article),
+            joinedload(PurchaseRequestLine.pending_article),
+            joinedload(PurchaseRequestLine.unit),
         )
-        .first_or_404()
+        .filter(
+            PurchaseRequestLine.purchase_request_id == request_id,
+            PurchaseRequestLine.line_status != "CANCELADA",
+        )
+        .order_by(
+            PurchaseRequestLine.id.asc()
+        )
+        .all()
     )
 
-    rows = (
+    if not request_lines:
+        return render_template(
+            "purchases/quotations/request_lines.html",
+            purchase_request=purchase_request,
+            line_groups=[],
+        )
+
+    line_ids = [
+        line.id
+        for line in request_lines
+    ]
+
+    # =====================================================
+    # 2. CONTAR COTIZACIONES DE TODAS LAS LÍNEAS
+    #    EN UNA SOLA CONSULTA
+    # =====================================================
+    quotation_rows = (
         db.session.query(
-            PurchaseRequestLine.id.label(
+            QuotationLine.purchase_request_line_id.label(
                 "purchase_request_line_id"
-            ),
-            PurchaseRequestLine.item_code.label(
-                "item_code"
-            ),
-            PurchaseRequestLine.item_name.label(
-                "item_name"
-            ),
-            PurchaseRequestLine.line_status.label(
-                "line_status"
-            ),
-            PurchaseRequestLine.quantity_requested.label(
-                "quantity_requested"
-            ),
-            PurchaseRequest.number.label(
-                "purchase_request_number"
-            ),
-            PurchaseRequest.id.label(
-                "purchase_request_id"
             ),
             func.count(
                 QuotationLine.id
@@ -681,73 +693,84 @@ def quotation_request_lines(request_id: int):
                 QuotationLine.quote_date
             ).label("last_quote_date"),
         )
-        .join(
-            PurchaseRequest,
-            PurchaseRequest.id
-            == PurchaseRequestLine.purchase_request_id,
-        )
-        .outerjoin(
-            QuotationLine,
-            QuotationLine.purchase_request_line_id
-            == PurchaseRequestLine.id,
-        )
         .filter(
-            PurchaseRequestLine.purchase_request_id
-            == request_id,
-            PurchaseRequestLine.line_status
-            != "CANCELADA",
+            QuotationLine.purchase_request_line_id.in_(
+                line_ids
+            )
         )
         .group_by(
-            PurchaseRequestLine.id,
-            PurchaseRequestLine.item_code,
-            PurchaseRequestLine.item_name,
-            PurchaseRequestLine.line_status,
-            PurchaseRequestLine.quantity_requested,
-            PurchaseRequest.number,
-            PurchaseRequest.id,
-        )
-        .order_by(
-            PurchaseRequestLine.id.asc()
+            QuotationLine.purchase_request_line_id
         )
         .all()
     )
 
-    line_groups = [
-        {
-            "purchase_request_id": (
-                row.purchase_request_id
-            ),
-            "purchase_request_number": (
-                row.purchase_request_number
-            ),
-            "purchase_request_line_id": (
-                row.purchase_request_line_id
-            ),
-            "item_code": row.item_code or "-",
-            "item_name": (
-                row.item_name or "Sin artículo"
-            ),
-            "quantity_requested": (
-                row.quantity_requested
-            ),
-            "line_status": row.line_status,
-            "total_quotes": int(
-                row.total_quotes or 0
-            ),
-            "draft_quotes": int(
-                row.draft_quotes or 0
-            ),
-            "confirmed_quotes": int(
-                row.confirmed_quotes or 0
-            ),
-            "best_price": None,
-            "best_supplier": None,
-            "last_quote_date": (
-                row.last_quote_date
-            ),
-        }
-        for row in rows
-    ]
+    quotation_map = {
+        row.purchase_request_line_id: row
+        for row in quotation_rows
+    }
+
+    # =====================================================
+    # 3. ARMAR RESPUESTA SIN CONSULTAS DENTRO DEL FOR
+    # =====================================================
+    line_groups = []
+
+    for request_line in request_lines:
+        quotation_data = quotation_map.get(
+            request_line.id
+        )
+
+        line_groups.append(
+            {
+                "purchase_request_id": (
+                    request_line.purchase_request_id
+                ),
+                "purchase_request_number": (
+                    purchase_request.number
+                ),
+                "purchase_request_line_id": (
+                    request_line.id
+                ),
+                "item_code": (
+                    request_line.item_code or "-"
+                ),
+                "item_name": (
+                    request_line.item_name
+                    or "Sin artículo"
+                ),
+                "quantity_requested": (
+                    request_line.quantity_requested
+                ),
+                "line_status": (
+                    request_line.line_status
+                ),
+                "total_quotes": int(
+                    quotation_data.total_quotes
+                    if quotation_data
+                    else 0
+                ),
+                "draft_quotes": int(
+                    quotation_data.draft_quotes
+                    if quotation_data
+                    and quotation_data.draft_quotes
+                    is not None
+                    else 0
+                ),
+                "confirmed_quotes": int(
+                    quotation_data.confirmed_quotes
+                    if quotation_data
+                    and quotation_data.confirmed_quotes
+                    is not None
+                    else 0
+                ),
+                "best_price": None,
+                "best_supplier": None,
+                "last_quote_date": (
+                    quotation_data.last_quote_date
+                    if quotation_data
+                    else None
+                ),
+            }
+        )
 
     return render_template(
         "purchases/quotations/request_lines.html",
