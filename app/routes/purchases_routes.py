@@ -1332,6 +1332,464 @@ def save_quotation_request_categories(
     )
 
 @purchases_bp.route(
+    "/quotations/request/<int:request_id>/export-excel"
+)
+@login_required
+def export_quotation_request_excel(request_id: int):
+    purchase_request = PurchaseRequest.query.get_or_404(
+        request_id
+    )
+
+    # =====================================================
+    # 1. CARGAR LÍNEAS DE LA SOLICITUD
+    # =====================================================
+    request_lines = (
+        PurchaseRequestLine.query
+        .options(
+            joinedload(PurchaseRequestLine.article),
+            joinedload(PurchaseRequestLine.pending_article),
+            joinedload(PurchaseRequestLine.unit),
+        )
+        .filter(
+            PurchaseRequestLine.purchase_request_id == request_id,
+            PurchaseRequestLine.line_status != "CANCELADA",
+        )
+        .order_by(
+            PurchaseRequestLine.id.asc()
+        )
+        .all()
+    )
+
+    line_ids = [
+        line.id
+        for line in request_lines
+    ]
+
+    article_ids = {
+        line.article_id
+        for line in request_lines
+        if line.article_id is not None
+    }
+
+    pending_article_ids = {
+        line.pending_article_id
+        for line in request_lines
+        if line.pending_article_id is not None
+    }
+
+    # =====================================================
+    # 2. CONTAR COTIZACIONES DE TODAS LAS LÍNEAS
+    # =====================================================
+    quotation_map = {}
+
+    if line_ids:
+        quotation_rows = (
+            db.session.query(
+                QuotationLine.purchase_request_line_id.label(
+                    "purchase_request_line_id"
+                ),
+                func.count(
+                    QuotationLine.id
+                ).label("total_quotes"),
+                func.max(
+                    QuotationLine.quote_date
+                ).label("last_quote_date"),
+            )
+            .filter(
+                QuotationLine.purchase_request_line_id.in_(
+                    line_ids
+                )
+            )
+            .group_by(
+                QuotationLine.purchase_request_line_id
+            )
+            .all()
+        )
+
+        quotation_map = {
+            row.purchase_request_line_id: row
+            for row in quotation_rows
+        }
+
+    # =====================================================
+    # 3. CARGAR CATEGORÍAS ASIGNADAS EN UNA CONSULTA
+    # =====================================================
+    assignment_filters = []
+
+    if article_ids:
+        assignment_filters.append(
+            ArticleQuotationCategory.article_id.in_(
+                article_ids
+            )
+        )
+
+    if pending_article_ids:
+        assignment_filters.append(
+            ArticleQuotationCategory.pending_article_id.in_(
+                pending_article_ids
+            )
+        )
+
+    article_category_map = {}
+    pending_category_map = {}
+
+    if assignment_filters:
+        assignment_rows = (
+            db.session.query(
+                ArticleQuotationCategory.article_id,
+                ArticleQuotationCategory.pending_article_id,
+                QuotationCategory.id.label(
+                    "category_id"
+                ),
+                QuotationCategory.name.label(
+                    "category_name"
+                ),
+                QuotationCategory.sort_order.label(
+                    "category_sort_order"
+                ),
+            )
+            .join(
+                QuotationCategory,
+                QuotationCategory.id
+                == ArticleQuotationCategory.quotation_category_id,
+            )
+            .filter(
+                db.or_(*assignment_filters)
+            )
+            .all()
+        )
+
+        for row in assignment_rows:
+            category_name = (
+                row.category_name
+                or "SIN CATEGORÍA"
+            ).replace("¡", "í")
+
+            category_data = {
+                "id": row.category_id,
+                "name": category_name,
+                "sort_order": row.category_sort_order or 999999,
+            }
+
+            if row.article_id is not None:
+                article_category_map[
+                    row.article_id
+                ] = category_data
+
+            if row.pending_article_id is not None:
+                pending_category_map[
+                    row.pending_article_id
+                ] = category_data
+
+    # =====================================================
+    # 4. AGRUPAR FILAS POR CATEGORÍA
+    # =====================================================
+    grouped_rows = {}
+
+    for request_line in request_lines:
+        category_data = None
+
+        if request_line.article_id is not None:
+            category_data = article_category_map.get(
+                request_line.article_id
+            )
+
+        elif request_line.pending_article_id is not None:
+            category_data = pending_category_map.get(
+                request_line.pending_article_id
+            )
+
+        if category_data:
+            category_key = category_data["id"]
+            category_name = category_data["name"]
+            category_sort_order = category_data["sort_order"]
+        else:
+            category_key = "SIN_CATEGORIA"
+            category_name = "SIN CATEGORÍA"
+            category_sort_order = 999999
+
+        quotation_data = quotation_map.get(
+            request_line.id
+        )
+
+        if category_key not in grouped_rows:
+            grouped_rows[category_key] = {
+                "name": category_name,
+                "sort_order": category_sort_order,
+                "rows": [],
+            }
+
+        grouped_rows[category_key]["rows"].append(
+            {
+                "code": request_line.item_code or "-",
+                "name": (
+                    request_line.item_name
+                    or "Sin artículo"
+                ),
+                "quantity": request_line.quantity_requested,
+                "status": (
+                    request_line.line_status
+                    or "-"
+                ).replace("_", " "),
+                "total_quotes": int(
+                    quotation_data.total_quotes
+                    if quotation_data
+                    else 0
+                ),
+                "best_supplier": "-",
+                "best_price": None,
+                "last_quote_date": (
+                    quotation_data.last_quote_date
+                    if quotation_data
+                    else None
+                ),
+            }
+        )
+
+    groups = sorted(
+        grouped_rows.values(),
+        key=lambda group: (
+            group["sort_order"],
+            group["name"],
+        ),
+    )
+
+    for group in groups:
+        group["rows"].sort(
+            key=lambda item: (
+                item["code"],
+                item["name"],
+            )
+        )
+
+    # =====================================================
+    # 5. CREAR ARCHIVO EXCEL
+    # =====================================================
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Solicitud de cotización"
+
+    thin_side = Side(
+        style="thin",
+        color="D1D5DB",
+    )
+
+    table_border = Border(
+        left=thin_side,
+        right=thin_side,
+        top=thin_side,
+        bottom=thin_side,
+    )
+
+    title_fill = PatternFill(
+        "solid",
+        fgColor="1D4ED8",
+    )
+
+    category_fill = PatternFill(
+        "solid",
+        fgColor="DBEAFE",
+    )
+
+    category_empty_fill = PatternFill(
+        "solid",
+        fgColor="E2E8F0",
+    )
+
+    header_fill = PatternFill(
+        "solid",
+        fgColor="1E293B",
+    )
+
+    sheet.merge_cells("A1:I1")
+    sheet["A1"] = "SOLICITUD DE COTIZACIÓN"
+    sheet["A1"].font = Font(
+        bold=True,
+        color="FFFFFF",
+        size=16,
+    )
+    sheet["A1"].fill = title_fill
+    sheet["A1"].alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+    )
+    sheet.row_dimensions[1].height = 26
+
+    sheet["A3"] = "Solicitud:"
+    sheet["A3"].font = Font(bold=True)
+    sheet["B3"] = purchase_request.number
+
+    sheet["A4"] = "Fecha de exportación:"
+    sheet["A4"].font = Font(bold=True)
+    sheet["B4"] = datetime.now(CR_TZ).strftime(
+        "%d/%m/%Y %H:%M"
+    )
+
+    headers = [
+        "Código",
+        "Artículo",
+        "Cantidad",
+        "Categoría",
+        "Estado",
+        "Cotizaciones",
+        "Mejor proveedor",
+        "Mejor precio",
+        "Última fecha",
+    ]
+
+    current_row = 6
+
+    for group in groups:
+        sheet.merge_cells(
+            start_row=current_row,
+            start_column=1,
+            end_row=current_row,
+            end_column=9,
+        )
+
+        category_cell = sheet.cell(
+            row=current_row,
+            column=1,
+            value=(
+                f"{group['name']} "
+                f"({len(group['rows'])})"
+            ),
+        )
+
+        category_cell.font = Font(
+            bold=True,
+            color="0F172A",
+            size=12,
+        )
+
+        category_cell.fill = (
+            category_empty_fill
+            if group["name"] == "SIN CATEGORÍA"
+            else category_fill
+        )
+
+        category_cell.alignment = Alignment(
+            vertical="center",
+        )
+
+        category_cell.border = table_border
+        sheet.row_dimensions[current_row].height = 23
+
+        current_row += 1
+
+        for column_index, header in enumerate(
+            headers,
+            start=1,
+        ):
+            cell = sheet.cell(
+                row=current_row,
+                column=column_index,
+                value=header,
+            )
+
+            cell.font = Font(
+                bold=True,
+                color="FFFFFF",
+            )
+
+            cell.fill = header_fill
+            cell.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+            )
+            cell.border = table_border
+
+        current_row += 1
+
+        for item in group["rows"]:
+            values = [
+                item["code"],
+                item["name"],
+                float(item["quantity"] or 0),
+                group["name"],
+                item["status"],
+                item["total_quotes"],
+                item["best_supplier"],
+                (
+                    float(item["best_price"])
+                    if item["best_price"] is not None
+                    else None
+                ),
+                (
+                    item["last_quote_date"].strftime(
+                        "%d/%m/%Y"
+                    )
+                    if item["last_quote_date"]
+                    else "-"
+                ),
+            ]
+
+            for column_index, value in enumerate(
+                values,
+                start=1,
+            ):
+                cell = sheet.cell(
+                    row=current_row,
+                    column=column_index,
+                    value=value,
+                )
+
+                cell.border = table_border
+                cell.alignment = Alignment(
+                    vertical="center",
+                    wrap_text=True,
+                )
+
+                if column_index in [3, 8]:
+                    cell.number_format = '#,##0.00'
+
+            current_row += 1
+
+        current_row += 2
+
+    column_widths = {
+        "A": 17,
+        "B": 52,
+        "C": 14,
+        "D": 22,
+        "E": 23,
+        "F": 15,
+        "G": 28,
+        "H": 17,
+        "I": 17,
+    }
+
+    for column_letter, width in column_widths.items():
+        sheet.column_dimensions[
+            column_letter
+        ].width = width
+
+    sheet.freeze_panes = "A6"
+    sheet.sheet_view.showGridLines = False
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+
+    safe_request_number = (
+        purchase_request.number
+        or str(request_id)
+    ).replace("/", "-")
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=(
+            f"solicitud_cotizacion_"
+            f"{safe_request_number}.xlsx"
+        ),
+        mimetype=(
+            "application/vnd.openxmlformats-"
+            "officedocument.spreadsheetml.sheet"
+        ),
+    )
+
+@purchases_bp.route(
     "/quotations/create",
     methods=["GET", "POST"],
 )

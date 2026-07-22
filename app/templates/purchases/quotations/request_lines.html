@@ -16,9 +16,6 @@ Líneas de solicitud
     --primary-dark: #1e40af;
     --primary-soft: #eff6ff;
     --success: #15803d;
-    --success-soft: #dcfce7;
-    --warning: #a16207;
-    --warning-soft: #fef3c7;
     --gray-50: #f8fafc;
     --gray-100: #f1f5f9;
     --gray-200: #e2e8f0;
@@ -33,13 +30,13 @@ Líneas de solicitud
   }
 
   .quotation-main-card {
+    overflow: hidden;
     background: #ffffff;
     border: 1px solid var(--gray-200);
     border-radius: 16px;
     box-shadow:
       0 1px 2px rgba(15, 23, 42, 0.04),
       0 8px 24px rgba(15, 23, 42, 0.05);
-    overflow: hidden;
   }
 
   .quotation-header {
@@ -49,13 +46,12 @@ Líneas de solicitud
     gap: 18px;
     flex-wrap: wrap;
     padding: 22px 24px;
+    background: linear-gradient(
+      135deg,
+      #ffffff 0%,
+      #f8fbff 100%
+    );
     border-bottom: 1px solid var(--gray-200);
-    background:
-      linear-gradient(
-        135deg,
-        #ffffff 0%,
-        #f8fbff 100%
-      );
   }
 
   .quotation-title {
@@ -63,13 +59,10 @@ Líneas de solicitud
     color: var(--gray-900);
     font-size: 26px;
     font-weight: 800;
-    letter-spacing: -0.025em;
-    line-height: 1.2;
   }
 
   .quotation-subtitle {
     display: flex;
-    align-items: center;
     gap: 7px;
     margin-top: 7px;
     color: var(--gray-500);
@@ -100,17 +93,12 @@ Líneas de solicitud
     text-decoration: none;
     font-size: 14px;
     font-weight: 700;
-    line-height: 1;
     cursor: pointer;
-    transition:
-      transform 0.15s ease,
-      box-shadow 0.15s ease,
-      background 0.15s ease;
   }
 
   .quotation-action-button:hover {
-    transform: translateY(-1px);
     text-decoration: none;
+    transform: translateY(-1px);
   }
 
   .quotation-action-button.primary {
@@ -120,12 +108,19 @@ Líneas de solicitud
       var(--primary),
       var(--primary-dark)
     );
-    box-shadow: 0 5px 13px rgba(29, 78, 216, 0.2);
   }
 
   .quotation-action-button.primary:hover {
     color: #ffffff;
-    box-shadow: 0 7px 17px rgba(29, 78, 216, 0.28);
+  }
+
+  .quotation-action-button.excel {
+    color: #ffffff;
+    background: var(--success);
+  }
+
+  .quotation-action-button.excel:hover {
+    color: #ffffff;
   }
 
   .quotation-action-button.secondary {
@@ -134,9 +129,52 @@ Líneas de solicitud
     border: 1px solid var(--gray-200);
   }
 
-  .quotation-action-button.secondary:hover {
-    color: var(--gray-900);
-    background: var(--gray-200);
+  .quotation-tools {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: #ffffff;
+    border-bottom: 1px solid var(--gray-200);
+  }
+
+  .quotation-search-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+  }
+
+  .quotation-search {
+    width: 100%;
+    height: 42px;
+    padding: 9px 14px 9px 40px;
+    color: var(--gray-800);
+    background: var(--gray-50);
+    border: 1px solid var(--gray-300);
+    border-radius: 10px;
+    outline: none;
+    font-size: 14px;
+  }
+
+  .quotation-search:focus {
+    background: #ffffff;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+  }
+
+  .quotation-search-icon {
+    position: absolute;
+    top: 50%;
+    left: 14px;
+    color: var(--gray-500);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  .search-result-count {
+    color: var(--gray-500);
+    font-size: 13px;
+    white-space: nowrap;
   }
 
   .quotation-content {
@@ -161,15 +199,13 @@ Líneas de solicitud
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
     min-height: 54px;
     padding: 12px 16px;
-    background:
-      linear-gradient(
-        135deg,
-        #f8fafc 0%,
-        #f1f5f9 100%
-      );
+    background: linear-gradient(
+      135deg,
+      #f8fafc,
+      #f1f5f9
+    );
     border-bottom: 1px solid var(--gray-200);
   }
 
@@ -177,20 +213,17 @@ Líneas de solicitud
     display: flex;
     align-items: center;
     gap: 11px;
-    min-width: 0;
   }
 
   .category-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    flex: 0 0 34px;
     width: 34px;
     height: 34px;
     color: var(--primary-dark);
     background: #dbeafe;
     border-radius: 10px;
-    font-size: 16px;
     font-weight: 800;
   }
 
@@ -200,12 +233,9 @@ Líneas de solicitud
   }
 
   .category-name {
-    overflow: hidden;
     color: var(--gray-900);
     font-size: 15px;
     font-weight: 800;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .category-count {
@@ -233,22 +263,18 @@ Líneas de solicitud
 
   .quotation-table {
     width: 100%;
-    min-width: 1180px;
+    min-width: 1350px;
     border-collapse: separate;
     border-spacing: 0;
   }
 
   .quotation-table thead th {
-    position: sticky;
-    top: 0;
-    z-index: 1;
     padding: 11px 12px;
     color: var(--gray-700);
     background: #ffffff;
     border-bottom: 1px solid var(--gray-200);
     font-size: 12px;
     font-weight: 800;
-    letter-spacing: 0.01em;
     text-transform: uppercase;
     white-space: nowrap;
   }
@@ -265,16 +291,23 @@ Líneas de solicitud
     border-bottom: 0;
   }
 
-  .quotation-table tbody tr {
-    transition: background 0.15s ease;
-  }
-
   .quotation-table tbody tr:hover {
     background: #f8fbff;
   }
 
+  .code-cell {
+    width: 135px;
+    min-width: 135px;
+  }
+
+  .item-code {
+    color: var(--primary-dark);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
   .item-cell {
-    min-width: 350px;
+    min-width: 330px;
   }
 
   .item-name {
@@ -284,15 +317,8 @@ Líneas de solicitud
     line-height: 1.35;
   }
 
-  .item-code {
-    margin-top: 3px;
-    color: var(--gray-500);
-    font-size: 11px;
-    font-weight: 500;
-  }
-
   .category-cell {
-    min-width: 180px;
+    min-width: 175px;
   }
 
   .category-badge {
@@ -306,7 +332,6 @@ Líneas de solicitud
     border-radius: 8px;
     font-size: 12px;
     font-weight: 750;
-    line-height: 1;
   }
 
   .category-badge.empty {
@@ -317,18 +342,12 @@ Líneas de solicitud
 
   .category-select {
     width: 100%;
-    min-width: 175px;
+    min-width: 170px;
     height: 38px;
-    padding: 7px 34px 7px 10px;
-    color: var(--gray-800);
-    background-color: #ffffff;
+    padding: 7px 10px;
     border: 1px solid var(--gray-300);
     border-radius: 9px;
     outline: none;
-    font-size: 13px;
-    transition:
-      border-color 0.15s ease,
-      box-shadow 0.15s ease;
   }
 
   .category-select:focus {
@@ -338,14 +357,13 @@ Líneas de solicitud
 
   .quantity-value {
     color: var(--gray-900);
-    font-weight: 700;
+    font-weight: 800;
     white-space: nowrap;
   }
 
   .status-badge {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
     min-height: 27px;
     padding: 5px 9px;
     color: #075985;
@@ -364,9 +382,8 @@ Líneas de solicitud
 
   .draft-count {
     margin-top: 3px;
-    color: var(--warning);
+    color: #a16207;
     font-size: 11px;
-    font-weight: 650;
   }
 
   .empty-value {
@@ -376,7 +393,6 @@ Líneas de solicitud
   .row-actions {
     display: flex;
     justify-content: center;
-    align-items: center;
     gap: 6px;
     flex-wrap: nowrap;
   }
@@ -387,22 +403,16 @@ Líneas de solicitud
     justify-content: center;
     min-height: 31px;
     padding: 6px 10px;
-    border: 0;
     border-radius: 8px;
     text-decoration: none;
     font-size: 11px;
     font-weight: 750;
-    line-height: 1;
     white-space: nowrap;
-    transition:
-      transform 0.15s ease,
-      box-shadow 0.15s ease,
-      opacity 0.15s ease;
   }
 
   .row-button:hover {
-    transform: translateY(-1px);
     text-decoration: none;
+    transform: translateY(-1px);
   }
 
   .row-button.view {
@@ -412,7 +422,6 @@ Líneas de solicitud
 
   .row-button.view:hover {
     color: #ffffff;
-    box-shadow: 0 4px 10px rgba(29, 78, 216, 0.22);
   }
 
   .row-button.excel {
@@ -422,7 +431,6 @@ Líneas de solicitud
 
   .row-button.excel:hover {
     color: #ffffff;
-    box-shadow: 0 4px 10px rgba(21, 128, 61, 0.22);
   }
 
   .row-button.print {
@@ -432,12 +440,11 @@ Líneas de solicitud
 
   .row-button.print:hover {
     color: #ffffff;
-    background: var(--gray-700);
-    box-shadow: 0 4px 10px rgba(71, 85, 105, 0.22);
   }
 
-  .empty-state {
-    padding: 55px 24px;
+  .empty-state,
+  .search-empty-state {
+    padding: 45px 24px;
     color: var(--gray-500);
     background: #ffffff;
     border: 1px dashed var(--gray-300);
@@ -445,11 +452,8 @@ Líneas de solicitud
     text-align: center;
   }
 
-  .empty-state-title {
-    margin-bottom: 5px;
-    color: var(--gray-800);
-    font-size: 17px;
-    font-weight: 800;
+  .search-empty-state {
+    display: none;
   }
 
   @media (max-width: 768px) {
@@ -469,18 +473,17 @@ Líneas de solicitud
       flex: 1;
     }
 
+    .quotation-tools {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .quotation-search-wrapper {
+      max-width: none;
+    }
+
     .quotation-content {
       padding: 12px;
-    }
-
-    .category-header {
-      padding: 11px 12px;
-    }
-
-    .quotation-table tbody td,
-    .quotation-table thead th {
-      padding-left: 9px;
-      padding-right: 9px;
     }
   }
 </style>
@@ -504,6 +507,16 @@ Líneas de solicitud
       </div>
 
       <div class="quotation-header-actions">
+        <a
+          class="quotation-action-button excel"
+          href="{{ url_for(
+            'purchases.export_quotation_request_excel',
+            request_id=purchase_request.id
+          ) }}"
+        >
+          Exportar solicitud
+        </a>
+
         {% if edit_categories %}
           <a
             class="quotation-action-button secondary"
@@ -537,6 +550,28 @@ Líneas de solicitud
       </div>
     </div>
 
+    <div class="quotation-tools">
+      <div class="quotation-search-wrapper">
+        <span class="quotation-search-icon">
+          &#128269;
+        </span>
+
+        <input
+          id="quotation-line-search"
+          class="quotation-search"
+          type="search"
+          autocomplete="off"
+          placeholder="Buscar por código o nombre del artículo..."
+        >
+      </div>
+
+      <div
+        id="quotation-search-count"
+        class="search-result-count"
+      >
+      </div>
+    </div>
+
     <div class="quotation-content">
       {% if grouped_line_groups %}
 
@@ -550,7 +585,6 @@ Líneas de solicitud
         >
 
           {% for group in grouped_line_groups %}
-
             <section
               class="
                 category-section
@@ -558,6 +592,7 @@ Líneas de solicitud
                   uncategorized
                 {% endif %}
               "
+              data-category-section
             >
               <div class="category-header">
                 <div class="category-header-main">
@@ -574,7 +609,10 @@ Líneas de solicitud
                   </div>
                 </div>
 
-                <span class="category-count">
+                <span
+                  class="category-count"
+                  data-category-count
+                >
                   {{ group.lines|length }}
                 </span>
               </div>
@@ -584,15 +622,19 @@ Líneas de solicitud
                   <thead>
                     <tr>
                       <th style="text-align:left;">
-                        Artículo
+                        Código
                       </th>
 
                       <th style="text-align:left;">
-                        Categoría
+                        Artículo
                       </th>
 
                       <th style="text-align:center;">
                         Cantidad
+                      </th>
+
+                      <th style="text-align:left;">
+                        Categoría
                       </th>
 
                       <th style="text-align:center;">
@@ -623,15 +665,32 @@ Líneas de solicitud
 
                   <tbody>
                     {% for item in group.lines %}
-                      <tr>
+                      <tr
+                        data-quotation-row
+                        data-search-text="{{
+                          (
+                            (item.item_code or '')
+                            ~ ' '
+                            ~ (item.item_name or '')
+                          )|lower
+                        }}"
+                      >
+                        <td class="code-cell">
+                          <span class="item-code">
+                            {{ item.item_code }}
+                          </span>
+                        </td>
+
                         <td class="item-cell">
                           <div class="item-name">
                             {{ item.item_name }}
                           </div>
+                        </td>
 
-                          <div class="item-code">
-                            {{ item.item_code }}
-                          </div>
+                        <td style="text-align:center;">
+                          <span class="quantity-value">
+                            {{ item.quantity_requested }}
+                          </span>
                         </td>
 
                         <td class="category-cell">
@@ -682,12 +741,6 @@ Líneas de solicitud
                               </span>
                             {% endif %}
                           {% endif %}
-                        </td>
-
-                        <td style="text-align:center;">
-                          <span class="quantity-value">
-                            {{ item.quantity_requested }}
-                          </span>
                         </td>
 
                         <td style="text-align:center;">
@@ -781,24 +834,139 @@ Líneas de solicitud
                 </table>
               </div>
             </section>
-
           {% endfor %}
         </form>
 
+        <div
+          id="quotation-search-empty"
+          class="search-empty-state"
+        >
+          No se encontraron artículos con ese código o nombre.
+        </div>
+
       {% else %}
         <div class="empty-state">
-          <div class="empty-state-title">
-            No hay líneas disponibles
-          </div>
-
-          <div>
-            Esta solicitud no tiene líneas activas para cotizar.
-          </div>
+          Esta solicitud no tiene líneas activas para cotizar.
         </div>
       {% endif %}
     </div>
 
   </div>
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const searchInput = document.getElementById(
+      "quotation-line-search"
+    );
+
+    const searchCount = document.getElementById(
+      "quotation-search-count"
+    );
+
+    const emptyResult = document.getElementById(
+      "quotation-search-empty"
+    );
+
+    if (!searchInput) {
+      return;
+    }
+
+    const sections = Array.from(
+      document.querySelectorAll(
+        "[data-category-section]"
+      )
+    );
+
+    const normalizeText = function (value) {
+      return (value || "")
+        .toString()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+    };
+
+    const filterRows = function () {
+      const term = normalizeText(
+        searchInput.value
+      );
+
+      let totalVisibleRows = 0;
+
+      sections.forEach(function (section) {
+        const rows = Array.from(
+          section.querySelectorAll(
+            "[data-quotation-row]"
+          )
+        );
+
+        let visibleRowsInSection = 0;
+
+        rows.forEach(function (row) {
+          const searchableText = normalizeText(
+            row.dataset.searchText
+          );
+
+          const visible = (
+            !term
+            || searchableText.includes(term)
+          );
+
+          row.style.display = visible
+            ? ""
+            : "none";
+
+          if (visible) {
+            visibleRowsInSection += 1;
+            totalVisibleRows += 1;
+          }
+        });
+
+        section.style.display = (
+          visibleRowsInSection > 0
+        )
+          ? ""
+          : "none";
+
+        const countElement = section.querySelector(
+          "[data-category-count]"
+        );
+
+        if (countElement) {
+          countElement.textContent = (
+            visibleRowsInSection
+          );
+        }
+      });
+
+      if (searchCount) {
+        searchCount.textContent = term
+          ? (
+              totalVisibleRows
+              + (
+                totalVisibleRows === 1
+                  ? " resultado"
+                  : " resultados"
+              )
+            )
+          : "";
+      }
+
+      if (emptyResult) {
+        emptyResult.style.display = (
+          term && totalVisibleRows === 0
+        )
+          ? "block"
+          : "none";
+      }
+    };
+
+    searchInput.addEventListener(
+      "input",
+      filterRows
+    );
+  });
+</script>
 
 {% endblock %}
