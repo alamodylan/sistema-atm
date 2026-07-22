@@ -625,73 +625,129 @@ def list_quotations():
 @purchases_bp.route("/quotations/request/<int:request_id>")
 @login_required
 def quotation_request_lines(request_id: int):
-    purchase_request = PurchaseRequest.query.get_or_404(request_id)
+    purchase_request = (
+        PurchaseRequest.query
+        .filter(
+            PurchaseRequest.id == request_id
+        )
+        .first_or_404()
+    )
 
     rows = (
         db.session.query(
-            PurchaseRequestLine.id.label("purchase_request_line_id"),
-            PurchaseRequestLine.line_status.label("line_status"),
-            PurchaseRequestLine.quantity_requested.label("quantity_requested"),
-            PurchaseRequest.number.label("purchase_request_number"),
-            PurchaseRequest.id.label("purchase_request_id"),
-            func.count(QuotationLine.id).label("total_quotes"),
+            PurchaseRequestLine.id.label(
+                "purchase_request_line_id"
+            ),
+            PurchaseRequestLine.item_code.label(
+                "item_code"
+            ),
+            PurchaseRequestLine.item_name.label(
+                "item_name"
+            ),
+            PurchaseRequestLine.line_status.label(
+                "line_status"
+            ),
+            PurchaseRequestLine.quantity_requested.label(
+                "quantity_requested"
+            ),
+            PurchaseRequest.number.label(
+                "purchase_request_number"
+            ),
+            PurchaseRequest.id.label(
+                "purchase_request_id"
+            ),
+            func.count(
+                QuotationLine.id
+            ).label("total_quotes"),
             func.sum(
                 db.case(
-                    (QuotationLine.status == "BORRADOR", 1),
+                    (
+                        QuotationLine.status == "BORRADOR",
+                        1,
+                    ),
                     else_=0,
                 )
             ).label("draft_quotes"),
             func.sum(
                 db.case(
-                    (QuotationLine.status == "COTIZADA", 1),
+                    (
+                        QuotationLine.status == "COTIZADA",
+                        1,
+                    ),
                     else_=0,
                 )
             ).label("confirmed_quotes"),
-            func.max(QuotationLine.quote_date).label("last_quote_date"),
+            func.max(
+                QuotationLine.quote_date
+            ).label("last_quote_date"),
         )
         .join(
             PurchaseRequest,
-            PurchaseRequest.id == PurchaseRequestLine.purchase_request_id,
+            PurchaseRequest.id
+            == PurchaseRequestLine.purchase_request_id,
         )
         .outerjoin(
             QuotationLine,
-            QuotationLine.purchase_request_line_id == PurchaseRequestLine.id,
+            QuotationLine.purchase_request_line_id
+            == PurchaseRequestLine.id,
         )
         .filter(
-            PurchaseRequestLine.purchase_request_id == request_id,
-            PurchaseRequestLine.line_status != "CANCELADA",
+            PurchaseRequestLine.purchase_request_id
+            == request_id,
+            PurchaseRequestLine.line_status
+            != "CANCELADA",
         )
         .group_by(
             PurchaseRequestLine.id,
+            PurchaseRequestLine.item_code,
+            PurchaseRequestLine.item_name,
             PurchaseRequestLine.line_status,
             PurchaseRequestLine.quantity_requested,
             PurchaseRequest.number,
             PurchaseRequest.id,
         )
-        .order_by(PurchaseRequestLine.id.asc())
+        .order_by(
+            PurchaseRequestLine.id.asc()
+        )
         .all()
     )
 
-    line_groups = []
-
-    for row in rows:
-        request_line = PurchaseRequestLine.query.get(row.purchase_request_line_id)
-
-        line_groups.append({
-            "purchase_request_id": row.purchase_request_id,
-            "purchase_request_number": row.purchase_request_number,
-            "purchase_request_line_id": row.purchase_request_line_id,
-            "item_code": request_line.item_code or "-",
-            "item_name": request_line.item_name or "Sin artículo",
-            "quantity_requested": row.quantity_requested,
+    line_groups = [
+        {
+            "purchase_request_id": (
+                row.purchase_request_id
+            ),
+            "purchase_request_number": (
+                row.purchase_request_number
+            ),
+            "purchase_request_line_id": (
+                row.purchase_request_line_id
+            ),
+            "item_code": row.item_code or "-",
+            "item_name": (
+                row.item_name or "Sin artículo"
+            ),
+            "quantity_requested": (
+                row.quantity_requested
+            ),
             "line_status": row.line_status,
-            "total_quotes": int(row.total_quotes or 0),
-            "draft_quotes": int(row.draft_quotes or 0),
-            "confirmed_quotes": int(row.confirmed_quotes or 0),
+            "total_quotes": int(
+                row.total_quotes or 0
+            ),
+            "draft_quotes": int(
+                row.draft_quotes or 0
+            ),
+            "confirmed_quotes": int(
+                row.confirmed_quotes or 0
+            ),
             "best_price": None,
             "best_supplier": None,
-            "last_quote_date": row.last_quote_date,
-        })
+            "last_quote_date": (
+                row.last_quote_date
+            ),
+        }
+        for row in rows
+    ]
 
     return render_template(
         "purchases/quotations/request_lines.html",
