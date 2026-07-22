@@ -4,342 +4,801 @@
 Líneas de solicitud
 {% endblock %}
 
+{% macro clean_category_name(value) %}
+  {{- (value or "SIN CATEGORÍA")|replace("¡", "í") -}}
+{% endmacro %}
+
 {% block content %}
-<div class="card card-pad">
 
-  <div
-    style="
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:12px;
-      flex-wrap:wrap;
-      margin-bottom:18px;
-    "
-  >
-    <div>
-      <h2 style="margin:0;">
-        Líneas de solicitud
-      </h2>
+<style>
+  .quotation-page {
+    --primary: #1d4ed8;
+    --primary-dark: #1e40af;
+    --primary-soft: #eff6ff;
+    --success: #15803d;
+    --success-soft: #dcfce7;
+    --warning: #a16207;
+    --warning-soft: #fef3c7;
+    --gray-50: #f8fafc;
+    --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;
+    --gray-300: #cbd5e1;
+    --gray-500: #64748b;
+    --gray-600: #475569;
+    --gray-700: #334155;
+    --gray-800: #1e293b;
+    --gray-900: #0f172a;
 
-      <div
-        style="
-          margin-top:5px;
-          color:#6b7280;
-        "
-      >
-        Solicitud:
-        <strong>
-          {{ purchase_request.number }}
-        </strong>
+    width: 100%;
+  }
+
+  .quotation-main-card {
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 16px;
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 8px 24px rgba(15, 23, 42, 0.05);
+    overflow: hidden;
+  }
+
+  .quotation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 18px;
+    flex-wrap: wrap;
+    padding: 22px 24px;
+    border-bottom: 1px solid var(--gray-200);
+    background:
+      linear-gradient(
+        135deg,
+        #ffffff 0%,
+        #f8fbff 100%
+      );
+  }
+
+  .quotation-title {
+    margin: 0;
+    color: var(--gray-900);
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+  }
+
+  .quotation-subtitle {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 7px;
+    color: var(--gray-500);
+    font-size: 14px;
+  }
+
+  .request-number {
+    color: var(--primary-dark);
+    font-weight: 800;
+  }
+
+  .quotation-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+  }
+
+  .quotation-action-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 39px;
+    padding: 9px 15px;
+    border: 0;
+    border-radius: 10px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease,
+      background 0.15s ease;
+  }
+
+  .quotation-action-button:hover {
+    transform: translateY(-1px);
+    text-decoration: none;
+  }
+
+  .quotation-action-button.primary {
+    color: #ffffff;
+    background: linear-gradient(
+      135deg,
+      var(--primary),
+      var(--primary-dark)
+    );
+    box-shadow: 0 5px 13px rgba(29, 78, 216, 0.2);
+  }
+
+  .quotation-action-button.primary:hover {
+    color: #ffffff;
+    box-shadow: 0 7px 17px rgba(29, 78, 216, 0.28);
+  }
+
+  .quotation-action-button.secondary {
+    color: var(--gray-700);
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+  }
+
+  .quotation-action-button.secondary:hover {
+    color: var(--gray-900);
+    background: var(--gray-200);
+  }
+
+  .quotation-content {
+    padding: 20px;
+    background: var(--gray-50);
+  }
+
+  .category-section {
+    margin-bottom: 20px;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 14px;
+    box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04);
+  }
+
+  .category-section:last-child {
+    margin-bottom: 0;
+  }
+
+  .category-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 54px;
+    padding: 12px 16px;
+    background:
+      linear-gradient(
+        135deg,
+        #f8fafc 0%,
+        #f1f5f9 100%
+      );
+    border-bottom: 1px solid var(--gray-200);
+  }
+
+  .category-header-main {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-width: 0;
+  }
+
+  .category-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    color: var(--primary-dark);
+    background: #dbeafe;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 800;
+  }
+
+  .category-section.uncategorized .category-icon {
+    color: var(--gray-700);
+    background: var(--gray-200);
+  }
+
+  .category-name {
+    overflow: hidden;
+    color: var(--gray-900);
+    font-size: 15px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .category-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 29px;
+    height: 25px;
+    padding: 0 8px;
+    color: #ffffff;
+    background: var(--primary);
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .category-section.uncategorized .category-count {
+    background: var(--gray-600);
+  }
+
+  .quotation-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .quotation-table {
+    width: 100%;
+    min-width: 1180px;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .quotation-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 11px 12px;
+    color: var(--gray-700);
+    background: #ffffff;
+    border-bottom: 1px solid var(--gray-200);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .quotation-table tbody td {
+    padding: 10px 12px;
+    color: var(--gray-700);
+    border-bottom: 1px solid #edf2f7;
+    font-size: 13px;
+    vertical-align: middle;
+  }
+
+  .quotation-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .quotation-table tbody tr {
+    transition: background 0.15s ease;
+  }
+
+  .quotation-table tbody tr:hover {
+    background: #f8fbff;
+  }
+
+  .item-cell {
+    min-width: 350px;
+  }
+
+  .item-name {
+    color: var(--gray-900);
+    font-size: 13px;
+    font-weight: 750;
+    line-height: 1.35;
+  }
+
+  .item-code {
+    margin-top: 3px;
+    color: var(--gray-500);
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .category-cell {
+    min-width: 180px;
+  }
+
+  .category-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 27px;
+    padding: 5px 9px;
+    color: var(--primary-dark);
+    background: #e0e7ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 750;
+    line-height: 1;
+  }
+
+  .category-badge.empty {
+    color: var(--gray-600);
+    background: var(--gray-100);
+    border-color: var(--gray-200);
+  }
+
+  .category-select {
+    width: 100%;
+    min-width: 175px;
+    height: 38px;
+    padding: 7px 34px 7px 10px;
+    color: var(--gray-800);
+    background-color: #ffffff;
+    border: 1px solid var(--gray-300);
+    border-radius: 9px;
+    outline: none;
+    font-size: 13px;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+
+  .category-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+  }
+
+  .quantity-value {
+    color: var(--gray-900);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 27px;
+    padding: 5px 9px;
+    color: #075985;
+    background: #e0f2fe;
+    border: 1px solid #bae6fd;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 750;
+    white-space: nowrap;
+  }
+
+  .quote-count {
+    color: var(--gray-900);
+    font-weight: 800;
+  }
+
+  .draft-count {
+    margin-top: 3px;
+    color: var(--warning);
+    font-size: 11px;
+    font-weight: 650;
+  }
+
+  .empty-value {
+    color: #94a3b8;
+  }
+
+  .row-actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+
+  .row-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 31px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 750;
+    line-height: 1;
+    white-space: nowrap;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease,
+      opacity 0.15s ease;
+  }
+
+  .row-button:hover {
+    transform: translateY(-1px);
+    text-decoration: none;
+  }
+
+  .row-button.view {
+    color: #ffffff;
+    background: var(--primary);
+  }
+
+  .row-button.view:hover {
+    color: #ffffff;
+    box-shadow: 0 4px 10px rgba(29, 78, 216, 0.22);
+  }
+
+  .row-button.excel {
+    color: #ffffff;
+    background: var(--success);
+  }
+
+  .row-button.excel:hover {
+    color: #ffffff;
+    box-shadow: 0 4px 10px rgba(21, 128, 61, 0.22);
+  }
+
+  .row-button.print {
+    color: #ffffff;
+    background: var(--gray-600);
+  }
+
+  .row-button.print:hover {
+    color: #ffffff;
+    background: var(--gray-700);
+    box-shadow: 0 4px 10px rgba(71, 85, 105, 0.22);
+  }
+
+  .empty-state {
+    padding: 55px 24px;
+    color: var(--gray-500);
+    background: #ffffff;
+    border: 1px dashed var(--gray-300);
+    border-radius: 14px;
+    text-align: center;
+  }
+
+  .empty-state-title {
+    margin-bottom: 5px;
+    color: var(--gray-800);
+    font-size: 17px;
+    font-weight: 800;
+  }
+
+  @media (max-width: 768px) {
+    .quotation-header {
+      padding: 18px;
+    }
+
+    .quotation-title {
+      font-size: 22px;
+    }
+
+    .quotation-header-actions {
+      width: 100%;
+    }
+
+    .quotation-action-button {
+      flex: 1;
+    }
+
+    .quotation-content {
+      padding: 12px;
+    }
+
+    .category-header {
+      padding: 11px 12px;
+    }
+
+    .quotation-table tbody td,
+    .quotation-table thead th {
+      padding-left: 9px;
+      padding-right: 9px;
+    }
+  }
+</style>
+
+<div class="quotation-page">
+  <div class="quotation-main-card">
+
+    <div class="quotation-header">
+      <div>
+        <h2 class="quotation-title">
+          Líneas de solicitud
+        </h2>
+
+        <div class="quotation-subtitle">
+          <span>Solicitud:</span>
+
+          <span class="request-number">
+            {{ purchase_request.number }}
+          </span>
+        </div>
+      </div>
+
+      <div class="quotation-header-actions">
+        {% if edit_categories %}
+          <a
+            class="quotation-action-button secondary"
+            href="{{ url_for(
+              'purchases.quotation_request_lines',
+              request_id=purchase_request.id
+            ) }}"
+          >
+            Cancelar
+          </a>
+
+          <button
+            type="submit"
+            form="quotation-categories-form"
+            class="quotation-action-button primary"
+          >
+            Guardar categorías
+          </button>
+        {% else %}
+          <a
+            class="quotation-action-button primary"
+            href="{{ url_for(
+              'purchases.quotation_request_lines',
+              request_id=purchase_request.id,
+              edit_categories=1
+            ) }}"
+          >
+            Editar categorías
+          </a>
+        {% endif %}
       </div>
     </div>
 
-    <div
-      style="
-        display:flex;
-        gap:8px;
-        align-items:center;
-        flex-wrap:wrap;
-      "
-    >
-      {% if edit_categories %}
-        <a
-          class="btn btn-secondary"
-          href="{{ url_for(
-            'purchases.quotation_request_lines',
+    <div class="quotation-content">
+      {% if grouped_line_groups %}
+
+        <form
+          id="quotation-categories-form"
+          method="post"
+          action="{{ url_for(
+            'purchases.save_quotation_request_categories',
             request_id=purchase_request.id
           ) }}"
         >
-          Cancelar
-        </a>
 
-        <button
-          type="submit"
-          form="quotation-categories-form"
-          class="btn btn-primary"
-        >
-          Guardar categorías
-        </button>
-      {% else %}
-        <a
-          class="btn btn-primary"
-          href="{{ url_for(
-            'purchases.quotation_request_lines',
-            request_id=purchase_request.id,
-            edit_categories=1
-          ) }}"
-        >
-          Editar categorías
-        </a>
-      {% endif %}
-    </div>
-  </div>
+          {% for group in grouped_line_groups %}
 
-  {% if grouped_line_groups %}
-
-    <form
-      id="quotation-categories-form"
-      method="post"
-      action="{{ url_for(
-        'purchases.save_quotation_request_categories',
-        request_id=purchase_request.id
-      ) }}"
-    >
-
-      {% for group in grouped_line_groups %}
-
-        <div
-          style="
-            margin-top:20px;
-            border:1px solid #d1d5db;
-            border-radius:10px;
-            overflow:hidden;
-          "
-        >
-
-          <div
-            style="
-              padding:11px 14px;
-              background:#f3f4f6;
-              border-bottom:1px solid #d1d5db;
-              font-weight:700;
-              color:#111827;
-            "
-          >
-            {{ group.category_name }}
-            <span
-              style="
-                color:#6b7280;
-                font-weight:400;
+            <section
+              class="
+                category-section
+                {% if not group.category_id %}
+                  uncategorized
+                {% endif %}
               "
             >
-              ({{ group.lines|length }})
-            </span>
+              <div class="category-header">
+                <div class="category-header-main">
+                  <div class="category-icon">
+                    {% if group.category_id %}
+                      C
+                    {% else %}
+                      —
+                    {% endif %}
+                  </div>
+
+                  <div class="category-name">
+                    {{ clean_category_name(group.category_name) }}
+                  </div>
+                </div>
+
+                <span class="category-count">
+                  {{ group.lines|length }}
+                </span>
+              </div>
+
+              <div class="quotation-table-wrapper">
+                <table class="quotation-table">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left;">
+                        Artículo
+                      </th>
+
+                      <th style="text-align:left;">
+                        Categoría
+                      </th>
+
+                      <th style="text-align:center;">
+                        Cantidad
+                      </th>
+
+                      <th style="text-align:center;">
+                        Estado
+                      </th>
+
+                      <th style="text-align:center;">
+                        Cotizaciones
+                      </th>
+
+                      <th style="text-align:left;">
+                        Mejor proveedor
+                      </th>
+
+                      <th style="text-align:right;">
+                        Mejor precio
+                      </th>
+
+                      <th style="text-align:center;">
+                        Última fecha
+                      </th>
+
+                      <th style="text-align:center;">
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {% for item in group.lines %}
+                      <tr>
+                        <td class="item-cell">
+                          <div class="item-name">
+                            {{ item.item_name }}
+                          </div>
+
+                          <div class="item-code">
+                            {{ item.item_code }}
+                          </div>
+                        </td>
+
+                        <td class="category-cell">
+                          {% if edit_categories %}
+                            <input
+                              type="hidden"
+                              name="item_type[]"
+                              value="{{ item.item_type }}"
+                            >
+
+                            <input
+                              type="hidden"
+                              name="item_id[]"
+                              value="{{ item.item_id }}"
+                            >
+
+                            <select
+                              name="quotation_category_id[]"
+                              class="category-select"
+                            >
+                              <option value="">
+                                SIN CATEGORÍA
+                              </option>
+
+                              {% for category in categories %}
+                                <option
+                                  value="{{ category.id }}"
+                                  {% if item.quotation_category_id == category.id %}
+                                    selected
+                                  {% endif %}
+                                >
+                                  {{ clean_category_name(category.name) }}
+                                </option>
+                              {% endfor %}
+                            </select>
+                          {% else %}
+                            {% if item.quotation_category_id %}
+                              <span class="category-badge">
+                                {{
+                                  clean_category_name(
+                                    item.quotation_category_name
+                                  )
+                                }}
+                              </span>
+                            {% else %}
+                              <span class="category-badge empty">
+                                SIN CATEGORÍA
+                              </span>
+                            {% endif %}
+                          {% endif %}
+                        </td>
+
+                        <td style="text-align:center;">
+                          <span class="quantity-value">
+                            {{ item.quantity_requested }}
+                          </span>
+                        </td>
+
+                        <td style="text-align:center;">
+                          <span class="status-badge">
+                            {{
+                              (item.line_status or "-")
+                              |replace("_", " ")
+                            }}
+                          </span>
+                        </td>
+
+                        <td style="text-align:center;">
+                          <span class="quote-count">
+                            {{ item.total_quotes }}
+                          </span>
+
+                          {% if item.draft_quotes %}
+                            <div class="draft-count">
+                              {{ item.draft_quotes }}
+                              borrador(es)
+                            </div>
+                          {% endif %}
+                        </td>
+
+                        <td>
+                          {% if item.best_supplier %}
+                            {{ item.best_supplier }}
+                          {% else %}
+                            <span class="empty-value">—</span>
+                          {% endif %}
+                        </td>
+
+                        <td style="text-align:right;">
+                          {% if item.best_price is not none %}
+                            {{ item.best_price }}
+                          {% else %}
+                            <span class="empty-value">—</span>
+                          {% endif %}
+                        </td>
+
+                        <td style="text-align:center;">
+                          {% if item.last_quote_date %}
+                            {{
+                              item.last_quote_date.strftime(
+                                "%d/%m/%Y"
+                              )
+                            }}
+                          {% else %}
+                            <span class="empty-value">—</span>
+                          {% endif %}
+                        </td>
+
+                        <td>
+                          <div class="row-actions">
+                            <a
+                              class="row-button view"
+                              href="{{ url_for(
+                                'purchases.quotation_line_view',
+                                line_id=item.purchase_request_line_id
+                              ) }}"
+                            >
+                              Ver / agregar
+                            </a>
+
+                            <a
+                              class="row-button excel"
+                              href="{{ url_for(
+                                'purchases.export_quotation_comparison_excel',
+                                line_id=item.purchase_request_line_id
+                              ) }}"
+                            >
+                              Excel
+                            </a>
+
+                            <a
+                              class="row-button print"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              href="{{ url_for(
+                                'purchases.print_quotation_comparison',
+                                line_id=item.purchase_request_line_id
+                              ) }}"
+                            >
+                              Imprimir
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+          {% endfor %}
+        </form>
+
+      {% else %}
+        <div class="empty-state">
+          <div class="empty-state-title">
+            No hay líneas disponibles
           </div>
 
-          <div style="overflow-x:auto;">
-            <table
-              style="
-                width:100%;
-                border-collapse:collapse;
-              "
-            >
-              <thead>
-                <tr>
-                  <th style="text-align:left;">
-                    Artículo
-                  </th>
-
-                  <th style="text-align:left;">
-                    Categoría
-                  </th>
-
-                  <th style="text-align:center;">
-                    Cantidad
-                  </th>
-
-                  <th style="text-align:center;">
-                    Estado
-                  </th>
-
-                  <th style="text-align:center;">
-                    Cotizaciones
-                  </th>
-
-                  <th style="text-align:left;">
-                    Mejor proveedor
-                  </th>
-
-                  <th style="text-align:right;">
-                    Mejor precio
-                  </th>
-
-                  <th style="text-align:center;">
-                    Última fecha
-                  </th>
-
-                  <th style="text-align:center;">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {% for item in group.lines %}
-                  <tr>
-                    <td>
-                      <div style="font-weight:600;">
-                        {{ item.item_name }}
-                      </div>
-
-                      <div
-                        style="
-                          color:#6b7280;
-                          font-size:12px;
-                          margin-top:2px;
-                        "
-                      >
-                        {{ item.item_code }}
-                      </div>
-                    </td>
-
-                    <td style="min-width:190px;">
-                      {% if edit_categories %}
-                        <input
-                          type="hidden"
-                          name="item_type[]"
-                          value="{{ item.item_type }}"
-                        >
-
-                        <input
-                          type="hidden"
-                          name="item_id[]"
-                          value="{{ item.item_id }}"
-                        >
-
-                        <select
-                          name="quotation_category_id[]"
-                          class="form-control"
-                          style="
-                            width:100%;
-                            min-width:180px;
-                          "
-                        >
-                          <option value="">
-                            SIN CATEGORÍA
-                          </option>
-
-                          {% for category in categories %}
-                            <option
-                              value="{{ category.id }}"
-                              {% if item.quotation_category_id == category.id %}
-                                selected
-                              {% endif %}
-                            >
-                              {{ category.name }}
-                            </option>
-                          {% endfor %}
-                        </select>
-                      {% else %}
-                        {% if item.quotation_category_id %}
-                          <strong>
-                            {{ item.quotation_category_name }}
-                          </strong>
-                        {% else %}
-                          <span style="color:#9ca3af;">
-                            SIN CATEGORÍA
-                          </span>
-                        {% endif %}
-                      {% endif %}
-                    </td>
-
-                    <td style="text-align:center;">
-                      {{ item.quantity_requested }}
-                    </td>
-
-                    <td style="text-align:center;">
-                      {{ item.line_status }}
-                    </td>
-
-                    <td style="text-align:center;">
-                      {{ item.total_quotes }}
-
-                      {% if item.draft_quotes %}
-                        <div
-                          style="
-                            color:#92400e;
-                            font-size:12px;
-                          "
-                        >
-                          {{ item.draft_quotes }}
-                          borrador(es)
-                        </div>
-                      {% endif %}
-                    </td>
-
-                    <td>
-                      {{ item.best_supplier or "-" }}
-                    </td>
-
-                    <td style="text-align:right;">
-                      {% if item.best_price is not none %}
-                        {{ item.best_price }}
-                      {% else %}
-                        -
-                      {% endif %}
-                    </td>
-
-                    <td style="text-align:center;">
-                      {% if item.last_quote_date %}
-                        {{ item.last_quote_date.strftime("%d/%m/%Y") }}
-                      {% else %}
-                        -
-                      {% endif %}
-                    </td>
-
-                    <td>
-                      <div
-                        style="
-                          display:flex;
-                          gap:6px;
-                          justify-content:center;
-                          flex-wrap:wrap;
-                        "
-                      >
-                        <a
-                          class="btn btn-primary btn-sm"
-                          href="{{ url_for(
-                            'purchases.quotation_line_view',
-                            line_id=item.purchase_request_line_id
-                          ) }}"
-                        >
-                          Ver / agregar
-                        </a>
-
-                        <a
-                          class="btn btn-secondary btn-sm"
-                          href="{{ url_for(
-                            'purchases.export_quotation_comparison_excel',
-                            line_id=item.purchase_request_line_id
-                          ) }}"
-                        >
-                          Excel
-                        </a>
-
-                        <a
-                          class="btn btn-secondary btn-sm"
-                          target="_blank"
-                          href="{{ url_for(
-                            'purchases.print_quotation_comparison',
-                            line_id=item.purchase_request_line_id
-                          ) }}"
-                        >
-                          Imprimir
-                        </a>
-                      </div>
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+          <div>
+            Esta solicitud no tiene líneas activas para cotizar.
           </div>
         </div>
-
-      {% endfor %}
-    </form>
-
-  {% else %}
-    <div
-      style="
-        padding:24px;
-        text-align:center;
-        color:#6b7280;
-      "
-    >
-      Esta solicitud no tiene líneas disponibles.
+      {% endif %}
     </div>
-  {% endif %}
 
+  </div>
 </div>
+
 {% endblock %}
