@@ -7,9 +7,24 @@ class PendingArticle(db.Model):
 
     id = db.Column(db.BigInteger, primary_key=True)
 
-    provisional_code = db.Column(db.String(80), unique=True, nullable=True)
-    provisional_name = db.Column(db.String(200), nullable=False)
+    provisional_code = db.Column(
+        db.String(80),
+        unique=True,
+        nullable=True,
+    )
+
+    provisional_name = db.Column(
+        db.String(200),
+        nullable=False,
+    )
+
     description = db.Column(db.Text)
+
+    quotation_category = db.Column(
+        db.String(30),
+        nullable=True,
+        index=True,
+    )
 
     category_id = db.Column(
         db.BigInteger,
@@ -78,4 +93,7 @@ class PendingArticle(db.Model):
 
     @property
     def is_resolved(self) -> bool:
-        return self.status == "CODIFICADO" and self.linked_article_id is not None
+        return (
+            self.status == "CODIFICADO"
+            and self.linked_article_id is not None
+        )

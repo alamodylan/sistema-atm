@@ -1,6 +1,25 @@
 from app.extensions import db
 
 
+QUOTATION_CATEGORY_LABELS = {
+    "REPUESTO": "Repuesto",
+    "TORNILLERIA": "Tornillería",
+    "BATERIAS": "Baterías",
+    "FITINERIA": "Fitinería",
+    "SEGURIDAD": "Seguridad",
+    "FERRETERIA": "Ferretería",
+    "TAYLOR": "Taylor",
+    "LLANTAS": "Llantas",
+    "MARCHAMOS": "Marchamos",
+    "IMPRENTA": "Imprenta",
+    "QUIMICOS": "Químicos",
+    "RETENEDORES": "Retenedores",
+    "CILINDROS": "Cilindros",
+    "RETAZOS": "Retazos",
+    "FUMIGACION": "Fumigación",
+}
+
+
 class PurchaseRequestLine(db.Model):
     __tablename__ = "purchase_request_lines"
     __table_args__ = {"schema": "atm"}
@@ -9,7 +28,10 @@ class PurchaseRequestLine(db.Model):
 
     purchase_request_id = db.Column(
         db.BigInteger,
-        db.ForeignKey("atm.purchase_requests.id", ondelete="CASCADE"),
+        db.ForeignKey(
+            "atm.purchase_requests.id",
+            ondelete="CASCADE",
+        ),
         nullable=False,
         index=True,
     )
@@ -26,7 +48,10 @@ class PurchaseRequestLine(db.Model):
         nullable=True,
     )
 
-    quantity_requested = db.Column(db.Numeric(14, 2), nullable=False)
+    quantity_requested = db.Column(
+        db.Numeric(14, 2),
+        nullable=False,
+    )
 
     unit_id = db.Column(
         db.BigInteger,
@@ -79,7 +104,9 @@ class PurchaseRequestLine(db.Model):
         back_populates="lines",
     )
 
-    article = db.relationship("Article")
+    article = db.relationship(
+        "Article",
+    )
 
     pending_article = db.relationship(
         "PendingArticle",
@@ -104,17 +131,84 @@ class PurchaseRequestLine(db.Model):
     def item_name(self) -> str:
         if self.article:
             return self.article.name
+
         if self.pending_article:
             return self.pending_article.provisional_name
+
         return "Sin artículo"
 
     @property
     def item_code(self) -> str:
         if self.article:
             return self.article.code
+
         if self.pending_article:
-            return self.pending_article.provisional_code or ""
+            return (
+                self.pending_article.provisional_code
+                or ""
+            )
+
         return ""
+
+    @property
+    def quotation_category(self) -> str | None:
+        """
+        Devuelve la categoría de cotización perteneciente
+        al artículo normal o al artículo pendiente.
+        """
+
+        if self.article:
+            return self.article.quotation_category
+
+        if self.pending_article:
+            return self.pending_article.quotation_category
+
+        return None
+
+    @property
+    def quotation_category_label(self) -> str:
+        """
+        Devuelve el nombre visible de la categoría.
+        """
+
+        category = self.quotation_category
+
+        if not category:
+            return "Sin categoría"
+
+        return QUOTATION_CATEGORY_LABELS.get(
+            category,
+            category.replace("_", " ").title(),
+        )
+
+    @property
+    def quotation_item_type(self) -> str | None:
+        """
+        Indica qué tipo de registro debe actualizarse al guardar
+        la categoría desde la pantalla de cotizaciones.
+        """
+
+        if self.article_id:
+            return "ARTICLE"
+
+        if self.pending_article_id:
+            return "PENDING_ARTICLE"
+
+        return None
+
+    @property
+    def quotation_item_id(self) -> int | None:
+        """
+        Devuelve el ID del artículo que debe actualizarse.
+        """
+
+        if self.article_id:
+            return self.article_id
+
+        if self.pending_article_id:
+            return self.pending_article_id
+
+        return None
 
     @property
     def is_pending(self) -> bool:

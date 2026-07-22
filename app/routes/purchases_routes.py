@@ -22,6 +22,8 @@ from app.models.inventory_entry import InventoryEntry
 from app.models.warehouse_location import WarehouseLocation
 from app.models.purchase_order import PurchaseOrder
 from app.models.purchase_order_line import PurchaseOrderLine
+from app.models.quotation_category import QuotationCategory
+from app.models.article_quotation_category import ArticleQuotationCategory
 
 from flask import (
     Blueprint,
@@ -625,10 +627,16 @@ def list_quotations():
 @purchases_bp.route("/quotations/request/<int:request_id>")
 @login_required
 def quotation_request_lines(request_id: int):
-    purchase_request = PurchaseRequest.query.get_or_404(request_id)
+    purchase_request = PurchaseRequest.query.get_or_404(
+        request_id
+    )
+
+    edit_categories = (
+        request.args.get("edit_categories") == "1"
+    )
 
     # =====================================================
-    # 1. CARGAR TODAS LAS LÍNEAS EN UNA SOLA CONSULTA
+    # 1. CARGAR TODAS LAS LÍNEAS
     # =====================================================
     request_lines = (
         PurchaseRequestLine.query
@@ -638,11 +646,27 @@ def quotation_request_lines(request_id: int):
             joinedload(PurchaseRequestLine.unit),
         )
         .filter(
-            PurchaseRequestLine.purchase_request_id == request_id,
-            PurchaseRequestLine.line_status != "CANCELADA",
+            PurchaseRequestLine.purchase_request_id
+            == request_id,
+            PurchaseRequestLine.line_status
+            != "CANCELADA",
         )
         .order_by(
             PurchaseRequestLine.id.asc()
+        )
+        .all()
+    )
+
+    # El catálogo es pequeño: actualmente solo 15 registros.
+    categories = (
+        QuotationCategory.query
+        .filter(
+            QuotationCategory.is_active.is_(True)
+        )
+        .order_by(
+            QuotationCategory.sort_order.asc(),
+            QuotationCategory.name.asc(),
+            QuotationCategory.id.asc(),
         )
         .all()
     )
@@ -652,6 +676,9 @@ def quotation_request_lines(request_id: int):
             "purchases/quotations/request_lines.html",
             purchase_request=purchase_request,
             line_groups=[],
+            grouped_line_groups=[],
+            categories=categories,
+            edit_categories=edit_categories,
         )
 
     line_ids = [
@@ -659,9 +686,20 @@ def quotation_request_lines(request_id: int):
         for line in request_lines
     ]
 
+    article_ids = {
+        line.article_id
+        for line in request_lines
+        if line.article_id is not None
+    }
+
+    pending_article_ids = {
+        line.pending_article_id
+        for line in request_lines
+        if line.pending_article_id is not None
+    }
+
     # =====================================================
-    # 2. CONTAR COTIZACIONES DE TODAS LAS LÍNEAS
-    #    EN UNA SOLA CONSULTA
+    # 2. CONTAR COTIZACIONES EN UNA SOLA CONSULTA
     # =====================================================
     quotation_rows = (
         db.session.query(
@@ -710,7 +748,73 @@ def quotation_request_lines(request_id: int):
     }
 
     # =====================================================
-    # 3. ARMAR RESPUESTA SIN CONSULTAS DENTRO DEL FOR
+    # 3. CARGAR TODAS LAS CATEGORÍAS ASIGNADAS
+    #    EN UNA SOLA CONSULTA
+    # =====================================================
+    assignment_filters = []
+
+    if article_ids:
+        assignment_filters.append(
+            ArticleQuotationCategory.article_id.in_(
+                article_ids
+            )
+        )
+
+    if pending_article_ids:
+        assignment_filters.append(
+            ArticleQuotationCategory.pending_article_id.in_(
+                pending_article_ids
+            )
+        )
+
+    article_category_map = {}
+    pending_category_map = {}
+
+    if assignment_filters:
+        assignment_rows = (
+            db.session.query(
+                ArticleQuotationCategory.article_id,
+                ArticleQuotationCategory.pending_article_id,
+                QuotationCategory.id.label(
+                    "category_id"
+                ),
+                QuotationCategory.name.label(
+                    "category_name"
+                ),
+                QuotationCategory.sort_order.label(
+                    "category_sort_order"
+                ),
+            )
+            .join(
+                QuotationCategory,
+                QuotationCategory.id
+                == ArticleQuotationCategory.quotation_category_id,
+            )
+            .filter(
+                db.or_(*assignment_filters)
+            )
+            .all()
+        )
+
+        for row in assignment_rows:
+            category_data = {
+                "id": row.category_id,
+                "name": row.category_name,
+                "sort_order": row.category_sort_order,
+            }
+
+            if row.article_id is not None:
+                article_category_map[
+                    row.article_id
+                ] = category_data
+
+            if row.pending_article_id is not None:
+                pending_category_map[
+                    row.pending_article_id
+                ] = category_data
+
+    # =====================================================
+    # 4. CONSTRUIR LAS FILAS SIN CONSULTAS EN EL FOR
     # =====================================================
     line_groups = []
 
@@ -718,6 +822,24 @@ def quotation_request_lines(request_id: int):
         quotation_data = quotation_map.get(
             request_line.id
         )
+
+        category_data = None
+        item_type = None
+        item_id = None
+
+        if request_line.article_id is not None:
+            item_type = "ARTICLE"
+            item_id = request_line.article_id
+            category_data = article_category_map.get(
+                request_line.article_id
+            )
+
+        elif request_line.pending_article_id is not None:
+            item_type = "PENDING"
+            item_id = request_line.pending_article_id
+            category_data = pending_category_map.get(
+                request_line.pending_article_id
+            )
 
         line_groups.append(
             {
@@ -730,6 +852,14 @@ def quotation_request_lines(request_id: int):
                 "purchase_request_line_id": (
                     request_line.id
                 ),
+                "article_id": (
+                    request_line.article_id
+                ),
+                "pending_article_id": (
+                    request_line.pending_article_id
+                ),
+                "item_type": item_type,
+                "item_id": item_id,
                 "item_code": (
                     request_line.item_code or "-"
                 ),
@@ -769,41 +899,436 @@ def quotation_request_lines(request_id: int):
                     if quotation_data
                     else None
                 ),
+                "quotation_category_id": (
+                    category_data["id"]
+                    if category_data
+                    else None
+                ),
+                "quotation_category_name": (
+                    category_data["name"]
+                    if category_data
+                    else "SIN CATEGORÍA"
+                ),
+                "quotation_category_sort_order": (
+                    category_data["sort_order"]
+                    if category_data
+                    else 999999
+                ),
             }
         )
+
+    # =====================================================
+    # 5. ORDENAR Y AGRUPAR EN MEMORIA
+    # =====================================================
+    line_groups.sort(
+        key=lambda item: (
+            item[
+                "quotation_category_sort_order"
+            ],
+            item[
+                "quotation_category_name"
+            ],
+            item["item_name"],
+            item["purchase_request_line_id"],
+        )
+    )
+
+    grouped_line_groups = []
+
+    current_group_key = object()
+    current_group = None
+
+    for item in line_groups:
+        group_key = (
+            item["quotation_category_id"]
+            if item["quotation_category_id"]
+            is not None
+            else "SIN_CATEGORIA"
+        )
+
+        if group_key != current_group_key:
+            current_group = {
+                "category_id": (
+                    item[
+                        "quotation_category_id"
+                    ]
+                ),
+                "category_name": (
+                    item[
+                        "quotation_category_name"
+                    ]
+                ),
+                "lines": [],
+            }
+
+            grouped_line_groups.append(
+                current_group
+            )
+
+            current_group_key = group_key
+
+        current_group["lines"].append(item)
 
     return render_template(
         "purchases/quotations/request_lines.html",
         purchase_request=purchase_request,
         line_groups=line_groups,
+        grouped_line_groups=grouped_line_groups,
+        categories=categories,
+        edit_categories=edit_categories,
     )
 
-
-@purchases_bp.route("/quotations/create", methods=["GET", "POST"])
+@purchases_bp.route(
+    "/quotations/request/<int:request_id>/categories/save",
+    methods=["POST"],
+)
 @login_required
-def create_quotation():
+def save_quotation_request_categories(
+    request_id: int,
+):
+    PurchaseRequest.query.get_or_404(
+        request_id
+    )
 
-    purchase_requests = (
-        PurchaseRequest.query
-        .options(
-            joinedload(PurchaseRequest.site),
-            joinedload(PurchaseRequest.warehouse),
+    item_types = request.form.getlist(
+        "item_type[]"
+    )
+
+    item_ids = request.form.getlist(
+        "item_id[]"
+    )
+
+    category_ids = request.form.getlist(
+        "quotation_category_id[]"
+    )
+
+    if not (
+        len(item_types)
+        == len(item_ids)
+        == len(category_ids)
+    ):
+        flash(
+            "La información de categorías está incompleta.",
+            "danger",
+        )
+
+        return redirect(
+            url_for(
+                "purchases.quotation_request_lines",
+                request_id=request_id,
+                edit_categories=1,
+            )
+        )
+
+    # =====================================================
+    # 1. VALIDAR LOS ARTÍCULOS QUE PERTENECEN A LA SOLICITUD
+    # =====================================================
+    request_item_rows = (
+        db.session.query(
+            PurchaseRequestLine.article_id,
+            PurchaseRequestLine.pending_article_id,
         )
         .filter(
-            PurchaseRequest.status.in_([
-                "EN_REVISION_PROVEEDURIA",
-                "PARCIALMENTE_COTIZADA",
-                "COTIZADA",
-            ])
+            PurchaseRequestLine.purchase_request_id
+            == request_id,
+            PurchaseRequestLine.line_status
+            != "CANCELADA",
         )
-        .order_by(PurchaseRequest.created_at.desc())
-        .limit(100)
         .all()
     )
 
-    return render_template(
-        "purchases/quotations/create.html",
-        purchase_requests=purchase_requests,
+    valid_article_ids = {
+        row.article_id
+        for row in request_item_rows
+        if row.article_id is not None
+    }
+
+    valid_pending_article_ids = {
+        row.pending_article_id
+        for row in request_item_rows
+        if row.pending_article_id is not None
+    }
+
+    submitted_rows = []
+    submitted_category_ids = set()
+
+    for index, raw_item_type in enumerate(
+        item_types
+    ):
+        item_type = (
+            raw_item_type or ""
+        ).strip().upper()
+
+        raw_item_id = (
+            item_ids[index] or ""
+        ).strip()
+
+        raw_category_id = (
+            category_ids[index] or ""
+        ).strip()
+
+        try:
+            item_id = int(raw_item_id)
+        except (TypeError, ValueError):
+            continue
+
+        category_id = None
+
+        if raw_category_id:
+            try:
+                category_id = int(
+                    raw_category_id
+                )
+            except (TypeError, ValueError):
+                flash(
+                    "Se recibió una categoría inválida.",
+                    "danger",
+                )
+
+                return redirect(
+                    url_for(
+                        "purchases.quotation_request_lines",
+                        request_id=request_id,
+                        edit_categories=1,
+                    )
+                )
+
+            submitted_category_ids.add(
+                category_id
+            )
+
+        if item_type == "ARTICLE":
+            if item_id not in valid_article_ids:
+                continue
+
+        elif item_type == "PENDING":
+            if (
+                item_id
+                not in valid_pending_article_ids
+            ):
+                continue
+
+        else:
+            continue
+
+        submitted_rows.append(
+            {
+                "item_type": item_type,
+                "item_id": item_id,
+                "category_id": category_id,
+            }
+        )
+
+    # =====================================================
+    # 2. VALIDAR TODAS LAS CATEGORÍAS EN UNA CONSULTA
+    # =====================================================
+    if submitted_category_ids:
+        valid_category_ids = {
+            row.id
+            for row in (
+                QuotationCategory.query
+                .filter(
+                    QuotationCategory.id.in_(
+                        submitted_category_ids
+                    ),
+                    QuotationCategory.is_active.is_(
+                        True
+                    ),
+                )
+                .all()
+            )
+        }
+
+        invalid_category_ids = (
+            submitted_category_ids
+            - valid_category_ids
+        )
+
+        if invalid_category_ids:
+            flash(
+                "Una de las categorías seleccionadas no existe o está inactiva.",
+                "danger",
+            )
+
+            return redirect(
+                url_for(
+                    "purchases.quotation_request_lines",
+                    request_id=request_id,
+                    edit_categories=1,
+                )
+            )
+
+    # Evita procesar varias veces el mismo artículo cuando
+    # aparece repetido en la misma solicitud.
+    normalized_rows = {}
+
+    for item in submitted_rows:
+        normalized_rows[
+            (
+                item["item_type"],
+                item["item_id"],
+            )
+        ] = item
+
+    submitted_rows = list(
+        normalized_rows.values()
+    )
+
+    article_ids = {
+        item["item_id"]
+        for item in submitted_rows
+        if item["item_type"] == "ARTICLE"
+    }
+
+    pending_article_ids = {
+        item["item_id"]
+        for item in submitted_rows
+        if item["item_type"] == "PENDING"
+    }
+
+    assignment_filters = []
+
+    if article_ids:
+        assignment_filters.append(
+            ArticleQuotationCategory.article_id.in_(
+                article_ids
+            )
+        )
+
+    if pending_article_ids:
+        assignment_filters.append(
+            ArticleQuotationCategory.pending_article_id.in_(
+                pending_article_ids
+            )
+        )
+
+    # =====================================================
+    # 3. CARGAR ASIGNACIONES EXISTENTES UNA SOLA VEZ
+    # =====================================================
+    existing_assignments = []
+
+    if assignment_filters:
+        existing_assignments = (
+            ArticleQuotationCategory.query
+            .filter(
+                db.or_(*assignment_filters)
+            )
+            .all()
+        )
+
+    existing_map = {}
+
+    for assignment in existing_assignments:
+        if assignment.article_id is not None:
+            existing_map[
+                (
+                    "ARTICLE",
+                    assignment.article_id,
+                )
+            ] = assignment
+
+        elif (
+            assignment.pending_article_id
+            is not None
+        ):
+            existing_map[
+                (
+                    "PENDING",
+                    assignment.pending_article_id,
+                )
+            ] = assignment
+
+    try:
+        now = datetime.now(UTC)
+
+        for item in submitted_rows:
+            key = (
+                item["item_type"],
+                item["item_id"],
+            )
+
+            category_id = item[
+                "category_id"
+            ]
+
+            existing = existing_map.get(key)
+
+            # Dejar sin categoría elimina la asignación.
+            if category_id is None:
+                if existing:
+                    db.session.delete(
+                        existing
+                    )
+
+                continue
+
+            if existing:
+                if (
+                    existing.quotation_category_id
+                    != category_id
+                ):
+                    existing.quotation_category_id = (
+                        category_id
+                    )
+                    existing.updated_at = now
+
+                continue
+
+            assignment = (
+                ArticleQuotationCategory(
+                    quotation_category_id=(
+                        category_id
+                    ),
+                    article_id=(
+                        item["item_id"]
+                        if item["item_type"]
+                        == "ARTICLE"
+                        else None
+                    ),
+                    pending_article_id=(
+                        item["item_id"]
+                        if item["item_type"]
+                        == "PENDING"
+                        else None
+                    ),
+                )
+            )
+
+            db.session.add(assignment)
+
+        db.session.commit()
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[SAVE QUOTATION CATEGORIES ERROR] "
+            f"{exc}"
+        )
+
+        flash(
+            "No fue posible guardar las categorías.",
+            "danger",
+        )
+
+        return redirect(
+            url_for(
+                "purchases.quotation_request_lines",
+                request_id=request_id,
+                edit_categories=1,
+            )
+        )
+
+    flash(
+        "Categorías guardadas correctamente.",
+        "success",
+    )
+
+    return redirect(
+        url_for(
+            "purchases.quotation_request_lines",
+            request_id=request_id,
+        )
     )
 
 @purchases_bp.route(

@@ -38,6 +38,12 @@ class Article(db.Model):
     barcode = db.Column(db.String(100), unique=True, nullable=True, index=True)
     sap_code = db.Column(db.String(100), nullable=True, index=True)
 
+    quotation_category = db.Column(
+        db.String(30),
+        nullable=True,
+        index=True,
+    )
+
     is_tool = db.Column(db.Boolean, nullable=False, default=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 

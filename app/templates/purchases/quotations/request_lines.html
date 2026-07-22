@@ -1,162 +1,345 @@
 {% extends "base.html" %}
 
+{% block title %}
+Líneas de solicitud
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
+<div class="card card-pad">
 
-    <nav class="mb-3">
-        <ol class="breadcrumb mb-0 small">
-            <li class="breadcrumb-item">
-                <a href="{{ url_for('purchases.list_quotations') }}">Cotizaciones</a>
-            </li>
-            <li class="breadcrumb-item active">
-                {{ purchase_request.number }}
-            </li>
-        </ol>
-    </nav>
+  <div
+    style="
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      flex-wrap:wrap;
+      margin-bottom:18px;
+    "
+  >
+    <div>
+      <h2 style="margin:0;">
+        Líneas de solicitud
+      </h2>
 
-    <div class="d-flex justify-content-between align-items-start mb-4">
-        <div>
-            <h2 class="fw-bold mb-1">Líneas de solicitud</h2>
-            <p class="text-muted mb-0">
-                Solicitud {{ purchase_request.number }}
-                {% if purchase_request.site %}
-                    | Predio: {{ purchase_request.site.name }}
-                {% endif %}
-                {% if purchase_request.warehouse %}
-                    | Bodega: {{ purchase_request.warehouse.name }}
-                {% endif %}
-            </p>
-        </div>
+      <div
+        style="
+          margin-top:5px;
+          color:#6b7280;
+        "
+      >
+        Solicitud:
+        <strong>
+          {{ purchase_request.number }}
+        </strong>
+      </div>
+    </div>
 
-        <a href="{{ url_for('purchases.list_quotations') }}" class="btn btn-light rounded-3">
-            <i class="bi bi-arrow-left me-2"></i>Volver a solicitudes
+    <div
+      style="
+        display:flex;
+        gap:8px;
+        align-items:center;
+        flex-wrap:wrap;
+      "
+    >
+      {% if edit_categories %}
+        <a
+          class="btn btn-secondary"
+          href="{{ url_for(
+            'purchases.quotation_request_lines',
+            request_id=purchase_request.id
+          ) }}"
+        >
+          Cancelar
         </a>
+
+        <button
+          type="submit"
+          form="quotation-categories-form"
+          class="btn btn-primary"
+        >
+          Guardar categorías
+        </button>
+      {% else %}
+        <a
+          class="btn btn-primary"
+          href="{{ url_for(
+            'purchases.quotation_request_lines',
+            request_id=purchase_request.id,
+            edit_categories=1
+          ) }}"
+        >
+          Editar categorías
+        </a>
+      {% endif %}
     </div>
+  </div>
 
-    <div class="card border-0 shadow-sm rounded-4">
-        <div class="card-body p-0">
+  {% if grouped_line_groups %}
 
-            {% if line_groups %}
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="ps-4">Artículo</th>
-                                <th>Cantidad</th>
-                                <th>Estado</th>
-                                <th>Cotizaciones</th>
-                                <th>Mejor proveedor</th>
-                                <th>Mejor precio</th>
-                                <th>Última fecha</th>
-                                <th class="text-end pe-4">Acciones</th>
-                            </tr>
-                        </thead>
+    <form
+      id="quotation-categories-form"
+      method="post"
+      action="{{ url_for(
+        'purchases.save_quotation_request_categories',
+        request_id=purchase_request.id
+      ) }}"
+    >
 
-                        <tbody>
-                            {% for item in line_groups %}
-                                <tr>
-                                    <td class="ps-4">
-                                        <div class="fw-semibold">
-                                            {{ item.item_name or "Sin artículo" }}
-                                        </div>
-                                        <div class="text-muted small">
-                                            Código: {{ item.item_code or "-" }}
-                                        </div>
-                                    </td>
+      {% for group in grouped_line_groups %}
 
-                                    <td>
-                                        {{ item.quantity_requested or "-" }}
-                                    </td>
+        <div
+          style="
+            margin-top:20px;
+            border:1px solid #d1d5db;
+            border-radius:10px;
+            overflow:hidden;
+          "
+        >
 
-                                    <td>
-                                        {% if item.line_status == "COTIZADA" %}
-                                            <span class="badge bg-success-subtle text-success border">
-                                                Cotizada
-                                            </span>
-                                        {% elif item.line_status == "COTIZANDO" %}
-                                            <span class="badge bg-warning-subtle text-warning border">
-                                                Cotizando
-                                            </span>
-                                        {% elif item.line_status == "CONVERTIDA_A_OC" %}
-                                            <span class="badge bg-primary-subtle text-primary border">
-                                                Convertida a OC
-                                            </span>
-                                        {% elif item.line_status == "RECIBIDA" %}
-                                            <span class="badge bg-info-subtle text-info border">
-                                                Recibida
-                                            </span>
-                                        {% else %}
-                                            <span class="badge bg-secondary-subtle text-secondary border">
-                                                {{ item.line_status or "-" }}
-                                            </span>
-                                        {% endif %}
-                                    </td>
+          <div
+            style="
+              padding:11px 14px;
+              background:#f3f4f6;
+              border-bottom:1px solid #d1d5db;
+              font-weight:700;
+              color:#111827;
+            "
+          >
+            {{ group.category_name }}
+            <span
+              style="
+                color:#6b7280;
+                font-weight:400;
+              "
+            >
+              ({{ group.lines|length }})
+            </span>
+          </div>
 
-                                    <td>
-                                        <div class="fw-semibold">
-                                            {{ item.total_quotes or 0 }}
-                                        </div>
-                                        <div class="text-muted small">
-                                            Confirmadas: {{ item.confirmed_quotes or 0 }}
-                                        </div>
-                                    </td>
+          <div style="overflow-x:auto;">
+            <table
+              style="
+                width:100%;
+                border-collapse:collapse;
+              "
+            >
+              <thead>
+                <tr>
+                  <th style="text-align:left;">
+                    Artículo
+                  </th>
 
-                                    <td>
-                                        {{ item.best_supplier or "-" }}
-                                    </td>
+                  <th style="text-align:left;">
+                    Categoría
+                  </th>
 
-                                    <td>
-                                        {% if item.best_price %}
-                                            CRC {{ item.best_price }}
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
+                  <th style="text-align:center;">
+                    Cantidad
+                  </th>
 
-                                    <td>
-                                        {{ item.last_quote_date.strftime("%d/%m/%Y") if item.last_quote_date else "-" }}
-                                    </td>
+                  <th style="text-align:center;">
+                    Estado
+                  </th>
 
-                                    <td class="text-end pe-4">
-                                        <div class="btn-group">
-                                            <a href="{{ url_for('purchases.quotation_line_view', line_id=item.purchase_request_line_id) }}"
-                                               class="btn btn-sm btn-dark rounded-start-3">
-                                                Ver / agregar
-                                            </a>
+                  <th style="text-align:center;">
+                    Cotizaciones
+                  </th>
 
-                                            <a href="{{ url_for('purchases.export_quotation_comparison_excel', line_id=item.purchase_request_line_id) }}"
-                                               class="btn btn-sm btn-outline-success">
-                                                Excel
-                                            </a>
+                  <th style="text-align:left;">
+                    Mejor proveedor
+                  </th>
 
-                                            <a href="{{ url_for('purchases.print_quotation_comparison', line_id=item.purchase_request_line_id) }}"
-                                               target="_blank"
-                                               class="btn btn-sm btn-outline-dark rounded-end-3">
-                                                Imprimir
-                                            </a>
-                                        </div>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <div class="p-5 text-center">
-                    <i class="bi bi-list-check fs-1 text-muted"></i>
-                    <h5 class="mt-3 fw-bold">No hay líneas cotizadas</h5>
-                    <p class="text-muted mb-4">
-                        Esta solicitud todavía no tiene líneas con cotizaciones registradas.
-                    </p>
+                  <th style="text-align:right;">
+                    Mejor precio
+                  </th>
 
-                    <a href="{{ url_for('purchases.create_quotation') }}" class="btn btn-dark rounded-3">
-                        <i class="bi bi-plus-lg me-2"></i>Crear cotización
-                    </a>
-                </div>
-            {% endif %}
+                  <th style="text-align:center;">
+                    Última fecha
+                  </th>
 
+                  <th style="text-align:center;">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {% for item in group.lines %}
+                  <tr>
+                    <td>
+                      <div style="font-weight:600;">
+                        {{ item.item_name }}
+                      </div>
+
+                      <div
+                        style="
+                          color:#6b7280;
+                          font-size:12px;
+                          margin-top:2px;
+                        "
+                      >
+                        {{ item.item_code }}
+                      </div>
+                    </td>
+
+                    <td style="min-width:190px;">
+                      {% if edit_categories %}
+                        <input
+                          type="hidden"
+                          name="item_type[]"
+                          value="{{ item.item_type }}"
+                        >
+
+                        <input
+                          type="hidden"
+                          name="item_id[]"
+                          value="{{ item.item_id }}"
+                        >
+
+                        <select
+                          name="quotation_category_id[]"
+                          class="form-control"
+                          style="
+                            width:100%;
+                            min-width:180px;
+                          "
+                        >
+                          <option value="">
+                            SIN CATEGORÍA
+                          </option>
+
+                          {% for category in categories %}
+                            <option
+                              value="{{ category.id }}"
+                              {% if item.quotation_category_id == category.id %}
+                                selected
+                              {% endif %}
+                            >
+                              {{ category.name }}
+                            </option>
+                          {% endfor %}
+                        </select>
+                      {% else %}
+                        {% if item.quotation_category_id %}
+                          <strong>
+                            {{ item.quotation_category_name }}
+                          </strong>
+                        {% else %}
+                          <span style="color:#9ca3af;">
+                            SIN CATEGORÍA
+                          </span>
+                        {% endif %}
+                      {% endif %}
+                    </td>
+
+                    <td style="text-align:center;">
+                      {{ item.quantity_requested }}
+                    </td>
+
+                    <td style="text-align:center;">
+                      {{ item.line_status }}
+                    </td>
+
+                    <td style="text-align:center;">
+                      {{ item.total_quotes }}
+
+                      {% if item.draft_quotes %}
+                        <div
+                          style="
+                            color:#92400e;
+                            font-size:12px;
+                          "
+                        >
+                          {{ item.draft_quotes }}
+                          borrador(es)
+                        </div>
+                      {% endif %}
+                    </td>
+
+                    <td>
+                      {{ item.best_supplier or "-" }}
+                    </td>
+
+                    <td style="text-align:right;">
+                      {% if item.best_price is not none %}
+                        {{ item.best_price }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+
+                    <td style="text-align:center;">
+                      {% if item.last_quote_date %}
+                        {{ item.last_quote_date.strftime("%d/%m/%Y") }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+
+                    <td>
+                      <div
+                        style="
+                          display:flex;
+                          gap:6px;
+                          justify-content:center;
+                          flex-wrap:wrap;
+                        "
+                      >
+                        <a
+                          class="btn btn-primary btn-sm"
+                          href="{{ url_for(
+                            'purchases.quotation_line_view',
+                            line_id=item.purchase_request_line_id
+                          ) }}"
+                        >
+                          Ver / agregar
+                        </a>
+
+                        <a
+                          class="btn btn-secondary btn-sm"
+                          href="{{ url_for(
+                            'purchases.export_quotation_comparison_excel',
+                            line_id=item.purchase_request_line_id
+                          ) }}"
+                        >
+                          Excel
+                        </a>
+
+                        <a
+                          class="btn btn-secondary btn-sm"
+                          target="_blank"
+                          href="{{ url_for(
+                            'purchases.print_quotation_comparison',
+                            line_id=item.purchase_request_line_id
+                          ) }}"
+                        >
+                          Imprimir
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
+
+      {% endfor %}
+    </form>
+
+  {% else %}
+    <div
+      style="
+        padding:24px;
+        text-align:center;
+        color:#6b7280;
+      "
+    >
+      Esta solicitud no tiene líneas disponibles.
     </div>
+  {% endif %}
 
 </div>
 {% endblock %}

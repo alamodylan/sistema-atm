@@ -58,6 +58,8 @@ from .permission import Permission
 from .role_permission import RolePermission
 from .request_routing_rule import RequestRoutingRule
 from .request_routing_rule import RequestRoutingRule
+from app.models.quotation_category import QuotationCategory
+from app.models.article_quotation_category import ArticleQuotationCategory
 
 __all__ = [
     "Role",
@@ -123,4 +125,6 @@ __all__ = [
     "Permission",
     "RolePermission",
     "RequestRoutingRule",
+    "QuotationCategory",
+    "ArticleQuotationCategory",
 ]
