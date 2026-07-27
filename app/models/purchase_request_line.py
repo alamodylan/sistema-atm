@@ -127,6 +127,12 @@ class PurchaseRequestLine(db.Model):
         lazy="selectin",
     )
 
+    purchase_order_candidate = db.relationship(
+        "PurchaseOrderCandidate",
+        back_populates="purchase_request_line",
+        uselist=False,
+    )
+
     @property
     def item_name(self) -> str:
         if self.article:

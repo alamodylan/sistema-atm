@@ -30,7 +30,10 @@ class QuotationBatch(db.Model):
         server_default=db.func.now(),
     )
 
-    purchase_request = db.relationship("PurchaseRequest")
+    purchase_request = db.relationship(
+        "PurchaseRequest",
+        back_populates="quotation_batches",
+    )
     created_by_user = db.relationship("User")
 
     lines = db.relationship(

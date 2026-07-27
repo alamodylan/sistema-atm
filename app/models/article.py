@@ -38,12 +38,7 @@ class Article(db.Model):
     barcode = db.Column(db.String(100), unique=True, nullable=True, index=True)
     sap_code = db.Column(db.String(100), nullable=True, index=True)
 
-    quotation_category = db.Column(
-        db.String(30),
-        nullable=True,
-        index=True,
-    )
-
+   
     is_tool = db.Column(db.Boolean, nullable=False, default=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
@@ -146,6 +141,14 @@ class Article(db.Model):
         back_populates="article",
         cascade="all, delete-orphan",
         lazy="selectin",
+    )
+
+    quotation_category_assignment = db.relationship(
+        "ArticleQuotationCategory",
+        back_populates="article",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="joined",
     )
 
     def __repr__(self) -> str:

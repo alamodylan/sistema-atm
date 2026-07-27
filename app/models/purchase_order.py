@@ -94,3 +94,9 @@ class PurchaseOrder(db.Model):
         back_populates="purchase_order",
         lazy="selectin",
     )
+
+    purchase_order_candidates = db.relationship(
+        "PurchaseOrderCandidate",
+        back_populates="purchase_order",
+        lazy="selectin",
+    )

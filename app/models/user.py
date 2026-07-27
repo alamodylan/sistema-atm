@@ -130,6 +130,12 @@ class User(UserMixin, db.Model):
         lazy="dynamic",
     )
 
+    selected_purchase_order_candidates = db.relationship(
+        "PurchaseOrderCandidate",
+        back_populates="selected_by_user",
+        lazy="selectin",
+    )
+
     def set_password(self, raw_password: str) -> None:
         self.password_hash = generate_password_hash(raw_password)
 

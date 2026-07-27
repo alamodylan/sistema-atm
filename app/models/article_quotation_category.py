@@ -78,5 +78,16 @@ class ArticleQuotationCategory(db.Model):
 
     quotation_category = db.relationship(
         "QuotationCategory",
+        back_populates="article_assignments",
         lazy="joined",
+    )
+
+    article = db.relationship(
+        "Article",
+        back_populates="quotation_category_assignment",
+    )
+
+    pending_article = db.relationship(
+        "PendingArticle",
+        back_populates="quotation_category_assignment",
     )

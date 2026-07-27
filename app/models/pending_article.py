@@ -20,11 +20,6 @@ class PendingArticle(db.Model):
 
     description = db.Column(db.Text)
 
-    quotation_category = db.Column(
-        db.String(30),
-        nullable=True,
-        index=True,
-    )
 
     category_id = db.Column(
         db.BigInteger,
@@ -89,6 +84,14 @@ class PendingArticle(db.Model):
         "InventoryEntryLine",
         back_populates="pending_article",
         lazy="selectin",
+    )
+
+    quotation_category_assignment = db.relationship(
+        "ArticleQuotationCategory",
+        back_populates="pending_article",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="joined",
     )
 
     @property

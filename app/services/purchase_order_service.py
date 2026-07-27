@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -9,8 +9,10 @@ from sqlalchemy import func
 from app.extensions import db
 from app.models.purchase_order import PurchaseOrder
 from app.models.purchase_order_approval import PurchaseOrderApproval
+from app.models.purchase_order_candidate import PurchaseOrderCandidate
 from app.models.purchase_order_line import PurchaseOrderLine
-from datetime import datetime, UTC
+from app.models.purchase_request import PurchaseRequest
+from app.models.purchase_request_line import PurchaseRequestLine
 from app.models.quotation_line import QuotationLine
 
 
@@ -18,20 +20,6 @@ class PurchaseOrderServiceError(Exception):
     pass
 
 
-@dataclass
-class PurchaseOrderLinePayload:
-    quantity_ordered: Decimal
-    unit_cost: Decimal
-    article_id: int | None = None
-    pending_article_id: int | None = None
-    purchase_request_line_id: int | None = None
-    quotation_line_id: int | None = None
-    unit_id: int | None = None
-    discount_pct: Decimal = Decimal("0")
-    tax_pct: Decimal = Decimal("0")
-    line_subtotal: Decimal = Decimal("0")
-    line_total: Decimal = Decimal("0")
-    line_notes: str | None = None
 
 
 def _generate_purchase_order_number() -> str:
@@ -47,193 +35,690 @@ def _normalize_decimal(value: Any, field_name: str) -> Decimal:
         raise PurchaseOrderServiceError(f"Valor inválido para {field_name}.") from exc
 
 
-def _validate_po_line(line: PurchaseOrderLinePayload) -> None:
-    if bool(line.article_id) == bool(line.pending_article_id):
+def _normalize_candidate_ids(
+    candidate_ids: list[int] | None,
+) -> list[int]:
+    """
+    Normaliza y valida los identificadores de candidatos recibidos
+    para generar una orden de compra.
+    """
+
+    if not candidate_ids:
         raise PurchaseOrderServiceError(
-            "Cada línea de orden de compra debe tener un artículo normal o un artículo pendiente, pero no ambos."
+            "Debe seleccionar al menos una línea pendiente para crear la orden."
         )
 
-    if _normalize_decimal(line.quantity_ordered, "cantidad") <= 0:
-        raise PurchaseOrderServiceError("La cantidad ordenada debe ser mayor que cero.")
+    normalized_ids: list[int] = []
 
+    for candidate_id in candidate_ids:
+        try:
+            normalized_id = int(candidate_id)
+        except (TypeError, ValueError) as exc:
+            raise PurchaseOrderServiceError(
+                "Se recibió una selección de pre-OC inválida."
+            ) from exc
 
-def _validate_unique_quotation_usage(line: PurchaseOrderLinePayload) -> None:
-    if not line.quotation_line_id:
+        if normalized_id <= 0:
+            raise PurchaseOrderServiceError(
+                "Se recibió una selección de pre-OC inválida."
+            )
+
+        normalized_ids.append(normalized_id)
+
+    if len(normalized_ids) != len(set(normalized_ids)):
+        raise PurchaseOrderServiceError(
+            "Una misma línea fue seleccionada más de una vez."
+        )
+
+    return normalized_ids
+
+def _build_payment_terms(
+    quotation_line: QuotationLine,
+) -> str | None:
+    """
+    Construye el texto de condiciones de pago de una cotización.
+    """
+
+    payment_type = (
+        quotation_line.payment_type or ""
+    ).strip()
+
+    payment_term_months = (
+        quotation_line.payment_term_months
+    )
+
+    if not payment_type:
+        return None
+
+    if payment_term_months is not None:
+        return (
+            f"{payment_type} "
+            f"{payment_term_months} meses"
+        )
+
+    return payment_type
+
+def _calculate_purchase_order_line_amounts(
+    *,
+    quotation_line: QuotationLine,
+    quantity: Any,
+) -> dict:
+    """
+    Calcula los montos de una línea de orden desde su cotización.
+
+    unit_cost representa el costo unitario antes del descuento
+    y sin impuesto.
+
+    El descuento y el impuesto permanecen almacenados por separado
+    en PurchaseOrderLine.
+    """
+
+    quantity_decimal = _normalize_decimal(
+        quantity,
+        "cantidad ordenada",
+    )
+
+    unit_price = _normalize_decimal(
+        quotation_line.unit_price or Decimal("0"),
+        "precio unitario",
+    )
+
+    discount_pct = _normalize_decimal(
+        quotation_line.discount_pct or Decimal("0"),
+        "descuento",
+    )
+
+    tax_pct = _normalize_decimal(
+        quotation_line.tax_pct or Decimal("0"),
+        "impuesto",
+    )
+
+    if quantity_decimal <= 0:
+        raise PurchaseOrderServiceError(
+            "La cantidad ordenada debe ser mayor que cero."
+        )
+
+    if unit_price <= 0:
+        raise PurchaseOrderServiceError(
+            "La cotización seleccionada no tiene un precio válido."
+        )
+
+    if discount_pct < 0 or discount_pct > 100:
+        raise PurchaseOrderServiceError(
+            "El porcentaje de descuento debe estar entre 0 y 100."
+        )
+
+    if tax_pct < 0:
+        raise PurchaseOrderServiceError(
+            "El porcentaje de impuesto no puede ser negativo."
+        )
+
+    tax_factor = (
+        Decimal("1")
+        + (tax_pct / Decimal("100"))
+    )
+
+    if quotation_line.tax_included:
+        unit_cost = (
+            unit_price / tax_factor
+            if tax_pct > 0
+            else unit_price
+        )
+    else:
+        unit_cost = unit_price
+
+    line_subtotal = (
+        quantity_decimal * unit_cost
+    )
+
+    discount_amount = (
+        line_subtotal
+        * (discount_pct / Decimal("100"))
+    )
+
+    taxable_base = (
+        line_subtotal - discount_amount
+    )
+
+    tax_amount = (
+        taxable_base
+        * (tax_pct / Decimal("100"))
+    )
+
+    line_total = (
+        taxable_base + tax_amount
+    )
+
+    return {
+        "quantity": quantity_decimal,
+        "unit_cost": unit_cost,
+        "discount_pct": discount_pct,
+        "tax_pct": tax_pct,
+        "line_subtotal": line_subtotal,
+        "discount_amount": discount_amount,
+        "taxable_base": taxable_base,
+        "tax_amount": tax_amount,
+        "line_total": line_total,
+    }
+
+def _update_purchase_request_after_order_creation(
+    purchase_request_id: int,
+) -> None:
+    """
+    Actualiza el estado general de una solicitud cuando sus líneas
+    han sido convertidas en órdenes de compra.
+
+    La solicitud solamente pasa a CONVERTIDA_A_OC cuando todas sus
+    líneas activas fueron convertidas o recibidas.
+    """
+
+    purchase_request = PurchaseRequest.query.get(
+        purchase_request_id
+    )
+
+    if not purchase_request:
         return
 
-    existing = PurchaseOrderLine.query.filter(
-        PurchaseOrderLine.quotation_line_id == line.quotation_line_id
-    ).first()
-
-    if existing:
-        raise PurchaseOrderServiceError(
-            "Una línea de cotización ya fue utilizada en otra orden de compra."
-        )
-
-
-def _validate_unique_request_usage(line: PurchaseOrderLinePayload) -> None:
-    if not line.purchase_request_line_id:
+    if purchase_request.status in {
+        "CERRADA",
+        "CANCELADA",
+    }:
         return
 
-    existing = PurchaseOrderLine.query.filter(
-        PurchaseOrderLine.purchase_request_line_id == line.purchase_request_line_id
-    ).first()
+    active_lines = [
+        line
+        for line in purchase_request.lines
+        if line.line_status != "CANCELADA"
+    ]
 
-    if existing:
-        raise PurchaseOrderServiceError(
-            "Esta línea de solicitud de compra ya fue utilizada en una orden."
+    if not active_lines:
+        return
+
+    completed_statuses = {
+        "CONVERTIDA_A_OC",
+        "RECIBIDA",
+    }
+
+    if all(
+        line.line_status in completed_statuses
+        for line in active_lines
+    ):
+        purchase_request.status = (
+            "CONVERTIDA_A_OC"
         )
+
 
 
 def create_purchase_order(
     *,
-    supplier_id: int | None,
+    candidate_ids: list[int],
     generated_by_user_id: int,
-    purchase_request_id: int | None = None,
-    site_id: int | None = None,
-    warehouse_id: int | None = None,
-    payment_terms: str | None = None,
-    currency_code: str = "CRC",
+    supplier_id: int | None = None,
     notes: str | None = None,
-    lines: list[PurchaseOrderLinePayload] | None = None,
+    payment_terms: str | None = None,
 ) -> PurchaseOrder:
-    if not supplier_id:
-        raise PurchaseOrderServiceError("Debe seleccionar un proveedor.")
+    """
+    Crea una orden de compra exclusivamente desde candidatos de pre-OC.
+
+    Reglas:
+    - todos los candidatos deben estar en estado PENDING;
+    - ninguno puede estar vinculado previamente a una OC;
+    - todos deben pertenecer al mismo proveedor;
+    - todos deben utilizar la misma moneda;
+    - cada candidato debe coincidir con su cotización y solicitud;
+    - ninguna línea de solicitud puede haberse utilizado previamente;
+    - después de crear la OC:
+        PurchaseOrderCandidate -> USED
+        QuotationLine -> CONVERTIDA_A_OC
+        PurchaseRequestLine -> CONVERTIDA_A_OC
+    """
 
     if not generated_by_user_id:
-        raise PurchaseOrderServiceError("No se pudo identificar el usuario que genera la orden.")
+        raise PurchaseOrderServiceError(
+            "No se pudo identificar el usuario que genera la orden."
+        )
 
-    lines = lines or []
-
-    if not lines:
-        raise PurchaseOrderServiceError("La orden de compra debe tener al menos una línea.")
-
-    now = datetime.now(UTC)
-
-    purchase_order = PurchaseOrder(
-        number=_generate_purchase_order_number(),
-        purchase_request_id=purchase_request_id,
-        supplier_id=supplier_id,
-        site_id=site_id,
-        warehouse_id=warehouse_id,
-        generated_by_user_id=generated_by_user_id,
-        approval_status="PENDIENTE_APROBACION",
-        submitted_for_approval_at=now,
-        payment_terms=payment_terms,
-        currency_code=currency_code or "CRC",
-        notes=notes,
+    normalized_candidate_ids = (
+        _normalize_candidate_ids(
+            candidate_ids
+        )
     )
 
-    db.session.add(purchase_order)
-    db.session.flush()
+    try:
+        candidates = (
+            PurchaseOrderCandidate.query
+            .filter(
+                PurchaseOrderCandidate.id.in_(
+                    normalized_candidate_ids
+                )
+            )
+            .with_for_update()
+            .order_by(
+                PurchaseOrderCandidate.id.asc()
+            )
+            .all()
+        )
 
-    for index, payload in enumerate(lines, start=1):
-        if not payload.quantity_ordered or payload.quantity_ordered <= 0:
+        returned_candidate_ids = {
+            candidate.id
+            for candidate in candidates
+        }
+
+        expected_candidate_ids = set(
+            normalized_candidate_ids
+        )
+
+        if (
+            returned_candidate_ids
+            != expected_candidate_ids
+        ):
             raise PurchaseOrderServiceError(
-                f"La cantidad de la línea {index} debe ser mayor a cero."
+                "Una o más selecciones de pre-OC no existen."
             )
 
-        quantity = Decimal(str(payload.quantity_ordered))
+        candidate_supplier_ids = {
+            candidate.supplier_id
+            for candidate in candidates
+        }
 
-        article_id = payload.article_id
-        pending_article_id = payload.pending_article_id
-        purchase_request_line_id = payload.purchase_request_line_id
-        quotation_line_id = payload.quotation_line_id
-        unit_id = payload.unit_id
+        if len(candidate_supplier_ids) != 1:
+            raise PurchaseOrderServiceError(
+                "Todos los candidatos de una orden deben pertenecer al mismo proveedor."
+            )
 
-        unit_cost = Decimal(str(payload.unit_cost or 0))
-        discount_pct = Decimal(str(payload.discount_pct or 0))
-        tax_pct = Decimal(str(payload.tax_pct or 0))
-        line_subtotal = Decimal(str(payload.line_subtotal or 0))
-        line_total = Decimal(str(payload.line_total or 0))
+        resolved_supplier_id = next(
+            iter(candidate_supplier_ids)
+        )
 
-        if quotation_line_id:
-            quotation_line = QuotationLine.query.get(quotation_line_id)
+        if (
+            supplier_id is not None
+            and int(supplier_id)
+            != resolved_supplier_id
+        ):
+            raise PurchaseOrderServiceError(
+                "El proveedor indicado no coincide con los candidatos seleccionados."
+            )
+
+        quotation_lines: list[
+            QuotationLine
+        ] = []
+
+        request_lines: list[
+            PurchaseRequestLine
+        ] = []
+
+        currency_codes: set[str] = set()
+        purchase_request_ids: set[int] = set()
+        site_ids: set[int] = set()
+        warehouse_ids: set[int] = set()
+        detected_payment_terms: set[str] = set()
+
+        for index, candidate in enumerate(
+            candidates,
+            start=1,
+        ):
+            if candidate.status != "PENDING":
+                raise PurchaseOrderServiceError(
+                    f"La selección de la línea {index} ya no está pendiente."
+                )
+
+            if candidate.purchase_order_id is not None:
+                raise PurchaseOrderServiceError(
+                    f"La selección de la línea {index} ya está vinculada a una orden de compra."
+                )
+
+            quotation_line = (
+                QuotationLine.query
+                .filter(
+                    QuotationLine.id
+                    == candidate.quotation_line_id
+                )
+                .with_for_update()
+                .first()
+            )
 
             if not quotation_line:
                 raise PurchaseOrderServiceError(
                     f"La cotización de la línea {index} no existe."
                 )
 
-            if quotation_line.supplier_id != supplier_id:
+            request_line = (
+                PurchaseRequestLine.query
+                .filter(
+                    PurchaseRequestLine.id
+                    == candidate.purchase_request_line_id
+                )
+                .with_for_update()
+                .first()
+            )
+
+            if not request_line:
                 raise PurchaseOrderServiceError(
-                    f"La línea {index} pertenece a otro proveedor. "
-                    "Una orden de compra solo puede contener líneas del mismo proveedor."
+                    f"La línea de solicitud correspondiente a la selección {index} no existe."
                 )
 
-            article_id = quotation_line.article_id
-            pending_article_id = quotation_line.pending_article_id
-            purchase_request_line_id = quotation_line.purchase_request_line_id
-
-            if not unit_id:
-                if quotation_line.article and quotation_line.article.unit_id:
-                    unit_id = quotation_line.article.unit_id
-                elif quotation_line.purchase_request_line and quotation_line.purchase_request_line.unit_id:
-                    unit_id = quotation_line.purchase_request_line.unit_id
-
-            quoted_price = Decimal(str(quotation_line.unit_price or 0))
-            discount_pct = Decimal(str(quotation_line.discount_pct or 0))
-            tax_pct = Decimal(str(quotation_line.tax_pct or 0))
-
-            if quoted_price <= 0:
+            if (
+                quotation_line.purchase_request_line_id
+                != request_line.id
+            ):
                 raise PurchaseOrderServiceError(
-                    f"La cotización de la línea {index} no tiene un precio válido."
+                    f"La cotización de la línea {index} no corresponde a la solicitud seleccionada."
                 )
 
-            tax_factor = Decimal("1") + (tax_pct / Decimal("100"))
-
-            if quotation_line.tax_included:
-                subtotal_unit = (
-                    quoted_price / tax_factor
-                ) if tax_pct > 0 else quoted_price
-            else:
-                subtotal_unit = quoted_price
-
-            discount_amount_unit = subtotal_unit * (discount_pct / Decimal("100"))
-            taxable_base_unit = subtotal_unit - discount_amount_unit
-            tax_amount_unit = taxable_base_unit * (tax_pct / Decimal("100"))
-            total_unit = taxable_base_unit + tax_amount_unit
-
-            unit_cost = taxable_base_unit
-            line_subtotal = quantity * subtotal_unit
-            line_total = quantity * total_unit
-
-        else:
-            if not line_subtotal:
-                line_subtotal = quantity * unit_cost
-
-            discount_amount = line_subtotal * (discount_pct / Decimal("100"))
-            taxable_base = line_subtotal - discount_amount
-
-            if tax_pct:
-                line_total = taxable_base * (
-                    Decimal("1") + (tax_pct / Decimal("100"))
+            if (
+                quotation_line.supplier_id
+                != resolved_supplier_id
+                or candidate.supplier_id
+                != resolved_supplier_id
+            ):
+                raise PurchaseOrderServiceError(
+                    f"La línea {index} pertenece a otro proveedor."
                 )
-            else:
-                line_total = taxable_base
 
-        purchase_order_line = PurchaseOrderLine(
-            purchase_order_id=purchase_order.id,
-            purchase_request_line_id=purchase_request_line_id,
-            quotation_line_id=quotation_line_id,
-            article_id=article_id,
-            pending_article_id=pending_article_id,
-            quantity_ordered=quantity,
-            quantity_received=Decimal("0"),
-            unit_id=unit_id,
-            unit_cost=unit_cost,
-            discount_pct=discount_pct,
-            tax_pct=tax_pct,
-            line_subtotal=line_subtotal,
-            line_total=line_total,
-            line_notes=payload.line_notes,
+            if quotation_line.status in {
+                "BORRADOR",
+                "DESCARTADA",
+                "CONVERTIDA_A_OC",
+            }:
+                raise PurchaseOrderServiceError(
+                    f"La cotización de la línea {index} no está disponible para generar una orden."
+                )
+
+            if request_line.line_status in {
+                "CANCELADA",
+                "CONVERTIDA_A_OC",
+                "RECIBIDA",
+            }:
+                raise PurchaseOrderServiceError(
+                    f"La línea de solicitud {index} ya no está disponible para generar una orden."
+                )
+
+            if bool(
+                quotation_line.article_id
+            ) == bool(
+                quotation_line.pending_article_id
+            ):
+                raise PurchaseOrderServiceError(
+                    f"La cotización de la línea {index} debe tener un artículo normal o pendiente, pero no ambos."
+                )
+
+            existing_quotation_usage = (
+                PurchaseOrderLine.query
+                .filter(
+                    PurchaseOrderLine.quotation_line_id
+                    == quotation_line.id
+                )
+                .first()
+            )
+
+            if existing_quotation_usage:
+                raise PurchaseOrderServiceError(
+                    f"La cotización de la línea {index} ya fue utilizada en otra orden."
+                )
+
+            existing_request_usage = (
+                PurchaseOrderLine.query
+                .filter(
+                    PurchaseOrderLine.purchase_request_line_id
+                    == request_line.id
+                )
+                .first()
+            )
+
+            if existing_request_usage:
+                raise PurchaseOrderServiceError(
+                    f"La línea de solicitud {index} ya fue utilizada en otra orden."
+                )
+
+            currency_code = (
+                quotation_line.currency_code
+                or "CRC"
+            ).strip().upper()
+
+            currency_codes.add(
+                currency_code
+            )
+
+            purchase_request_id = (
+                request_line.purchase_request_id
+            )
+
+            if purchase_request_id:
+                purchase_request_ids.add(
+                    purchase_request_id
+                )
+
+            purchase_request = (
+                request_line.purchase_request
+            )
+
+            if purchase_request:
+                if purchase_request.site_id:
+                    site_ids.add(
+                        purchase_request.site_id
+                    )
+
+                if purchase_request.warehouse_id:
+                    warehouse_ids.add(
+                        purchase_request.warehouse_id
+                    )
+
+            quotation_payment_terms = (
+                _build_payment_terms(
+                    quotation_line
+                )
+            )
+
+            if quotation_payment_terms:
+                detected_payment_terms.add(
+                    quotation_payment_terms
+                )
+
+            quotation_lines.append(
+                quotation_line
+            )
+
+            request_lines.append(
+                request_line
+            )
+
+        if len(currency_codes) != 1:
+            raise PurchaseOrderServiceError(
+                "Una orden de compra solo puede contener líneas de una misma moneda."
+            )
+
+        resolved_currency_code = next(
+            iter(currency_codes)
         )
 
-        db.session.add(purchase_order_line)
+        resolved_purchase_request_id = (
+            next(iter(purchase_request_ids))
+            if len(purchase_request_ids) == 1
+            else None
+        )
 
-    db.session.commit()
+        resolved_site_id = (
+            next(iter(site_ids))
+            if len(site_ids) == 1
+            else None
+        )
 
-    return purchase_order
+        resolved_warehouse_id = (
+            next(iter(warehouse_ids))
+            if len(warehouse_ids) == 1
+            else None
+        )
+
+        resolved_payment_terms = (
+            (payment_terms or "").strip()
+            or (
+                next(iter(detected_payment_terms))
+                if len(detected_payment_terms) == 1
+                else None
+            )
+        )
+
+        now = datetime.now(UTC)
+
+        purchase_order = PurchaseOrder(
+            number=_generate_purchase_order_number(),
+            purchase_request_id=(
+                resolved_purchase_request_id
+            ),
+            supplier_id=resolved_supplier_id,
+            site_id=resolved_site_id,
+            warehouse_id=resolved_warehouse_id,
+            generated_by_user_id=(
+                generated_by_user_id
+            ),
+            approval_status=(
+                "PENDIENTE_APROBACION"
+            ),
+            submitted_for_approval_at=now,
+            payment_terms=(
+                resolved_payment_terms
+            ),
+            currency_code=(
+                resolved_currency_code
+            ),
+            notes=(
+                (notes or "").strip()
+                or None
+            ),
+        )
+
+        db.session.add(
+            purchase_order
+        )
+
+        db.session.flush()
+
+        affected_purchase_request_ids: set[
+            int
+        ] = set()
+
+        for (
+            candidate,
+            quotation_line,
+            request_line,
+        ) in zip(
+            candidates,
+            quotation_lines,
+            request_lines,
+        ):
+            quantity = _normalize_decimal(
+                request_line.quantity_requested
+                or Decimal("0"),
+                "cantidad solicitada",
+            )
+
+            amounts = (
+                _calculate_purchase_order_line_amounts(
+                    quotation_line=quotation_line,
+                    quantity=quantity,
+                )
+            )
+
+            unit_id = request_line.unit_id
+
+            if (
+                not unit_id
+                and quotation_line.article
+                and quotation_line.article.unit_id
+            ):
+                unit_id = (
+                    quotation_line.article.unit_id
+                )
+
+            purchase_order_line = (
+                PurchaseOrderLine(
+                    purchase_order_id=(
+                        purchase_order.id
+                    ),
+                    purchase_request_line_id=(
+                        request_line.id
+                    ),
+                    quotation_line_id=(
+                        quotation_line.id
+                    ),
+                    article_id=(
+                        quotation_line.article_id
+                    ),
+                    pending_article_id=(
+                        quotation_line.pending_article_id
+                    ),
+                    quantity_ordered=(
+                        amounts["quantity"]
+                    ),
+                    quantity_received=Decimal("0"),
+                    unit_id=unit_id,
+                    unit_cost=(
+                        amounts["unit_cost"]
+                    ),
+                    discount_pct=(
+                        amounts["discount_pct"]
+                    ),
+                    tax_pct=(
+                        amounts["tax_pct"]
+                    ),
+                    line_subtotal=(
+                        amounts["line_subtotal"]
+                    ),
+                    line_total=(
+                        amounts["line_total"]
+                    ),
+                    line_notes=(
+                        quotation_line.notes
+                    ),
+                )
+            )
+
+            db.session.add(
+                purchase_order_line
+            )
+
+            candidate.status = "USED"
+            candidate.purchase_order_id = (
+                purchase_order.id
+            )
+            candidate.updated_at = now
+
+            quotation_line.status = (
+                "CONVERTIDA_A_OC"
+            )
+
+            request_line.line_status = (
+                "CONVERTIDA_A_OC"
+            )
+
+            if request_line.purchase_request_id:
+                affected_purchase_request_ids.add(
+                    request_line.purchase_request_id
+                )
+
+        db.session.flush()
+
+        for affected_request_id in (
+            affected_purchase_request_ids
+        ):
+            _update_purchase_request_after_order_creation(
+                affected_request_id
+            )
+
+        db.session.commit()
+
+        return purchase_order
+
+    except PurchaseOrderServiceError:
+        db.session.rollback()
+        raise
+
+    except Exception as exc:
+        db.session.rollback()
+
+        raise PurchaseOrderServiceError(
+            "No fue posible generar la orden de compra."
+        ) from exc
 
 
 def list_purchase_orders(
@@ -271,22 +756,67 @@ def register_purchase_order_approval(
     status: str,
     reason: str | None,
 ) -> PurchaseOrderApproval:
-    valid_statuses = {"APROBADA", "RECHAZADA"}
-    if status not in valid_statuses:
-        raise PurchaseOrderServiceError("Estado de aprobación inválido.")
+    valid_statuses = {
+        "APROBADA",
+        "RECHAZADA",
+    }
 
-    purchase_order = get_purchase_order_or_404(purchase_order_id)
+    if status not in valid_statuses:
+        raise PurchaseOrderServiceError(
+            "Estado de aprobación inválido."
+        )
+
+    if not approved_by_user_id:
+        raise PurchaseOrderServiceError(
+            "No se pudo identificar el usuario que registra la aprobación."
+        )
+
+    purchase_order = get_purchase_order_or_404(
+        purchase_order_id
+    )
+
+    if purchase_order.approval_status in {
+        "APROBADA",
+        "RECHAZADA",
+    }:
+        raise PurchaseOrderServiceError(
+            "Esta orden de compra ya tiene una decisión de aprobación registrada."
+        )
+
+    normalized_reason = (
+        reason or ""
+    ).strip() or None
+
+    if (
+        status == "RECHAZADA"
+        and not normalized_reason
+    ):
+        raise PurchaseOrderServiceError(
+            "Debe indicar el motivo del rechazo."
+        )
+
+    now = datetime.now(UTC)
+
     purchase_order.approval_status = status
+
+    if status == "APROBADA":
+        purchase_order.approved_at = now
 
     approval = PurchaseOrderApproval(
         purchase_order_id=purchase_order_id,
-        approved_by_user_id=approved_by_user_id,
+        approved_by_user_id=(
+            approved_by_user_id
+        ),
         status=status,
-        reason=(reason or "").strip() or None,
+        reason=normalized_reason,
     )
 
-    db.session.add(approval)
+    db.session.add(
+        approval
+    )
+
     db.session.commit()
+
     return approval
 
 def adjust_approved_purchase_order_line(
@@ -343,6 +873,18 @@ def adjust_approved_purchase_order_line(
     if quantity > original_quantity:
         raise PurchaseOrderServiceError(
             "No se puede aumentar la cantidad aprobada."
+        )
+
+    quantity_received = Decimal(
+        str(
+            purchase_order_line.quantity_received
+            or 0
+        )
+    )
+
+    if quantity < quantity_received:
+        raise PurchaseOrderServiceError(
+            "La cantidad ordenada no puede ser menor que la cantidad ya recibida."
         )
 
     if unit_cost > original_unit_cost:

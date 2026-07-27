@@ -51,3 +51,10 @@ class QuotationCategory(db.Model):
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
     )
+
+    article_assignments = db.relationship(
+        "ArticleQuotationCategory",
+        back_populates="quotation_category",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )

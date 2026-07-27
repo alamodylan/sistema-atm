@@ -31,5 +31,11 @@ class Supplier(db.Model):
         lazy="selectin",
     )
 
+    purchase_order_candidates = db.relationship(
+        "PurchaseOrderCandidate",
+        back_populates="supplier",
+        lazy="selectin",
+    )
+
     def __repr__(self) -> str:
         return f"<Supplier {self.code} - {self.commercial_name}>"

@@ -20,6 +20,8 @@ class QuotationLine(db.Model):
         nullable=True,
     )
 
+    
+
     article_id = db.Column(
         db.BigInteger,
         db.ForeignKey("atm.articles.id"),
@@ -121,6 +123,12 @@ class QuotationLine(db.Model):
         "PurchaseOrderLine",
         back_populates="quotation_line",
         lazy="selectin",
+    )
+
+    purchase_order_candidate = db.relationship(
+        "PurchaseOrderCandidate",
+        back_populates="quotation_line",
+        uselist=False,
     )
 
     @property

@@ -60,6 +60,7 @@ from .request_routing_rule import RequestRoutingRule
 from .request_routing_rule import RequestRoutingRule
 from app.models.quotation_category import QuotationCategory
 from app.models.article_quotation_category import ArticleQuotationCategory
+from .purchase_order_candidate import PurchaseOrderCandidate
 
 __all__ = [
     "Role",
@@ -127,4 +128,5 @@ __all__ = [
     "RequestRoutingRule",
     "QuotationCategory",
     "ArticleQuotationCategory",
+    "PurchaseOrderCandidate",
 ]

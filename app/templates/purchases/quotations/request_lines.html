@@ -256,6 +256,39 @@ Líneas de solicitud
     background: var(--gray-600);
   }
 
+  .category-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+  }
+
+  .category-comparison-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 7px 12px;
+    color: #ffffff;
+    background: linear-gradient(
+      135deg,
+      var(--primary),
+      var(--primary-dark)
+    );
+    border: 0;
+    border-radius: 9px;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .category-comparison-button:hover {
+    color: #ffffff;
+    text-decoration: none;
+    transform: translateY(-1px);
+  }
+
   .quotation-table-wrapper {
     width: 100%;
     overflow-x: auto;
@@ -263,7 +296,7 @@ Líneas de solicitud
 
   .quotation-table {
     width: 100%;
-    min-width: 1350px;
+    min-width: 1180px;
     border-collapse: separate;
     border-spacing: 0;
   }
@@ -609,12 +642,27 @@ Líneas de solicitud
                   </div>
                 </div>
 
-                <span
-                  class="category-count"
-                  data-category-count
-                >
-                  {{ group.lines|length }}
-                </span>
+                <div class="category-header-actions">
+                  <span
+                    class="category-count"
+                    data-category-count
+                  >
+                    {{ group.lines|length }}
+                  </span>
+
+                  {% if not edit_categories %}
+                    <a
+                      class="category-comparison-button"
+                      href="{{ url_for(
+                          'purchases.quotation_category_comparison',
+                          request_id=purchase_request.id,
+                          category_id=group.category_id if group.category_id else 0
+                      ) }}"
+                    >
+                      Ver comparativo
+                    </a>
+                  {% endif %}
+                </div>
               </div>
 
               <div class="quotation-table-wrapper">
@@ -657,9 +705,6 @@ Líneas de solicitud
                         Última fecha
                       </th>
 
-                      <th style="text-align:center;">
-                        Acciones
-                      </th>
                     </tr>
                   </thead>
 
@@ -793,41 +838,6 @@ Líneas de solicitud
                           {% endif %}
                         </td>
 
-                        <td>
-                          <div class="row-actions">
-                            <a
-                              class="row-button view"
-                              href="{{ url_for(
-                                'purchases.quotation_line_view',
-                                line_id=item.purchase_request_line_id
-                              ) }}"
-                            >
-                              Ver / agregar
-                            </a>
-
-                            <a
-                              class="row-button excel"
-                              href="{{ url_for(
-                                'purchases.export_quotation_comparison_excel',
-                                line_id=item.purchase_request_line_id
-                              ) }}"
-                            >
-                              Excel
-                            </a>
-
-                            <a
-                              class="row-button print"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              href="{{ url_for(
-                                'purchases.print_quotation_comparison',
-                                line_id=item.purchase_request_line_id
-                              ) }}"
-                            >
-                              Imprimir
-                            </a>
-                          </div>
-                        </td>
                       </tr>
                     {% endfor %}
                   </tbody>

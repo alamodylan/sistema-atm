@@ -1,3 +1,4 @@
+# app/ routes/ purchases_routes.py
 from __future__ import annotations
 
 from datetime import datetime, UTC
@@ -45,6 +46,7 @@ from app.models.supplier import Supplier
 from app.models.unit import Unit
 from app.models.warehouse import Warehouse
 from app.models.purchase_order import PurchaseOrder
+from app.models.purchase_order_candidate import PurchaseOrderCandidate
 from app.models.quotation_batch import QuotationBatch
 from app.models.purchase_order_line import PurchaseOrderLine
 from app.services.inventory_entry_service import (
@@ -62,7 +64,6 @@ from app.services.pending_article_service import (
     resolve_pending_article,
 )
 from app.services.purchase_order_service import (
-    PurchaseOrderLinePayload,
     PurchaseOrderServiceError,
     create_purchase_order,
     get_purchase_order_or_404,
@@ -84,15 +85,19 @@ from app.services.purchase_request_service import (
 from app.services.quotation_service import (
     QuotationLinePayload,
     QuotationServiceError,
+    clear_quotation_selection,
     create_quotation_batch,
+    create_minimal_supplier_for_quotation,
     create_single_line_quotation,
-    get_quotation_batch_or_404,
-    list_quotation_request_groups,
-    list_quotation_batches,
-    list_quotation_line_groups,
+    get_category_comparison_matrix,
     get_comparison_for_purchase_request_line,
     get_last_price_for_supplier,
-    create_minimal_supplier_for_quotation,
+    get_quotation_batch_or_404,
+    list_pending_purchase_order_candidates_by_supplier,
+    list_quotation_batches,
+    list_quotation_line_groups,
+    list_quotation_request_groups,
+    select_quotation_for_purchase_order,
 )
 
 purchases_bp = Blueprint("purchases", __name__, template_folder="../templates")
@@ -976,6 +981,254 @@ def quotation_request_lines(request_id: int):
         grouped_line_groups=grouped_line_groups,
         categories=categories,
         edit_categories=edit_categories,
+    )
+
+@purchases_bp.route(
+    "/quotations/request/<int:request_id>/category/<int:category_id>"
+)
+@login_required
+def quotation_category_comparison(
+    request_id: int,
+    category_id: int,
+):
+    """
+    Abre el comparativo completo de una categoría dentro de una
+    solicitud de compra.
+
+    category_id:
+    - ID real de atm.quotation_categories.
+    - El valor 0 representa líneas sin categoría.
+    """
+
+    purchase_request = PurchaseRequest.query.get_or_404(
+        request_id
+    )
+
+    quotation_category = None
+
+    if category_id != 0:
+        quotation_category = (
+            QuotationCategory.query
+            .filter(
+                QuotationCategory.id == category_id,
+                QuotationCategory.is_active.is_(True),
+            )
+            .first()
+        )
+
+        if not quotation_category:
+            flash(
+                "La categoría indicada no existe o está inactiva.",
+                "danger",
+            )
+
+            return redirect(
+                url_for(
+                    "purchases.quotation_request_lines",
+                    request_id=request_id,
+                )
+            )
+
+    try:
+        comparison_matrix = (
+            get_category_comparison_matrix(
+                purchase_request_id=request_id,
+                quotation_category_id=(
+                    category_id
+                    if category_id != 0
+                    else None
+                ),
+            )
+        )
+
+    except QuotationServiceError as exc:
+        flash(
+            str(exc),
+            "danger",
+        )
+
+        return redirect(
+            url_for(
+                "purchases.quotation_request_lines",
+                request_id=request_id,
+            )
+        )
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[QUOTATION CATEGORY COMPARISON ERROR] "
+            f"{exc}"
+        )
+
+        flash(
+            "No fue posible cargar el comparativo de la categoría.",
+            "danger",
+        )
+
+        return redirect(
+            url_for(
+                "purchases.quotation_request_lines",
+                request_id=request_id,
+            )
+        )
+
+    return render_template(
+        "purchases/quotations/category_comparison.html",
+        purchase_request=purchase_request,
+        quotation_category=quotation_category,
+        category_id=category_id,
+        comparison_matrix=comparison_matrix,
+    )
+
+@purchases_bp.route(
+    "/quotations/request-line/<int:line_id>/select",
+    methods=["POST"],
+)
+@login_required
+def select_quotation_candidate(line_id: int):
+    """
+    Selecciona manualmente una cotización como candidata para
+    generar una orden de compra.
+
+    La selección no crea todavía la OC. Únicamente crea o actualiza
+    el PurchaseOrderCandidate correspondiente a la línea.
+    """
+
+    quotation_line_id = _to_int(
+        request.form.get("quotation_line_id")
+    )
+
+    request_id = _to_int(
+        request.form.get("request_id")
+    )
+
+    category_id = _to_int(
+        request.form.get("category_id")
+    )
+
+    if not quotation_line_id:
+        flash(
+            "Debe seleccionar una cotización válida.",
+            "danger",
+        )
+
+        if request_id is not None:
+            return redirect(
+                url_for(
+                    "purchases.quotation_category_comparison",
+                    request_id=request_id,
+                    category_id=(
+                        category_id
+                        if category_id is not None
+                        else 0
+                    ),
+                )
+            )
+
+        return redirect(
+            url_for(
+                "purchases.quotation_line_view",
+                line_id=line_id,
+            )
+        )
+
+    try:
+        select_quotation_for_purchase_order(
+            purchase_request_line_id=line_id,
+            quotation_line_id=quotation_line_id,
+            selected_by_user_id=current_user.id,
+        )
+
+    except QuotationServiceError as exc:
+        flash(
+            str(exc),
+            "danger",
+        )
+
+    else:
+        flash(
+            "Cotización seleccionada correctamente para generar la orden de compra.",
+            "success",
+        )
+
+    if request_id is not None:
+        return redirect(
+            url_for(
+                "purchases.quotation_category_comparison",
+                request_id=request_id,
+                category_id=(
+                    category_id
+                    if category_id is not None
+                    else 0
+                ),
+            )
+        )
+
+    return redirect(
+        url_for(
+            "purchases.quotation_line_view",
+            line_id=line_id,
+        )
+    )
+
+
+@purchases_bp.route(
+    "/quotations/request-line/<int:line_id>/selection/clear",
+    methods=["POST"],
+)
+@login_required
+def clear_quotation_candidate(line_id: int):
+    """
+    Cancela una selección de pre-OC mientras todavía no haya sido
+    utilizada para crear una orden de compra.
+    """
+
+    request_id = _to_int(
+        request.form.get("request_id")
+    )
+
+    category_id = _to_int(
+        request.form.get("category_id")
+    )
+
+    try:
+        clear_quotation_selection(
+            purchase_request_line_id=line_id,
+            cancelled_by_user_id=current_user.id,
+        )
+
+    except QuotationServiceError as exc:
+        flash(
+            str(exc),
+            "danger",
+        )
+
+    else:
+        flash(
+            "La selección de cotización fue eliminada correctamente.",
+            "success",
+        )
+
+    if request_id is not None:
+        return redirect(
+            url_for(
+                "purchases.quotation_category_comparison",
+                request_id=request_id,
+                category_id=(
+                    category_id
+                    if category_id is not None
+                    else 0
+                ),
+            )
+        )
+
+    return redirect(
+        url_for(
+            "purchases.quotation_line_view",
+            line_id=line_id,
+        )
     )
 
 @purchases_bp.route(
@@ -2157,300 +2410,404 @@ def list_orders_partial():
         ), 500
 
 
-@purchases_bp.route("/orders/create", methods=["GET", "POST"])
+@purchases_bp.route(
+    "/orders/create",
+    methods=["GET", "POST"],
+)
 @login_required
 def create_order():
+    """
+    Muestra las selecciones pendientes de OC y genera una orden
+    exclusivamente desde PurchaseOrderCandidate.
+
+    Ya no recibe QuotationLine directamente ni construye manualmente
+    PurchaseOrderLinePayload.
+    """
+
+    selected_supplier_id = _to_int(
+        request.args.get("supplier_id")
+    )
+
     if request.method == "POST":
-        q_line_ids = request.form.getlist("line_quotation_line_id[]")
-        quantities = request.form.getlist("line_quantity_ordered[]")
-        line_notes_list = request.form.getlist("line_notes[]")
-
-        selected_q_line_ids: list[int] = []
-
-        for raw_id in q_line_ids:
-            q_line_id = _to_int(raw_id)
-            if q_line_id:
-                selected_q_line_ids.append(q_line_id)
-
-        if not selected_q_line_ids:
-            flash("Debe seleccionar al menos una cotización para crear la OC.", "danger")
-            return redirect(url_for("purchases.create_order"))
-
-        quotation_lines = (
-            QuotationLine.query
-            .filter(QuotationLine.id.in_(selected_q_line_ids))
-            .all()
+        raw_candidate_ids = request.form.getlist(
+            "candidate_id[]"
         )
 
-        quotation_by_id = {line.id: line for line in quotation_lines}
+        candidate_ids: list[int] = []
 
-        if len(quotation_by_id) != len(set(selected_q_line_ids)):
-            flash("Una o más cotizaciones seleccionadas no existen.", "danger")
-            return redirect(url_for("purchases.create_order"))
+        for raw_candidate_id in raw_candidate_ids:
+            candidate_id = _to_int(
+                raw_candidate_id
+            )
 
-        supplier_id = None
-        purchase_request_id = None
-        site_id = None
-        warehouse_id = None
-        currency_code = None
-        payment_terms = None
-
-        lines: list[PurchaseOrderLinePayload] = []
-
-        for index, q_line_id in enumerate(selected_q_line_ids):
-            quotation_line = quotation_by_id.get(q_line_id)
-
-            if not quotation_line:
-                continue
-
-            if quotation_line.purchase_request_line_id:
-                already_used_request_line = PurchaseOrderLine.query.filter(
-                    PurchaseOrderLine.purchase_request_line_id == quotation_line.purchase_request_line_id
-                ).first()
-
-                if already_used_request_line:
-                    flash(
-                        f"La línea {index + 1} ya fue utilizada en otra orden de compra.",
-                        "danger",
-                    )
-                    return redirect(url_for("purchases.create_order"))
-
-            is_used = PurchaseOrderLine.query.filter(
-                PurchaseOrderLine.quotation_line_id == quotation_line.id
-            ).first() is not None
-
-            if is_used:
-                flash(
-                    f"La cotización de la línea {index + 1} ya fue utilizada en otra OC.",
-                    "danger",
+            if candidate_id:
+                candidate_ids.append(
+                    candidate_id
                 )
-                return redirect(url_for("purchases.create_order"))
 
-            if supplier_id is None:
-                supplier_id = quotation_line.supplier_id
-            elif quotation_line.supplier_id != supplier_id:
-                flash("Todas las líneas de una OC deben pertenecer al mismo proveedor.", "danger")
-                return redirect(url_for("purchases.create_order"))
+        supplier_id = _to_int(
+            request.form.get("supplier_id")
+        )
 
-            if purchase_request_id is None and quotation_line.purchase_request_line:
-                purchase_request_id = quotation_line.purchase_request_line.purchase_request_id
+        payment_terms = (
+            request.form.get("payment_terms")
+            or ""
+        ).strip() or None
 
-                if quotation_line.purchase_request_line.purchase_request:
-                    pr = quotation_line.purchase_request_line.purchase_request
-                    site_id = pr.site_id
-                    warehouse_id = pr.warehouse_id
+        notes = (
+            request.form.get("notes")
+            or ""
+        ).strip() or None
 
-            if currency_code is None:
-                currency_code = quotation_line.currency_code or "CRC"
+        if not candidate_ids:
+            flash(
+                "Debe seleccionar al menos una línea pendiente para crear la orden de compra.",
+                "danger",
+            )
 
-            if payment_terms is None and quotation_line.payment_type:
-                if quotation_line.payment_term_months:
-                    payment_terms = f"{quotation_line.payment_type} {quotation_line.payment_term_months} meses"
-                else:
-                    payment_terms = quotation_line.payment_type
-
-            quantity_raw = quantities[index] if index < len(quantities) else None
-
-            try:
-                quantity_ordered = _to_decimal(quantity_raw, default="1")
-            except ValueError:
-                flash(f"La cantidad de la línea {index + 1} no es válida.", "danger")
-                return redirect(url_for("purchases.create_order"))
-
-            if quantity_ordered <= 0:
-                flash(f"La cantidad de la línea {index + 1} debe ser mayor a cero.", "danger")
-                return redirect(url_for("purchases.create_order"))
-
-            note = line_notes_list[index] if index < len(line_notes_list) else None
-
-            lines.append(
-                PurchaseOrderLinePayload(
-                    quantity_ordered=quantity_ordered,
-                    unit_cost=Decimal("0"),
-                    article_id=quotation_line.article_id,
-                    pending_article_id=quotation_line.pending_article_id,
-                    purchase_request_line_id=quotation_line.purchase_request_line_id,
-                    quotation_line_id=quotation_line.id,
-                    unit_id=(
-                        quotation_line.article.unit_id
-                        if quotation_line.article and quotation_line.article.unit_id
-                        else quotation_line.purchase_request_line.unit_id
-                        if quotation_line.purchase_request_line and quotation_line.purchase_request_line.unit_id
-                        else None
-                    ),
-                    discount_pct=quotation_line.discount_pct or Decimal("0"),
-                    tax_pct=Decimal("13"),
-                    line_subtotal=Decimal("0"),
-                    line_total=Decimal("0"),
-                    line_notes=note or quotation_line.notes,
+            return redirect(
+                url_for(
+                    "purchases.create_order",
+                    supplier_id=supplier_id,
                 )
             )
 
         try:
             purchase_order = create_purchase_order(
-                supplier_id=supplier_id,
+                candidate_ids=candidate_ids,
                 generated_by_user_id=current_user.id,
-                purchase_request_id=purchase_request_id,
-                site_id=site_id,
-                warehouse_id=warehouse_id,
+                supplier_id=supplier_id,
                 payment_terms=payment_terms,
-                currency_code=currency_code or "CRC",
-                notes=request.form.get("notes"),
-                lines=lines,
+                notes=notes,
             )
 
         except PurchaseOrderServiceError as exc:
-            flash(str(exc), "danger")
-            return redirect(url_for("purchases.create_order"))
+            flash(
+                str(exc),
+                "danger",
+            )
 
-        flash("Orden de compra creada correctamente y enviada a aprobación.", "success")
-        return redirect(url_for("purchases.order_print", order_id=purchase_order.id))
+            return redirect(
+                url_for(
+                    "purchases.create_order",
+                    supplier_id=supplier_id,
+                )
+            )
+
+        flash(
+            "Orden de compra creada correctamente y enviada a aprobación.",
+            "success",
+        )
+
+        return redirect(
+            url_for(
+                "purchases.order_print",
+                order_id=purchase_order.id,
+            )
+        )
 
     return render_template(
         "purchases/orders/create.html",
-        quotation_groups=[],
+        candidate_groups=[],
+        selected_supplier_id=(
+            selected_supplier_id
+        ),
     )
 
-@purchases_bp.route("/orders/create/partial/quotation-groups")
+@purchases_bp.route(
+    "/orders/create/partial/quotation-groups"
+)
 @login_required
 def create_order_quotation_groups_partial():
+    """
+    Devuelve candidatos pendientes de orden de compra agrupados
+    por proveedor.
 
-    page = request.args.get("page", 1, type=int)
-    search = (request.args.get("search") or "").strip()
+    La URL se conserva para no romper las llamadas existentes del
+    frontend, aunque la fuente actual es PurchaseOrderCandidate.
+    """
 
-    used_quotation_line_ids = {
-        row[0]
-        for row in (
-            db.session.query(PurchaseOrderLine.quotation_line_id)
-            .filter(PurchaseOrderLine.quotation_line_id.isnot(None))
-            .all()
-        )
-    }
-
-    used_purchase_request_line_ids = {
-        row[0]
-        for row in (
-            db.session.query(PurchaseOrderLine.purchase_request_line_id)
-            .filter(PurchaseOrderLine.purchase_request_line_id.isnot(None))
-            .all()
-        )
-    }
-
-    query = (
-        QuotationLine.query
-        .filter(
-            QuotationLine.status == "COTIZADA"
-        )
+    supplier_id = _to_int(
+        request.args.get("supplier_id")
     )
 
-    if search:
+    search = (
+        request.args.get("search")
+        or ""
+    ).strip().lower()
 
-        like_value = f"%{search}%"
-
-        query = query.filter(
-            db.or_(
-                QuotationLine.notes.ilike(like_value),
+    try:
+        candidate_groups = (
+            list_pending_purchase_order_candidates_by_supplier(
+                supplier_id=supplier_id,
             )
         )
 
-    quotation_lines = (
-        query
-        .order_by(
-            QuotationLine.quote_date.desc(),
-            QuotationLine.id.desc(),
+        if search:
+            filtered_groups = []
+
+            for group in candidate_groups:
+                supplier_name = (
+                    group.get("supplier_name")
+                    or ""
+                ).lower()
+
+                matching_lines = []
+
+                for line in group.get(
+                    "lines",
+                    [],
+                ):
+                    searchable_values = [
+                        supplier_name,
+                        str(
+                            line.get(
+                                "purchase_request_number"
+                            )
+                            or ""
+                        ).lower(),
+                        str(
+                            line.get("item_code")
+                            or ""
+                        ).lower(),
+                        str(
+                            line.get("item_name")
+                            or ""
+                        ).lower(),
+                        str(
+                            line.get(
+                                "quotation_category_label"
+                            )
+                            or ""
+                        ).lower(),
+                        str(
+                            line.get("currency_code")
+                            or ""
+                        ).lower(),
+                        str(
+                            line.get("notes")
+                            or ""
+                        ).lower(),
+                    ]
+
+                    if any(
+                        search in searchable_value
+                        for searchable_value
+                        in searchable_values
+                    ):
+                        matching_lines.append(
+                            line
+                        )
+
+                if not matching_lines:
+                    continue
+
+                filtered_group = dict(
+                    group
+                )
+
+                filtered_group["lines"] = (
+                    matching_lines
+                )
+
+                filtered_group["total_lines"] = (
+                    len(matching_lines)
+                )
+
+                currencies = sorted(
+                    {
+                        line.get(
+                            "currency_code"
+                        )
+                        or "CRC"
+                        for line in matching_lines
+                    }
+                )
+
+                totals_by_currency_map: dict[
+                    str,
+                    dict,
+                ] = {}
+
+                for line in matching_lines:
+                    currency_code = (
+                        line.get(
+                            "currency_code"
+                        )
+                        or "CRC"
+                    )
+
+                    currency_totals = (
+                        totals_by_currency_map.setdefault(
+                            currency_code,
+                            {
+                                "currency_code": (
+                                    currency_code
+                                ),
+                                "subtotal": Decimal(
+                                    "0"
+                                ),
+                                "discount_amount": Decimal(
+                                    "0"
+                                ),
+                                "tax_amount": Decimal(
+                                    "0"
+                                ),
+                                "total": Decimal(
+                                    "0"
+                                ),
+                                "total_lines": 0,
+                            },
+                        )
+                    )
+
+                    currency_totals[
+                        "subtotal"
+                    ] += Decimal(
+                        str(
+                            line.get(
+                                "line_subtotal"
+                            )
+                            or 0
+                        )
+                    )
+
+                    currency_totals[
+                        "discount_amount"
+                    ] += Decimal(
+                        str(
+                            line.get(
+                                "discount_amount"
+                            )
+                            or 0
+                        )
+                    )
+
+                    currency_totals[
+                        "tax_amount"
+                    ] += Decimal(
+                        str(
+                            line.get(
+                                "tax_amount"
+                            )
+                            or 0
+                        )
+                    )
+
+                    currency_totals[
+                        "total"
+                    ] += Decimal(
+                        str(
+                            line.get(
+                                "line_total"
+                            )
+                            or 0
+                        )
+                    )
+
+                    currency_totals[
+                        "total_lines"
+                    ] += 1
+
+                filtered_group[
+                    "currencies"
+                ] = currencies
+
+                filtered_group[
+                    "has_mixed_currencies"
+                ] = len(currencies) > 1
+
+                filtered_group[
+                    "currency_code"
+                ] = (
+                    currencies[0]
+                    if len(currencies) == 1
+                    else None
+                )
+
+                filtered_group[
+                    "totals_by_currency"
+                ] = [
+                    totals_by_currency_map[
+                        currency_code
+                    ]
+                    for currency_code in currencies
+                ]
+
+                if len(currencies) == 1:
+                    only_total = (
+                        filtered_group[
+                            "totals_by_currency"
+                        ][0]
+                    )
+
+                    filtered_group[
+                        "subtotal"
+                    ] = only_total["subtotal"]
+
+                    filtered_group[
+                        "discount_amount"
+                    ] = only_total[
+                        "discount_amount"
+                    ]
+
+                    filtered_group[
+                        "tax_amount"
+                    ] = only_total[
+                        "tax_amount"
+                    ]
+
+                    filtered_group[
+                        "total"
+                    ] = only_total["total"]
+
+                else:
+                    filtered_group[
+                        "subtotal"
+                    ] = None
+
+                    filtered_group[
+                        "discount_amount"
+                    ] = None
+
+                    filtered_group[
+                        "tax_amount"
+                    ] = None
+
+                    filtered_group[
+                        "total"
+                    ] = None
+
+                filtered_groups.append(
+                    filtered_group
+                )
+
+            candidate_groups = filtered_groups
+
+        return {
+            "items": candidate_groups,
+        }
+
+    except QuotationServiceError as exc:
+        return {
+            "items": [],
+            "error": str(exc),
+        }, 400
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[PURCHASE ORDER CANDIDATES PARTIAL ERROR] "
+            f"{exc}"
         )
-        .limit(100)
-        .all()
-    )
 
-    quotation_groups_map = {}
-
-    for line in quotation_lines:
-
-        if line.purchase_request_line_id and line.purchase_request_line_id in used_purchase_request_line_ids:
-            continue
-
-        if line.id in used_quotation_line_ids:
-            continue
-
-        quantity = Decimal("1")
-
-        if line.purchase_request_line and line.purchase_request_line.quantity_requested:
-            quantity = Decimal(str(line.purchase_request_line.quantity_requested))
-
-        if line.tax_included:
-            subtotal = (Decimal(str(line.unit_price or 0)) / Decimal("1.13")) * quantity
-            total = Decimal(str(line.unit_price or 0)) * quantity
-        else:
-            subtotal = Decimal(str(line.unit_price or 0)) * quantity
-            total = subtotal * Decimal("1.13")
-
-        tax_amount = total - subtotal
-
-        if line.purchase_request_line_id:
-            group_key = f"pr-line-{line.purchase_request_line_id}"
-        else:
-            group_key = f"quotation-line-{line.id}"
-
-        if group_key not in quotation_groups_map:
-
-            purchase_request = (
-                line.purchase_request_line.purchase_request
-                if line.purchase_request_line
-                and line.purchase_request_line.purchase_request
-                else None
-            )
-
-            quotation_groups_map[group_key] = {
-                "key": group_key,
-                "purchase_request_line_id": line.purchase_request_line_id,
-                "purchase_request_number": purchase_request.number if purchase_request else "-",
-                "item_code": line.item_code or "",
-                "item_name": line.item_name or "Sin artículo",
-                "quantity_requested": str(quantity),
-                "unit_name": (
-                    line.purchase_request_line.unit.name
-                    if line.purchase_request_line
-                    and line.purchase_request_line.unit
-                    else "-"
-                ),
-                "options": [],
-            }
-
-        quotation_groups_map[group_key]["options"].append(
-            {
-                "quotation_line_id": line.id,
-                "supplier_id": line.supplier_id,
-                "supplier_name": line.supplier.commercial_name if line.supplier else "-",
-                "unit_price": str(line.unit_price or 0),
-                "currency_code": line.currency_code or "CRC",
-                "discount_pct": str(line.discount_pct or 0),
-                "tax_pct": str(line.tax_pct or 0),
-                "tax_included": bool(line.tax_included),
-                "quote_date": line.quote_date.strftime("%d/%m/%Y") if line.quote_date else "-",
-                "payment_type": line.payment_type or "",
-                "payment_term_months": line.payment_term_months or "",
-                "origin_type": line.origin_type or "",
-                "brand_model": line.brand_model or "",
-                "notes": line.notes or "",
-                "estimated_subtotal": str(subtotal),
-                "estimated_tax": str(tax_amount),
-                "estimated_total": str(total),
-            }
-        )
-
-    quotation_groups = list(quotation_groups_map.values())
-
-    quotation_groups.sort(
-        key=lambda item: (
-            item["purchase_request_number"] or "",
-            item["item_name"] or "",
-        )
-    )
-
-    return {
-        "items": quotation_groups
-    }
+        return {
+            "items": [],
+            "error": (
+                "No fue posible cargar las líneas pendientes de orden de compra."
+            ),
+        }, 500
 
 @purchases_bp.route("/orders/create/manual", methods=["GET", "POST"])
 @login_required

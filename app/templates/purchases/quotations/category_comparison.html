@@ -1,0 +1,1343 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4 quotation-comparison-page">
+
+    {# =========================================================
+       ENCABEZADO Y NAVEGACIÓN
+       ========================================================= #}
+    <nav class="mb-3" aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 small">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('purchases.list_quotations') }}">
+                    Cotizaciones
+                </a>
+            </li>
+
+            <li class="breadcrumb-item">
+                <a href="{{ url_for(
+                    'purchases.quotation_request_lines',
+                    request_id=purchase_request.id
+                ) }}">
+                    {{ purchase_request.number }}
+                </a>
+            </li>
+
+            <li class="breadcrumb-item active" aria-current="page">
+                {{ comparison_matrix.category_label or "Sin categoría" }}
+            </li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-start gap-3 mb-4">
+        <div>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <h2 class="fw-bold mb-0">
+                    Comparativo de cotizaciones
+                </h2>
+
+                {% if comparison_matrix.is_uncategorized %}
+                    <span class="badge rounded-pill text-bg-secondary">
+                        Sin categoría
+                    </span>
+                {% else %}
+                    <span class="badge rounded-pill text-bg-primary">
+                        {{ comparison_matrix.category_label }}
+                    </span>
+                {% endif %}
+            </div>
+
+            <p class="text-muted mb-1">
+                Solicitud:
+                <strong class="text-dark">
+                    {{ comparison_matrix.purchase_request_number }}
+                </strong>
+            </p>
+
+            <p class="text-muted mb-0">
+                Selecciona la cotización ganadora de cada artículo.
+                El mejor precio se resalta únicamente dentro de la misma moneda.
+            </p>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            <a
+                href="{{ url_for(
+                    'purchases.quotation_request_lines',
+                    request_id=purchase_request.id
+                ) }}"
+                class="btn btn-light border rounded-3"
+            >
+                <i class="bi bi-arrow-left me-2"></i>
+                Volver a categorías
+            </a>
+
+            <a
+                href="{{ url_for('purchases.create_order') }}"
+                class="btn btn-dark rounded-3"
+            >
+                <i class="bi bi-file-earmark-text me-2"></i>
+                Ver preórdenes
+            </a>
+        </div>
+    </div>
+
+    {# =========================================================
+       RESUMEN
+       ========================================================= #}
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-4 col-xl">
+            <div class="summary-card h-100">
+                <div class="summary-label">Artículos</div>
+                <div class="summary-value">
+                    {{ comparison_matrix.total_lines or 0 }}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-md-4 col-xl">
+            <div class="summary-card h-100">
+                <div class="summary-label">Proveedores</div>
+                <div class="summary-value">
+                    {{ comparison_matrix.total_suppliers or 0 }}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-md-4 col-xl">
+            <div class="summary-card h-100">
+                <div class="summary-label">Cotizaciones</div>
+                <div class="summary-value">
+                    {{ comparison_matrix.total_quotations or 0 }}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-md-4 col-xl">
+            <div class="summary-card h-100 summary-card-selected">
+                <div class="summary-label">Seleccionados</div>
+                <div class="summary-value">
+                    {{ comparison_matrix.selected_lines or 0 }}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-md-4 col-xl">
+            <div class="summary-card h-100 summary-card-pending">
+                <div class="summary-label">Pendientes</div>
+                <div class="summary-value">
+                    {{ comparison_matrix.pending_selection_lines or 0 }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# =========================================================
+       LEYENDA
+       ========================================================= #}
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body py-3 px-4">
+            <div class="d-flex flex-wrap align-items-center gap-3 small">
+                <span class="fw-semibold text-dark">
+                    Leyenda:
+                </span>
+
+                <span class="legend-item">
+                    <span class="legend-box legend-best"></span>
+                    Mejor precio en su moneda
+                </span>
+
+                <span class="legend-item">
+                    <span class="legend-box legend-selected"></span>
+                    Cotización seleccionada
+                </span>
+
+                <span class="legend-item">
+                    <span class="legend-box legend-used"></span>
+                    Utilizada en una OC
+                </span>
+
+                <span class="legend-item">
+                    <span class="legend-box legend-empty"></span>
+                    Sin cotización
+                </span>
+            </div>
+        </div>
+    </div>
+
+    {# =========================================================
+       MATRIZ PRINCIPAL
+       ========================================================= #}
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="card-header bg-white border-0 p-4">
+            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                <div>
+                    <h5 class="fw-bold mb-1">
+                        Matriz de proveedores
+                    </h5>
+                    <p class="text-muted mb-0">
+                        Cada fila representa un artículo y cada columna un proveedor.
+                    </p>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    <div class="input-group comparison-search-group">
+                        <span class="input-group-text bg-white">
+                            <i class="bi bi-search"></i>
+                        </span>
+
+                        <input
+                            type="search"
+                            id="comparisonSearch"
+                            class="form-control"
+                            placeholder="Buscar código o descripción..."
+                            autocomplete="off"
+                        >
+
+                        <button
+                            type="button"
+                            id="clearComparisonSearch"
+                            class="btn btn-outline-secondary"
+                            title="Limpiar búsqueda"
+                        >
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+
+                    <button
+                        type="button"
+                        id="scrollToSelected"
+                        class="btn btn-outline-primary rounded-3"
+                    >
+                        <i class="bi bi-check2-square me-2"></i>
+                        Ver seleccionados
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {% if comparison_matrix.lines %}
+            <div class="comparison-scroll-wrapper" id="comparisonScrollWrapper">
+                <table class="comparison-table" id="comparisonTable">
+                    <thead>
+                        <tr>
+                            <th class="sticky-column sticky-code comparison-header-code">
+                                Cód.
+                            </th>
+
+                            <th class="sticky-column sticky-description comparison-header-description">
+                                Descripción
+                            </th>
+
+                            <th class="sticky-column sticky-quantity comparison-header-quantity">
+                                Cant.
+                            </th>
+
+                            {% for supplier in comparison_matrix.suppliers %}
+                                <th class="supplier-header">
+                                    <div class="supplier-header-content">
+                                        <span class="supplier-header-index">
+                                            {{ loop.index }}
+                                        </span>
+
+                                        <span class="supplier-header-name">
+                                            {{ supplier.supplier_name }}
+                                        </span>
+                                    </div>
+                                </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for line in comparison_matrix.lines %}
+                            <tr
+                                class="comparison-row"
+                                data-search-text="{{ (
+                                    (line.item_code or '') ~ ' ' ~
+                                    (line.item_name or '')
+                                )|lower }}"
+                                data-has-selection="{{ '1' if line.has_selection else '0' }}"
+                            >
+                                <td class="sticky-column sticky-code item-code-cell">
+                                    {{ line.item_code or "-" }}
+                                </td>
+
+                                <td class="sticky-column sticky-description item-description-cell">
+                                    <div class="item-name">
+                                        {{ line.item_name or "Sin artículo" }}
+                                    </div>
+
+                                    <div class="item-meta">
+                                        {% if line.is_urgent %}
+                                            <span class="badge text-bg-danger">
+                                                Urgente
+                                            </span>
+                                        {% endif %}
+
+                                        {% if line.line_status %}
+                                            <span class="badge text-bg-light border text-dark">
+                                                {{ line.line_status|replace("_", " ") }}
+                                            </span>
+                                        {% endif %}
+                                    </div>
+
+                                    {% if line.line_notes %}
+                                        <div
+                                            class="item-notes"
+                                            title="{{ line.line_notes }}"
+                                        >
+                                            {{ line.line_notes }}
+                                        </div>
+                                    {% endif %}
+                                </td>
+
+                                <td class="sticky-column sticky-quantity item-quantity-cell">
+                                    <div class="fw-bold">
+                                        {{ "{:,.2f}".format((line.quantity_requested or 0)|float) }}
+                                    </div>
+
+                                    {% if line.unit %}
+                                        <div class="small text-muted">
+                                            {{ line.unit.name if line.unit.name is defined else line.unit }}
+                                        </div>
+                                    {% endif %}
+                                </td>
+
+                                {% for cell in line.cells %}
+                                    {% if cell.has_quotation and cell.quotation %}
+                                        {% set quotation = cell.quotation %}
+
+                                        {% set cell_classes = [] %}
+
+                                        {% if quotation.is_selection_locked %}
+                                            {% set cell_classes = cell_classes + ["quotation-cell-used"] %}
+                                        {% elif quotation.is_selected %}
+                                            {% set cell_classes = cell_classes + ["quotation-cell-selected"] %}
+                                        {% elif quotation.is_best_price %}
+                                            {% set cell_classes = cell_classes + ["quotation-cell-best"] %}
+                                        {% else %}
+                                            {% set cell_classes = cell_classes + ["quotation-cell-normal"] %}
+                                        {% endif %}
+
+                                        <td class="supplier-cell {{ cell_classes|join(' ') }}">
+                                            <div class="quotation-cell-content">
+
+                                                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                                    <span class="currency-badge">
+                                                        {{ quotation.currency_code or "CRC" }}
+                                                    </span>
+
+                                                    {% if quotation.is_selection_locked %}
+                                                        <span
+                                                            class="badge text-bg-secondary"
+                                                            title="Esta cotización ya fue utilizada en una orden de compra"
+                                                        >
+                                                            OC
+                                                        </span>
+                                                    {% elif quotation.is_selected %}
+                                                        <span class="badge text-bg-primary">
+                                                            Seleccionada
+                                                        </span>
+                                                    {% elif quotation.is_best_price %}
+                                                        <span class="badge text-bg-success">
+                                                            Mejor
+                                                        </span>
+                                                    {% endif %}
+                                                </div>
+
+                                                <div class="quotation-price">
+                                                    {{ "{:,.2f}".format((quotation.unit_total or 0)|float) }}
+                                                </div>
+
+                                                <div class="quotation-price-label">
+                                                    Total unitario
+                                                </div>
+
+                                                <div class="quotation-details mt-3">
+                                                    <div class="quotation-detail-row">
+                                                        <span>Precio ingresado</span>
+                                                        <strong>
+                                                            {{ "{:,.2f}".format((quotation.unit_price or 0)|float) }}
+                                                        </strong>
+                                                    </div>
+
+                                                    {% if quotation.discount_pct and quotation.discount_pct|float > 0 %}
+                                                        <div class="quotation-detail-row">
+                                                            <span>Descuento</span>
+                                                            <strong>
+                                                                {{ "{:,.2f}".format(quotation.discount_pct|float) }}%
+                                                            </strong>
+                                                        </div>
+                                                    {% endif %}
+
+                                                    <div class="quotation-detail-row">
+                                                        <span>Impuesto</span>
+                                                        <strong>
+                                                            {{ "{:,.2f}".format((quotation.tax_pct or 0)|float) }}%
+                                                        </strong>
+                                                    </div>
+
+                                                    <div class="quotation-detail-row line-total-row">
+                                                        <span>Total línea</span>
+                                                        <strong>
+                                                            {{ quotation.currency_code or "CRC" }}
+                                                            {{ "{:,.2f}".format((quotation.line_total or 0)|float) }}
+                                                        </strong>
+                                                    </div>
+                                                </div>
+
+                                                <details class="quotation-more mt-3">
+                                                    <summary>
+                                                        Ver condiciones
+                                                    </summary>
+
+                                                    <div class="quotation-more-content">
+                                                        <div>
+                                                            <span>Fecha:</span>
+                                                            <strong>
+                                                                {{ quotation.quote_date.strftime("%d/%m/%Y") if quotation.quote_date else "-" }}
+                                                            </strong>
+                                                        </div>
+
+                                                        <div>
+                                                            <span>Pago:</span>
+                                                            <strong>
+                                                                {% if quotation.payment_type %}
+                                                                    {{ quotation.payment_type }}
+                                                                    {% if quotation.payment_term_months is not none %}
+                                                                        / {{ quotation.payment_term_months }} meses
+                                                                    {% endif %}
+                                                                {% else %}
+                                                                    -
+                                                                {% endif %}
+                                                            </strong>
+                                                        </div>
+
+                                                        <div>
+                                                            <span>Entrega:</span>
+                                                            <strong>
+                                                                {% if quotation.lead_time_days is not none %}
+                                                                    {{ quotation.lead_time_days }} días
+                                                                {% else %}
+                                                                    -
+                                                                {% endif %}
+                                                            </strong>
+                                                        </div>
+
+                                                        <div>
+                                                            <span>Origen:</span>
+                                                            <strong>
+                                                                {{ quotation.origin_type or "-" }}
+                                                            </strong>
+                                                        </div>
+
+                                                        <div>
+                                                            <span>Marca / Modelo:</span>
+                                                            <strong>
+                                                                {{ quotation.brand_model or "-" }}
+                                                            </strong>
+                                                        </div>
+
+                                                        <div>
+                                                            <span>IVA incluido:</span>
+                                                            <strong>
+                                                                {{ "Sí" if quotation.tax_included else "No" }}
+                                                            </strong>
+                                                        </div>
+
+                                                        {% if quotation.notes %}
+                                                            <div class="quotation-notes">
+                                                                <span>Notas:</span>
+                                                                <strong>
+                                                                    {{ quotation.notes }}
+                                                                </strong>
+                                                            </div>
+                                                        {% endif %}
+                                                    </div>
+                                                </details>
+
+                                                <div class="quotation-actions mt-3">
+                                                    {% if quotation.is_selection_locked %}
+                                                        <button
+                                                            type="button"
+                                                            class="btn btn-sm btn-secondary w-100"
+                                                            disabled
+                                                        >
+                                                            <i class="bi bi-lock-fill me-2"></i>
+                                                            Utilizada en OC
+                                                        </button>
+
+                                                        {% if line.selected_quotation and line.selected_quotation.purchase_order_id %}
+                                                            <a
+                                                                href="{{ url_for(
+                                                                    'purchases.order_detail',
+                                                                    order_id=line.selected_quotation.purchase_order_id
+                                                                ) }}"
+                                                                class="btn btn-sm btn-outline-secondary w-100 mt-2"
+                                                            >
+                                                                <i class="bi bi-box-arrow-up-right me-2"></i>
+                                                                Ver orden
+                                                            </a>
+                                                        {% endif %}
+
+                                                    {% elif quotation.is_selected %}
+                                                        <form
+                                                            method="post"
+                                                            action="{{ url_for(
+                                                                'purchases.clear_quotation_candidate',
+                                                                line_id=line.purchase_request_line_id
+                                                            ) }}"
+                                                            class="clear-selection-form"
+                                                        >
+                                                            <input
+                                                                type="hidden"
+                                                                name="request_id"
+                                                                value="{{ purchase_request.id }}"
+                                                            >
+
+                                                            <input
+                                                                type="hidden"
+                                                                name="category_id"
+                                                                value="{{ category_id }}"
+                                                            >
+
+                                                            <button
+                                                                type="submit"
+                                                                class="btn btn-sm btn-outline-danger w-100"
+                                                            >
+                                                                <i class="bi bi-x-circle me-2"></i>
+                                                                Quitar selección
+                                                            </button>
+                                                        </form>
+
+                                                    {% elif quotation.is_selectable %}
+                                                        <form
+                                                            method="post"
+                                                            action="{{ url_for(
+                                                                'purchases.select_quotation_candidate',
+                                                                line_id=line.purchase_request_line_id
+                                                            ) }}"
+                                                            class="select-quotation-form"
+                                                            data-supplier-name="{{ cell.supplier_name }}"
+                                                            data-item-name="{{ line.item_name }}"
+                                                        >
+                                                            <input
+                                                                type="hidden"
+                                                                name="quotation_line_id"
+                                                                value="{{ quotation.quotation_line_id }}"
+                                                            >
+
+                                                            <input
+                                                                type="hidden"
+                                                                name="request_id"
+                                                                value="{{ purchase_request.id }}"
+                                                            >
+
+                                                            <input
+                                                                type="hidden"
+                                                                name="category_id"
+                                                                value="{{ category_id }}"
+                                                            >
+
+                                                            <button
+                                                                type="submit"
+                                                                class="btn btn-sm btn-dark w-100"
+                                                            >
+                                                                <i class="bi bi-check2-circle me-2"></i>
+                                                                Seleccionar
+                                                            </button>
+                                                        </form>
+
+                                                    {% else %}
+                                                        <button
+                                                            type="button"
+                                                            class="btn btn-sm btn-light border w-100"
+                                                            disabled
+                                                        >
+                                                            No disponible
+                                                        </button>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </td>
+                                    {% else %}
+                                        <td class="supplier-cell quotation-cell-empty">
+                                            <div class="empty-quotation">
+                                                <span>-</span>
+                                                <small>Sin cotización</small>
+                                            </div>
+                                        </td>
+                                    {% endif %}
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div
+                id="noSearchResults"
+                class="d-none text-center p-5"
+            >
+                <i class="bi bi-search fs-1 text-muted"></i>
+                <h6 class="fw-bold mt-3 mb-1">
+                    No se encontraron artículos
+                </h6>
+                <p class="text-muted mb-0">
+                    Prueba con otro código o descripción.
+                </p>
+            </div>
+
+        {% else %}
+            <div class="text-center p-5">
+                <i class="bi bi-grid-3x3-gap fs-1 text-muted"></i>
+
+                <h5 class="fw-bold mt-3">
+                    No hay líneas para comparar
+                </h5>
+
+                <p class="text-muted mb-3">
+                    Esta categoría no contiene líneas activas en la solicitud.
+                </p>
+
+                <a
+                    href="{{ url_for(
+                        'purchases.quotation_request_lines',
+                        request_id=purchase_request.id
+                    ) }}"
+                    class="btn btn-dark rounded-3"
+                >
+                    Volver a categorías
+                </a>
+            </div>
+        {% endif %}
+    </div>
+
+    {# =========================================================
+       PIE DE PÁGINA
+       ========================================================= #}
+    {% if comparison_matrix.lines %}
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mt-4">
+            <div class="text-muted small">
+                {% if comparison_matrix.pending_selection_lines > 0 %}
+                    Faltan
+                    <strong>
+                        {{ comparison_matrix.pending_selection_lines }}
+                    </strong>
+                    artículo(s) por seleccionar en esta categoría.
+                {% else %}
+                    <span class="text-success fw-semibold">
+                        <i class="bi bi-check-circle-fill me-1"></i>
+                        Todas las líneas de esta categoría tienen una selección.
+                    </span>
+                {% endif %}
+            </div>
+
+            <div class="d-flex flex-wrap gap-2">
+                <a
+                    href="{{ url_for(
+                        'purchases.quotation_request_lines',
+                        request_id=purchase_request.id
+                    ) }}"
+                    class="btn btn-light border rounded-3"
+                >
+                    <i class="bi bi-arrow-left me-2"></i>
+                    Volver
+                </a>
+
+                {% if comparison_matrix.selected_lines > 0 %}
+                    <a
+                        href="{{ url_for('purchases.create_order') }}"
+                        class="btn btn-dark rounded-3"
+                    >
+                        <i class="bi bi-file-earmark-check me-2"></i>
+                        Continuar a órdenes de compra
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<style>
+    .quotation-comparison-page {
+        --comparison-yellow: #fff200;
+        --comparison-yellow-dark: #e4d900;
+        --comparison-border: #111827;
+        --comparison-green: #a7d96b;
+        --comparison-green-soft: #eaf7d8;
+        --comparison-blue: #dbeafe;
+        --comparison-blue-border: #2563eb;
+        --comparison-gray: #e5e7eb;
+        --comparison-empty: #f8fafc;
+        --sticky-code-width: 105px;
+        --sticky-description-width: 270px;
+        --sticky-quantity-width: 88px;
+    }
+
+    .summary-card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 1rem;
+        padding: 1rem 1.1rem;
+        box-shadow: 0 0.125rem 0.5rem rgba(15, 23, 42, 0.05);
+    }
+
+    .summary-card-selected {
+        border-color: #bfdbfe;
+        background: #eff6ff;
+    }
+
+    .summary-card-pending {
+        border-color: #fde68a;
+        background: #fffbeb;
+    }
+
+    .summary-label {
+        color: #64748b;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .summary-value {
+        color: #0f172a;
+        font-size: 1.55rem;
+        font-weight: 800;
+        margin-top: 0.25rem;
+    }
+
+    .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        color: #475569;
+    }
+
+    .legend-box {
+        display: inline-block;
+        width: 18px;
+        height: 18px;
+        border: 1px solid #94a3b8;
+        border-radius: 0.25rem;
+    }
+
+    .legend-best {
+        background: var(--comparison-green);
+    }
+
+    .legend-selected {
+        background: var(--comparison-blue);
+        border-color: var(--comparison-blue-border);
+    }
+
+    .legend-used {
+        background: var(--comparison-gray);
+    }
+
+    .legend-empty {
+        background: var(--comparison-empty);
+    }
+
+    .comparison-search-group {
+        width: min(100%, 360px);
+    }
+
+    .comparison-scroll-wrapper {
+        width: 100%;
+        max-height: 72vh;
+        overflow: auto;
+        border-top: 1px solid #e5e7eb;
+        position: relative;
+    }
+
+    .comparison-table {
+        width: max-content;
+        min-width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+        background: #ffffff;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+        border-right: 1px solid var(--comparison-border);
+        border-bottom: 1px solid var(--comparison-border);
+        vertical-align: top;
+    }
+
+    .comparison-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: var(--comparison-yellow);
+        color: #111827;
+        font-size: 0.82rem;
+        font-weight: 800;
+        text-align: center;
+        padding: 0.7rem 0.55rem;
+        border-top: 1px solid var(--comparison-border);
+    }
+
+    .comparison-table tr > :first-child {
+        border-left: 1px solid var(--comparison-border);
+    }
+
+    .sticky-column {
+        position: sticky;
+        z-index: 10;
+        background: #ffffff;
+    }
+
+    .comparison-table thead .sticky-column {
+        z-index: 30;
+        background: var(--comparison-yellow);
+    }
+
+    .sticky-code {
+        left: 0;
+        width: var(--sticky-code-width);
+        min-width: var(--sticky-code-width);
+        max-width: var(--sticky-code-width);
+    }
+
+    .sticky-description {
+        left: var(--sticky-code-width);
+        width: var(--sticky-description-width);
+        min-width: var(--sticky-description-width);
+        max-width: var(--sticky-description-width);
+    }
+
+    .sticky-quantity {
+        left: calc(
+            var(--sticky-code-width)
+            + var(--sticky-description-width)
+        );
+        width: var(--sticky-quantity-width);
+        min-width: var(--sticky-quantity-width);
+        max-width: var(--sticky-quantity-width);
+        box-shadow: 4px 0 8px rgba(15, 23, 42, 0.08);
+    }
+
+    .supplier-header {
+        width: 225px;
+        min-width: 225px;
+        max-width: 225px;
+    }
+
+    .supplier-header-content {
+        min-height: 54px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+    }
+
+    .supplier-header-index {
+        flex: 0 0 auto;
+        display: inline-grid;
+        place-items: center;
+        min-width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.12);
+        font-size: 0.72rem;
+    }
+
+    .supplier-header-name {
+        line-height: 1.15;
+        overflow-wrap: anywhere;
+    }
+
+    .item-code-cell {
+        padding: 0.7rem 0.55rem;
+        text-align: center;
+        font-size: 0.82rem;
+        font-weight: 800;
+        color: #111827;
+    }
+
+    .item-description-cell {
+        padding: 0.7rem;
+    }
+
+    .item-name {
+        font-weight: 700;
+        color: #111827;
+        line-height: 1.25;
+    }
+
+    .item-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+        margin-top: 0.45rem;
+    }
+
+    .item-notes {
+        color: #64748b;
+        font-size: 0.75rem;
+        line-height: 1.3;
+        margin-top: 0.5rem;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        overflow: hidden;
+    }
+
+    .item-quantity-cell {
+        padding: 0.7rem 0.4rem;
+        text-align: center;
+        color: #111827;
+    }
+
+    .supplier-cell {
+        width: 225px;
+        min-width: 225px;
+        max-width: 225px;
+        padding: 0;
+        transition:
+            background-color 0.15s ease,
+            box-shadow 0.15s ease;
+    }
+
+    .quotation-cell-normal {
+        background: #ffffff;
+    }
+
+    .quotation-cell-best {
+        background: var(--comparison-green-soft);
+        box-shadow: inset 0 0 0 2px #65a30d;
+    }
+
+    .quotation-cell-selected {
+        background: var(--comparison-blue);
+        box-shadow: inset 0 0 0 3px var(--comparison-blue-border);
+    }
+
+    .quotation-cell-used {
+        background: var(--comparison-gray);
+        box-shadow: inset 0 0 0 2px #6b7280;
+    }
+
+    .quotation-cell-empty {
+        background: var(--comparison-empty);
+        vertical-align: middle !important;
+    }
+
+    .quotation-cell-content {
+        min-height: 230px;
+        padding: 0.7rem;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .currency-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 45px;
+        padding: 0.2rem 0.45rem;
+        background: #111827;
+        color: #ffffff;
+        border-radius: 0.35rem;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+    }
+
+    .quotation-price {
+        color: #111827;
+        font-size: 1.15rem;
+        font-weight: 900;
+        line-height: 1.15;
+        text-align: right;
+        overflow-wrap: anywhere;
+    }
+
+    .quotation-price-label {
+        color: #64748b;
+        font-size: 0.68rem;
+        font-weight: 600;
+        text-align: right;
+        margin-top: 0.15rem;
+    }
+
+    .quotation-details {
+        display: grid;
+        gap: 0.35rem;
+    }
+
+    .quotation-detail-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.5rem;
+        color: #475569;
+        font-size: 0.72rem;
+        line-height: 1.25;
+    }
+
+    .quotation-detail-row strong {
+        color: #0f172a;
+        text-align: right;
+    }
+
+    .line-total-row {
+        border-top: 1px dashed rgba(15, 23, 42, 0.35);
+        padding-top: 0.4rem;
+        margin-top: 0.2rem;
+    }
+
+    .quotation-more {
+        font-size: 0.72rem;
+    }
+
+    .quotation-more summary {
+        color: #334155;
+        cursor: pointer;
+        font-weight: 700;
+        user-select: none;
+    }
+
+    .quotation-more-content {
+        display: grid;
+        gap: 0.35rem;
+        margin-top: 0.5rem;
+        padding: 0.55rem;
+        background: rgba(255, 255, 255, 0.65);
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        border-radius: 0.5rem;
+    }
+
+    .quotation-more-content > div {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .quotation-more-content strong {
+        color: #0f172a;
+        text-align: right;
+        overflow-wrap: anywhere;
+    }
+
+    .quotation-notes {
+        display: block !important;
+        border-top: 1px solid rgba(148, 163, 184, 0.45);
+        padding-top: 0.4rem;
+    }
+
+    .quotation-notes strong {
+        display: block;
+        text-align: left;
+        margin-top: 0.2rem;
+        font-weight: 500;
+    }
+
+    .quotation-actions {
+        margin-top: auto !important;
+        padding-top: 0.7rem;
+    }
+
+    .empty-quotation {
+        min-height: 230px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #94a3b8;
+    }
+
+    .empty-quotation span {
+        font-size: 1.3rem;
+        font-weight: 700;
+    }
+
+    .empty-quotation small {
+        font-size: 0.7rem;
+    }
+
+    .comparison-row.is-hidden {
+        display: none;
+    }
+
+    .comparison-row.highlight-selected td {
+        animation: selectedPulse 1.3s ease;
+    }
+
+    @keyframes selectedPulse {
+        0% {
+            filter: brightness(1);
+        }
+
+        50% {
+            filter: brightness(0.88);
+        }
+
+        100% {
+            filter: brightness(1);
+        }
+    }
+
+    @media (max-width: 991.98px) {
+        .quotation-comparison-page {
+            --sticky-code-width: 90px;
+            --sticky-description-width: 220px;
+            --sticky-quantity-width: 75px;
+        }
+
+        .supplier-header,
+        .supplier-cell {
+            width: 205px;
+            min-width: 205px;
+            max-width: 205px;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        .quotation-comparison-page {
+            --sticky-code-width: 82px;
+            --sticky-description-width: 185px;
+            --sticky-quantity-width: 68px;
+        }
+
+        .comparison-table thead th {
+            font-size: 0.72rem;
+            padding: 0.55rem 0.35rem;
+        }
+
+        .item-name {
+            font-size: 0.8rem;
+        }
+
+        .item-code-cell,
+        .item-quantity-cell {
+            font-size: 0.72rem;
+        }
+
+        .supplier-header,
+        .supplier-cell {
+            width: 190px;
+            min-width: 190px;
+            max-width: 190px;
+        }
+
+        .quotation-price {
+            font-size: 1rem;
+        }
+    }
+</style>
+
+<script>
+(function () {
+    const searchInput = document.getElementById("comparisonSearch");
+    const clearSearchButton = document.getElementById("clearComparisonSearch");
+    const table = document.getElementById("comparisonTable");
+    const noSearchResults = document.getElementById("noSearchResults");
+    const scrollWrapper = document.getElementById("comparisonScrollWrapper");
+    const scrollToSelectedButton = document.getElementById("scrollToSelected");
+
+    function normalizeText(value) {
+        return String(value || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .trim();
+    }
+
+    function filterRows() {
+        if (!table || !searchInput) {
+            return;
+        }
+
+        const term = normalizeText(searchInput.value);
+        const rows = table.querySelectorAll("tbody .comparison-row");
+        let visibleRows = 0;
+
+        rows.forEach(function (row) {
+            const searchableText = normalizeText(
+                row.dataset.searchText || ""
+            );
+
+            const matches = !term || searchableText.includes(term);
+
+            row.classList.toggle("is-hidden", !matches);
+
+            if (matches) {
+                visibleRows += 1;
+            }
+        });
+
+        if (noSearchResults) {
+            noSearchResults.classList.toggle(
+                "d-none",
+                visibleRows > 0
+            );
+        }
+
+        if (scrollWrapper) {
+            scrollWrapper.classList.toggle(
+                "d-none",
+                visibleRows === 0
+            );
+        }
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener("input", filterRows);
+    }
+
+    if (clearSearchButton) {
+        clearSearchButton.addEventListener("click", function () {
+            if (!searchInput) {
+                return;
+            }
+
+            searchInput.value = "";
+            filterRows();
+            searchInput.focus();
+        });
+    }
+
+    if (scrollToSelectedButton && table) {
+        scrollToSelectedButton.addEventListener("click", function () {
+            const selectedRow = table.querySelector(
+                'tbody .comparison-row[data-has-selection="1"]:not(.is-hidden)'
+            );
+
+            if (!selectedRow) {
+                window.alert(
+                    "No hay líneas seleccionadas visibles en esta categoría."
+                );
+                return;
+            }
+
+            selectedRow.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+                inline: "nearest",
+            });
+
+            selectedRow.classList.add("highlight-selected");
+
+            window.setTimeout(function () {
+                selectedRow.classList.remove("highlight-selected");
+            }, 1400);
+        });
+    }
+
+    document
+        .querySelectorAll(".select-quotation-form")
+        .forEach(function (form) {
+            form.addEventListener("submit", function (event) {
+                const supplierName =
+                    form.dataset.supplierName || "este proveedor";
+
+                const itemName =
+                    form.dataset.itemName || "este artículo";
+
+                const confirmed = window.confirm(
+                    `¿Seleccionar la cotización de ${supplierName} para ${itemName}?`
+                );
+
+                if (!confirmed) {
+                    event.preventDefault();
+                    return;
+                }
+
+                const button = form.querySelector(
+                    'button[type="submit"]'
+                );
+
+                if (button) {
+                    button.disabled = true;
+                    button.innerHTML = `
+                        <span
+                            class="spinner-border spinner-border-sm me-2"
+                            aria-hidden="true"
+                        ></span>
+                        Seleccionando...
+                    `;
+                }
+            });
+        });
+
+    document
+        .querySelectorAll(".clear-selection-form")
+        .forEach(function (form) {
+            form.addEventListener("submit", function (event) {
+                const confirmed = window.confirm(
+                    "¿Deseas quitar esta selección de la preorden?"
+                );
+
+                if (!confirmed) {
+                    event.preventDefault();
+                    return;
+                }
+
+                const button = form.querySelector(
+                    'button[type="submit"]'
+                );
+
+                if (button) {
+                    button.disabled = true;
+                    button.innerHTML = `
+                        <span
+                            class="spinner-border spinner-border-sm me-2"
+                            aria-hidden="true"
+                        ></span>
+                        Quitando...
+                    `;
+                }
+            });
+        });
+
+    if (scrollWrapper) {
+        const storageKey = [
+            "quotation-comparison-scroll",
+            "{{ purchase_request.id }}",
+            "{{ category_id }}",
+        ].join("-");
+
+        const savedScrollLeft = window.sessionStorage.getItem(
+            `${storageKey}-left`
+        );
+
+        const savedScrollTop = window.sessionStorage.getItem(
+            `${storageKey}-top`
+        );
+
+        if (savedScrollLeft !== null) {
+            scrollWrapper.scrollLeft = Number(savedScrollLeft) || 0;
+        }
+
+        if (savedScrollTop !== null) {
+            scrollWrapper.scrollTop = Number(savedScrollTop) || 0;
+        }
+
+        let saveTimer = null;
+
+        scrollWrapper.addEventListener("scroll", function () {
+            window.clearTimeout(saveTimer);
+
+            saveTimer = window.setTimeout(function () {
+                window.sessionStorage.setItem(
+                    `${storageKey}-left`,
+                    String(scrollWrapper.scrollLeft)
+                );
+
+                window.sessionStorage.setItem(
+                    `${storageKey}-top`,
+                    String(scrollWrapper.scrollTop)
+                );
+            }, 100);
+        });
+    }
+})();
+</script>
+{% endblock %}
