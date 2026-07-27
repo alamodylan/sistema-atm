@@ -98,6 +98,8 @@ from app.services.quotation_service import (
     list_quotation_line_groups,
     list_quotation_request_groups,
     select_quotation_for_purchase_order,
+    list_suppliers_for_category_comparison,
+    save_category_comparison_matrix,
 )
 
 purchases_bp = Blueprint("purchases", __name__, template_folder="../templates")
@@ -1080,6 +1082,197 @@ def quotation_category_comparison(
         quotation_category=quotation_category,
         category_id=category_id,
         comparison_matrix=comparison_matrix,
+        edit_mode=False,
+    )
+
+@purchases_bp.route(
+    "/quotations/request/<int:request_id>/category/<int:category_id>/suppliers"
+)
+@login_required
+def quotation_category_suppliers(
+    request_id: int,
+    category_id: int,
+):
+
+    exclude_supplier_ids = []
+
+    for raw_supplier_id in request.args.getlist(
+        "exclude_supplier_id"
+    ):
+        supplier_id = _to_int(raw_supplier_id)
+
+        if supplier_id:
+            exclude_supplier_ids.append(
+                supplier_id
+            )
+
+    search = (
+        request.args.get("search")
+        or ""
+    ).strip()
+
+    try:
+
+        suppliers = (
+            list_suppliers_for_category_comparison(
+                purchase_request_id=request_id,
+                quotation_category_id=(
+                    None
+                    if category_id == 0
+                    else category_id
+                ),
+                exclude_supplier_ids=exclude_supplier_ids,
+                search=search,
+            )
+        )
+
+        return jsonify(
+            {
+                "items": suppliers
+            }
+        )
+
+    except QuotationServiceError as exc:
+
+        return jsonify(
+            {
+                "items": [],
+                "error": str(exc),
+            }
+        ), 400
+
+    except Exception as exc:
+
+        db.session.rollback()
+
+        print(
+            "[CATEGORY SUPPLIERS ERROR]",
+            exc,
+        )
+
+        return jsonify(
+            {
+                "items": [],
+                "error":
+                    "No fue posible cargar los proveedores.",
+            }
+        ), 500
+
+@purchases_bp.route(
+    "/quotations/request/<int:request_id>/category/<int:category_id>/save",
+    methods=["POST"],
+)
+@login_required
+def save_category_comparison(
+    request_id: int,
+    category_id: int,
+):
+
+    payload = (
+        request.get_json(silent=True)
+        or {}
+    )
+
+    supplier_columns = payload.get(
+        "supplier_columns",
+        [],
+    )
+
+    try:
+
+        result = (
+            save_category_comparison_matrix(
+                purchase_request_id=request_id,
+                quotation_category_id=(
+                    None
+                    if category_id == 0
+                    else category_id
+                ),
+                created_by_user_id=current_user.id,
+                supplier_columns=supplier_columns,
+            )
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                **result,
+            }
+        )
+
+    except QuotationServiceError as exc:
+
+        return jsonify(
+            {
+                "success": False,
+                "error": str(exc),
+            }
+        ), 400
+
+    except Exception as exc:
+
+        db.session.rollback()
+
+        print(
+            "[SAVE CATEGORY COMPARISON ERROR]",
+            exc,
+        )
+
+        return jsonify(
+            {
+                "success": False,
+                "error":
+                    "No fue posible guardar el comparativo.",
+            }
+        ), 500
+
+@purchases_bp.route(
+    "/quotations/request/<int:request_id>/category/<int:category_id>/excel"
+)
+@login_required
+def export_category_comparison_excel(
+    request_id: int,
+    category_id: int,
+):
+    """
+    Temporalmente reutiliza el exportador actual.
+
+    Posteriormente será reemplazado por el Excel
+    tipo matriz editable.
+    """
+
+    return redirect(
+        url_for(
+            "purchases.export_quotation_request_excel",
+            request_id=request_id,
+        )
+    )
+
+@purchases_bp.route(
+    "/quotations/request/<int:request_id>/category/<int:category_id>/print"
+)
+@login_required
+def print_category_comparison(
+    request_id: int,
+    category_id: int,
+):
+    """
+    Imprime el comparativo de una categoría específica.
+    """
+
+    purchase_request = PurchaseRequest.query.get_or_404(request_id)
+
+    comparison_matrix = get_category_comparison_matrix(
+        purchase_request_id=request_id,
+        category_id=category_id,
+    )
+
+    return render_template(
+        "purchases/quotations/print_category_comparison.html",
+        purchase_request=purchase_request,
+        comparison_matrix=comparison_matrix,
+        category_id=category_id,
+        printed_at=datetime.now(),
     )
 
 @purchases_bp.route(

@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func
+from sqlalchemy.orm import aliased, joinedload
 
 from app.extensions import db
 from app.models.article_supplier import ArticleSupplier
@@ -68,6 +69,7 @@ def _normalize_optional_text(value: str | None) -> str | None:
     return value or None
 
 
+
 def _normalize_optional_int(value: Any, field_name: str) -> int | None:
     if value is None or value == "":
         return None
@@ -76,6 +78,300 @@ def _normalize_optional_int(value: Any, field_name: str) -> int | None:
         return int(value)
     except Exception as exc:
         raise QuotationServiceError(f"Valor inválido para {field_name}.") from exc
+    
+def _normalize_category_id(
+    quotation_category_id: int | str | None,
+) -> int | None:
+    """
+    Normaliza el identificador de categoría.
+
+    None, vacío y 0 representan líneas sin categoría.
+    """
+
+    if quotation_category_id in {
+        None,
+        "",
+        0,
+        "0",
+    }:
+        return None
+
+    try:
+        category_id = int(quotation_category_id)
+    except (TypeError, ValueError) as exc:
+        raise QuotationServiceError(
+            "La categoría indicada no es válida."
+        ) from exc
+
+    if category_id <= 0:
+        raise QuotationServiceError(
+            "La categoría indicada no es válida."
+        )
+
+    return category_id
+
+
+def _get_quotation_category_or_error(
+    category_id: int | None,
+) -> QuotationCategory | None:
+    """
+    Devuelve la categoría activa o None cuando se solicita
+    el grupo sin categoría.
+    """
+
+    if category_id is None:
+        return None
+
+    quotation_category = (
+        QuotationCategory.query
+        .filter(
+            QuotationCategory.id == category_id,
+            QuotationCategory.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if not quotation_category:
+        raise QuotationServiceError(
+            "La categoría indicada no existe o está inactiva."
+        )
+
+    return quotation_category
+
+
+def _get_category_request_lines(
+    *,
+    purchase_request_id: int,
+    category_id: int | None,
+) -> list[PurchaseRequestLine]:
+    """
+    Obtiene únicamente las líneas activas de la categoría solicitada.
+
+    La categoría se resuelve directamente en SQL para evitar cargar
+    toda la solicitud y filtrarla posteriormente en Python.
+    """
+
+    article_assignment = aliased(
+        ArticleQuotationCategory
+    )
+
+    pending_assignment = aliased(
+        ArticleQuotationCategory
+    )
+
+    query = (
+        PurchaseRequestLine.query
+        .options(
+            joinedload(
+                PurchaseRequestLine.article
+            ),
+            joinedload(
+                PurchaseRequestLine.pending_article
+            ),
+            joinedload(
+                PurchaseRequestLine.unit
+            ),
+        )
+        .outerjoin(
+            article_assignment,
+            db.and_(
+                PurchaseRequestLine.article_id.isnot(
+                    None
+                ),
+                article_assignment.article_id
+                == PurchaseRequestLine.article_id,
+            ),
+        )
+        .outerjoin(
+            pending_assignment,
+            db.and_(
+                PurchaseRequestLine.pending_article_id.isnot(
+                    None
+                ),
+                pending_assignment.pending_article_id
+                == PurchaseRequestLine.pending_article_id,
+            ),
+        )
+        .filter(
+            PurchaseRequestLine.purchase_request_id
+            == purchase_request_id,
+            PurchaseRequestLine.line_status
+            != "CANCELADA",
+        )
+    )
+
+    if category_id is None:
+        query = query.filter(
+            db.or_(
+                db.and_(
+                    PurchaseRequestLine.article_id.isnot(
+                        None
+                    ),
+                    article_assignment.id.is_(None),
+                ),
+                db.and_(
+                    PurchaseRequestLine.pending_article_id.isnot(
+                        None
+                    ),
+                    pending_assignment.id.is_(None),
+                ),
+                db.and_(
+                    PurchaseRequestLine.article_id.is_(
+                        None
+                    ),
+                    PurchaseRequestLine.pending_article_id.is_(
+                        None
+                    ),
+                ),
+            )
+        )
+
+    else:
+        query = query.filter(
+            db.or_(
+                db.and_(
+                    PurchaseRequestLine.article_id.isnot(
+                        None
+                    ),
+                    article_assignment.quotation_category_id
+                    == category_id,
+                ),
+                db.and_(
+                    PurchaseRequestLine.pending_article_id.isnot(
+                        None
+                    ),
+                    pending_assignment.quotation_category_id
+                    == category_id,
+                ),
+            )
+        )
+
+    return (
+        query
+        .order_by(
+            PurchaseRequestLine.id.asc()
+        )
+        .all()
+    )
+
+
+def _normalize_currency_code(
+    value: Any,
+) -> str:
+    currency_code = (
+        str(value or "CRC")
+        .strip()
+        .upper()
+    )
+
+    if not currency_code:
+        currency_code = "CRC"
+
+    if len(currency_code) > 10:
+        raise QuotationServiceError(
+            "El código de moneda no es válido."
+        )
+
+    return currency_code
+
+
+def _normalize_boolean(
+    value: Any,
+) -> bool:
+    if isinstance(value, bool):
+        return value
+
+    return str(
+        value or ""
+    ).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "si",
+        "sí",
+        "on",
+    }
+
+
+def _quotation_values_are_equal(
+    *,
+    quotation_line: QuotationLine,
+    unit_price: Decimal,
+    currency_code: str,
+    discount_pct: Decimal,
+    tax_pct: Decimal,
+    tax_included: bool,
+    lead_time_days: int | None,
+    brand_model: str | None,
+    notes: str | None,
+    payment_type: str | None,
+    payment_term_months: int | None,
+    origin_type: str | None,
+) -> bool:
+    """
+    Determina si la información enviada es idéntica a la última
+    cotización registrada.
+
+    Esto evita crear nuevas versiones cuando el usuario presiona
+    Guardar sin haber cambiado la celda.
+    """
+
+    return all(
+        [
+            Decimal(
+                str(
+                    quotation_line.unit_price
+                    or 0
+                )
+            ) == unit_price,
+
+            _normalize_currency_code(
+                quotation_line.currency_code
+            ) == currency_code,
+
+            Decimal(
+                str(
+                    quotation_line.discount_pct
+                    or 0
+                )
+            ) == discount_pct,
+
+            Decimal(
+                str(
+                    quotation_line.tax_pct
+                    or 0
+                )
+            ) == tax_pct,
+
+            bool(
+                quotation_line.tax_included
+            ) == tax_included,
+
+            quotation_line.lead_time_days
+            == lead_time_days,
+
+            _normalize_optional_text(
+                quotation_line.brand_model
+            ) == brand_model,
+
+            _normalize_optional_text(
+                quotation_line.notes
+            ) == notes,
+
+            (
+                quotation_line.payment_type
+                or None
+            ) == payment_type,
+
+            quotation_line.payment_term_months
+            == payment_term_months,
+
+            (
+                quotation_line.origin_type
+                or None
+            ) == origin_type,
+        ]
+    )
 
 def _calculate_quotation_amounts(
     quotation_line: QuotationLine,
@@ -1424,18 +1720,16 @@ def get_category_comparison_matrix(
     quotation_category_id: int | None,
 ) -> dict:
     """
-    Construye el comparativo de cotizaciones de una categoría dentro
-    de una solicitud de compra.
+    Construye el comparativo horizontal de una categoría.
 
-    Reglas:
-    - La categoría se obtiene desde ArticleQuotationCategory.
-    - quotation_category_id recibe el ID real de QuotationCategory.
-    - None o 0 representan artículos sin categoría.
-    - Solo se incluyen líneas no canceladas.
-    - Por cada línea y proveedor se conserva la cotización más reciente.
-    - Las selecciones vigentes provienen de PurchaseOrderCandidate.
-    - Los candidatos USED quedan bloqueados.
-    - No se comparan precios entre monedas distintas.
+    Optimizaciones:
+    - consulta únicamente las líneas de la categoría;
+    - evita filtrar toda la solicitud en Python;
+    - obtiene desde PostgreSQL solo la cotización más reciente
+      por línea y proveedor;
+    - no ejecuta consultas dentro de los ciclos;
+    - si no existen cotizaciones, retorna antes de construir
+      mapas y cálculos innecesarios.
     """
 
     purchase_request = PurchaseRequest.query.get(
@@ -1447,39 +1741,15 @@ def get_category_comparison_matrix(
             "La solicitud de compra indicada no existe."
         )
 
-    category_id: int | None = None
+    category_id = _normalize_category_id(
+        quotation_category_id
+    )
 
-    if quotation_category_id not in {
-        None,
-        "",
-        0,
-        "0",
-    }:
-        try:
-            category_id = int(
-                quotation_category_id
-            )
-        except (TypeError, ValueError) as exc:
-            raise QuotationServiceError(
-                "La categoría indicada no es válida."
-            ) from exc
-
-    quotation_category = None
-
-    if category_id is not None:
-        quotation_category = (
-            QuotationCategory.query
-            .filter(
-                QuotationCategory.id == category_id,
-                QuotationCategory.is_active.is_(True),
-            )
-            .first()
+    quotation_category = (
+        _get_quotation_category_or_error(
+            category_id
         )
-
-        if not quotation_category:
-            raise QuotationServiceError(
-                "La categoría indicada no existe o está inactiva."
-            )
+    )
 
     category_label = (
         quotation_category.name
@@ -1487,145 +1757,38 @@ def get_category_comparison_matrix(
         else "Sin categoría"
     )
 
-    # =====================================================
-    # 1. CARGAR LAS LÍNEAS DE LA SOLICITUD
-    # =====================================================
-
-    request_lines = (
-        PurchaseRequestLine.query
-        .filter(
-            PurchaseRequestLine.purchase_request_id
-            == purchase_request_id,
-            PurchaseRequestLine.line_status
-            != "CANCELADA",
-        )
-        .order_by(
-            PurchaseRequestLine.id.asc(),
-        )
-        .all()
+    request_lines = _get_category_request_lines(
+        purchase_request_id=purchase_request_id,
+        category_id=category_id,
     )
+
+    base_result = {
+        "purchase_request_id": (
+            purchase_request.id
+        ),
+        "purchase_request_number": (
+            purchase_request.number
+        ),
+        "purchase_request_status": (
+            purchase_request.status
+        ),
+        "purchase_request": (
+            purchase_request
+        ),
+        "category_id": category_id,
+        "category_code": category_id,
+        "category_label": category_label,
+        "quotation_category": (
+            quotation_category
+        ),
+        "is_uncategorized": (
+            category_id is None
+        ),
+    }
 
     if not request_lines:
         return {
-            "purchase_request_id": purchase_request.id,
-            "purchase_request_number": purchase_request.number,
-            "purchase_request_status": purchase_request.status,
-            "purchase_request": purchase_request,
-            "category_id": category_id,
-            "category_code": category_id,
-            "category_label": category_label,
-            "quotation_category": quotation_category,
-            "is_uncategorized": category_id is None,
-            "suppliers": [],
-            "lines": [],
-            "total_lines": 0,
-            "total_suppliers": 0,
-            "total_quotations": 0,
-            "selected_lines": 0,
-            "pending_selection_lines": 0,
-        }
-
-    article_ids = {
-        line.article_id
-        for line in request_lines
-        if line.article_id is not None
-    }
-
-    pending_article_ids = {
-        line.pending_article_id
-        for line in request_lines
-        if line.pending_article_id is not None
-    }
-
-    # =====================================================
-    # 2. CARGAR ASIGNACIONES DE CATEGORÍA
-    # =====================================================
-
-    assignment_filters = []
-
-    if article_ids:
-        assignment_filters.append(
-            ArticleQuotationCategory.article_id.in_(
-                article_ids
-            )
-        )
-
-    if pending_article_ids:
-        assignment_filters.append(
-            ArticleQuotationCategory.pending_article_id.in_(
-                pending_article_ids
-            )
-        )
-
-    article_category_map: dict[int, int] = {}
-    pending_category_map: dict[int, int] = {}
-
-    if assignment_filters:
-        assignments = (
-            ArticleQuotationCategory.query
-            .filter(
-                db.or_(*assignment_filters)
-            )
-            .all()
-        )
-
-        for assignment in assignments:
-            if assignment.article_id is not None:
-                article_category_map[
-                    assignment.article_id
-                ] = assignment.quotation_category_id
-
-            if assignment.pending_article_id is not None:
-                pending_category_map[
-                    assignment.pending_article_id
-                ] = assignment.quotation_category_id
-
-    # =====================================================
-    # 3. FILTRAR LAS LÍNEAS POR CATEGORÍA
-    # =====================================================
-
-    filtered_request_lines: list[
-        PurchaseRequestLine
-    ] = []
-
-    for request_line in request_lines:
-        assigned_category_id = None
-
-        if request_line.article_id is not None:
-            assigned_category_id = (
-                article_category_map.get(
-                    request_line.article_id
-                )
-            )
-
-        elif request_line.pending_article_id is not None:
-            assigned_category_id = (
-                pending_category_map.get(
-                    request_line.pending_article_id
-                )
-            )
-
-        if category_id is None:
-            if assigned_category_id is None:
-                filtered_request_lines.append(
-                    request_line
-                )
-        elif assigned_category_id == category_id:
-            filtered_request_lines.append(
-                request_line
-            )
-
-    if not filtered_request_lines:
-        return {
-            "purchase_request_id": purchase_request.id,
-            "purchase_request_number": purchase_request.number,
-            "purchase_request_status": purchase_request.status,
-            "purchase_request": purchase_request,
-            "category_id": category_id,
-            "category_code": category_id,
-            "category_label": category_label,
-            "quotation_category": quotation_category,
-            "is_uncategorized": category_id is None,
+            **base_result,
             "suppliers": [],
             "lines": [],
             "total_lines": 0,
@@ -1636,13 +1799,42 @@ def get_category_comparison_matrix(
         }
 
     request_line_ids = [
-        request_line.id
-        for request_line in filtered_request_lines
+        line.id
+        for line in request_lines
     ]
 
     # =====================================================
-    # 4. CARGAR COTIZACIONES
+    # COTIZACIÓN MÁS RECIENTE POR LÍNEA Y PROVEEDOR
     # =====================================================
+
+    ranked_quotations = (
+        db.session.query(
+            QuotationLine.id.label(
+                "quotation_line_id"
+            ),
+            func.row_number()
+            .over(
+                partition_by=(
+                    QuotationLine.purchase_request_line_id,
+                    QuotationLine.supplier_id,
+                ),
+                order_by=(
+                    QuotationLine.quote_date.desc(),
+                    QuotationLine.created_at.desc(),
+                    QuotationLine.id.desc(),
+                ),
+            )
+            .label("quotation_rank"),
+        )
+        .filter(
+            QuotationLine.purchase_request_line_id.in_(
+                request_line_ids
+            ),
+            QuotationLine.status
+            != "DESCARTADA",
+        )
+        .subquery()
+    )
 
     quotation_rows = (
         db.session.query(
@@ -1651,27 +1843,30 @@ def get_category_comparison_matrix(
             Supplier.legal_name,
         )
         .join(
+            ranked_quotations,
+            ranked_quotations.c.quotation_line_id
+            == QuotationLine.id,
+        )
+        .join(
             Supplier,
-            Supplier.id == QuotationLine.supplier_id,
+            Supplier.id
+            == QuotationLine.supplier_id,
         )
         .filter(
-            QuotationLine.purchase_request_line_id.in_(
-                request_line_ids
-            ),
-            QuotationLine.status != "DESCARTADA",
+            ranked_quotations.c.quotation_rank
+            == 1
         )
         .order_by(
+            Supplier.commercial_name.asc(),
+            Supplier.legal_name.asc(),
+            Supplier.id.asc(),
             QuotationLine.purchase_request_line_id.asc(),
-            QuotationLine.supplier_id.asc(),
-            QuotationLine.quote_date.desc(),
-            QuotationLine.created_at.desc(),
-            QuotationLine.id.desc(),
         )
         .all()
     )
 
     # =====================================================
-    # 5. CARGAR SELECCIONES DE PRE-OC
+    # SELECCIONES DE PRE-OC
     # =====================================================
 
     candidate_rows = (
@@ -1681,7 +1876,10 @@ def get_category_comparison_matrix(
                 request_line_ids
             ),
             PurchaseOrderCandidate.status.in_(
-                {"PENDING", "USED"}
+                {
+                    "PENDING",
+                    "USED",
+                }
             ),
         )
         .order_by(
@@ -1703,7 +1901,128 @@ def get_category_comparison_matrix(
         )
 
     # =====================================================
-    # 6. INDEXAR PROVEEDORES Y COTIZACIONES
+    # RETORNO RÁPIDO CUANDO NO HAY COTIZACIONES
+    # =====================================================
+
+    if not quotation_rows:
+        matrix_lines = []
+
+        for request_line in request_lines:
+            selected_candidate = (
+                candidate_by_request_line.get(
+                    request_line.id
+                )
+            )
+
+            matrix_lines.append(
+                {
+                    "purchase_request_line_id": (
+                        request_line.id
+                    ),
+                    "article_id": (
+                        request_line.article_id
+                    ),
+                    "pending_article_id": (
+                        request_line.pending_article_id
+                    ),
+                    "item_type": (
+                        "ARTICLE"
+                        if request_line.article_id
+                        is not None
+                        else "PENDING"
+                        if request_line.pending_article_id
+                        is not None
+                        else None
+                    ),
+                    "item_id": (
+                        request_line.article_id
+                        if request_line.article_id
+                        is not None
+                        else request_line.pending_article_id
+                    ),
+                    "item_code": (
+                        request_line.item_code
+                        or "-"
+                    ),
+                    "item_name": (
+                        request_line.item_name
+                        or "Sin artículo"
+                    ),
+                    "quantity_requested": (
+                        _normalize_decimal(
+                            request_line.quantity_requested
+                            or Decimal("0"),
+                            "cantidad solicitada",
+                        )
+                    ),
+                    "unit_id": (
+                        request_line.unit_id
+                    ),
+                    "unit": request_line.unit,
+                    "line_notes": (
+                        request_line.line_notes
+                    ),
+                    "line_status": (
+                        request_line.line_status
+                    ),
+                    "is_urgent": bool(
+                        request_line.is_urgent
+                    ),
+                    "category_id": category_id,
+                    "category_code": category_id,
+                    "category_label": (
+                        category_label
+                    ),
+                    "cells": [],
+                    "has_quotations": False,
+                    "quotation_count": 0,
+                    "currency_codes": [],
+                    "has_mixed_currencies": False,
+                    "selected_candidate": (
+                        selected_candidate
+                    ),
+                    "selected_quotation": None,
+                    "has_selection": bool(
+                        selected_candidate
+                    ),
+                    "selection_status": (
+                        selected_candidate.status
+                        if selected_candidate
+                        else None
+                    ),
+                    "is_selection_locked": bool(
+                        selected_candidate
+                        and selected_candidate.status
+                        == "USED"
+                    ),
+                    "selected_is_latest": False,
+                }
+            )
+
+        selected_lines = sum(
+            1
+            for line in matrix_lines
+            if line["has_selection"]
+        )
+
+        return {
+            **base_result,
+            "suppliers": [],
+            "lines": matrix_lines,
+            "total_lines": len(
+                matrix_lines
+            ),
+            "total_suppliers": 0,
+            "total_quotations": 0,
+            "selected_lines": selected_lines,
+            "pending_selection_lines": (
+                len(matrix_lines)
+                - selected_lines
+            ),
+        }
+
+    # =====================================================
+    # INDEXAR COTIZACIONES Y PROVEEDORES
     # =====================================================
 
     supplier_map: dict[int, dict] = {}
@@ -1732,9 +2051,23 @@ def get_category_comparison_matrix(
         supplier_map.setdefault(
             quotation_line.supplier_id,
             {
-                "supplier_id": quotation_line.supplier_id,
-                "supplier_name": supplier_name,
+                "supplier_id": (
+                    quotation_line.supplier_id
+                ),
+                "supplier_name": (
+                    supplier_name
+                ),
             },
+        )
+
+        latest_quotation_map[
+            (
+                quotation_line.purchase_request_line_id,
+                quotation_line.supplier_id,
+            )
+        ] = (
+            quotation_line,
+            supplier_name,
         )
 
         quotation_by_id[
@@ -1744,58 +2077,33 @@ def get_category_comparison_matrix(
             supplier_name,
         )
 
-        quotation_key = (
-            quotation_line.purchase_request_line_id,
-            quotation_line.supplier_id,
-        )
-
-        latest_quotation_map.setdefault(
-            quotation_key,
-            (
-                quotation_line,
-                supplier_name,
-            ),
-        )
-
     suppliers = sorted(
         supplier_map.values(),
         key=lambda supplier: (
-            supplier["supplier_name"].lower(),
-            supplier["supplier_id"],
+            supplier[
+                "supplier_name"
+            ].lower(),
+            supplier[
+                "supplier_id"
+            ],
         ),
     )
 
     # =====================================================
-    # 7. CONSTRUIR MATRIZ
+    # CONSTRUIR MATRIZ
     # =====================================================
 
     matrix_lines: list[dict] = []
     selected_lines = 0
     total_quotations = 0
 
-    for request_line in filtered_request_lines:
-        if request_line.article_id is not None:
-            item_type = "ARTICLE"
-            item_id = request_line.article_id
-        elif request_line.pending_article_id is not None:
-            item_type = "PENDING"
-            item_id = request_line.pending_article_id
-        else:
-            item_type = None
-            item_id = None
-
-        item_code = (
-            request_line.item_code or "-"
-        )
-
-        item_name = (
-            request_line.item_name or "Sin artículo"
-        )
-
-        quantity_requested = _normalize_decimal(
-            request_line.quantity_requested
-            or Decimal("0"),
-            "cantidad solicitada",
+    for request_line in request_lines:
+        quantity_requested = (
+            _normalize_decimal(
+                request_line.quantity_requested
+                or Decimal("0"),
+                "cantidad solicitada",
+            )
         )
 
         selected_candidate = (
@@ -1829,7 +2137,9 @@ def get_category_comparison_matrix(
             )
 
             selected_quotation_data = {
-                "candidate_id": selected_candidate.id,
+                "candidate_id": (
+                    selected_candidate.id
+                ),
                 "quotation_line_id": (
                     selected_quotation.id
                 ),
@@ -1840,16 +2150,23 @@ def get_category_comparison_matrix(
                     selected_supplier_name
                 ),
                 "currency_code": (
-                    selected_quotation.currency_code
-                    or "CRC"
+                    _normalize_currency_code(
+                        selected_quotation.currency_code
+                    )
                 ),
                 "unit_total": (
-                    selected_amounts["unit_total"]
+                    selected_amounts[
+                        "unit_total"
+                    ]
                 ),
                 "line_total": (
-                    selected_amounts["line_total"]
+                    selected_amounts[
+                        "line_total"
+                    ]
                 ),
-                "status": selected_candidate.status,
+                "status": (
+                    selected_candidate.status
+                ),
                 "is_locked": (
                     selected_candidate.status
                     == "USED"
@@ -1859,8 +2176,8 @@ def get_category_comparison_matrix(
                 ),
             }
 
-        cells: list[dict] = []
-        calculated_cells: list[dict] = []
+        cells = []
+        calculated_cells = []
         line_currency_codes: set[str] = set()
 
         for supplier in suppliers:
@@ -1880,14 +2197,19 @@ def get_category_comparison_matrix(
             if not quotation_data:
                 cells.append(
                     {
-                        "supplier_id": supplier_id,
+                        "supplier_id": (
+                            supplier_id
+                        ),
                         "supplier_name": (
-                            supplier["supplier_name"]
+                            supplier[
+                                "supplier_name"
+                            ]
                         ),
                         "has_quotation": False,
                         "quotation": None,
                     }
                 )
+
                 continue
 
             (
@@ -1895,15 +2217,18 @@ def get_category_comparison_matrix(
                 supplier_name,
             ) = quotation_data
 
-            amounts = _calculate_quotation_amounts(
-                quotation_line,
-                quantity_requested,
+            amounts = (
+                _calculate_quotation_amounts(
+                    quotation_line,
+                    quantity_requested,
+                )
             )
 
             currency_code = (
-                quotation_line.currency_code
-                or "CRC"
-            ).strip().upper()
+                _normalize_currency_code(
+                    quotation_line.currency_code
+                )
+            )
 
             line_currency_codes.add(
                 currency_code
@@ -1917,6 +2242,12 @@ def get_category_comparison_matrix(
                 == quotation_line.id
             )
 
+            is_selection_locked = bool(
+                is_selected
+                and selected_candidate.status
+                == "USED"
+            )
+
             is_selectable = (
                 quotation_line.status
                 not in {
@@ -1924,7 +2255,9 @@ def get_category_comparison_matrix(
                     "DESCARTADA",
                     "CONVERTIDA_A_OC",
                 }
-                and amounts["unit_price"] > 0
+                and amounts[
+                    "unit_price"
+                ] > 0
                 and not (
                     selected_candidate
                     and selected_candidate.status
@@ -1950,15 +2283,21 @@ def get_category_comparison_matrix(
                     "created_at": (
                         quotation_line.created_at
                     ),
-                    "currency_code": currency_code,
+                    "currency_code": (
+                        currency_code
+                    ),
                     "unit_price": (
                         amounts["unit_price"]
                     ),
                     "unit_subtotal": (
-                        amounts["unit_subtotal"]
+                        amounts[
+                            "unit_subtotal"
+                        ]
                     ),
                     "discount_pct": (
-                        amounts["discount_pct"]
+                        amounts[
+                            "discount_pct"
+                        ]
                     ),
                     "unit_discount_amount": (
                         amounts[
@@ -1974,13 +2313,17 @@ def get_category_comparison_matrix(
                         amounts["tax_pct"]
                     ),
                     "unit_tax_amount": (
-                        amounts["unit_tax_amount"]
+                        amounts[
+                            "unit_tax_amount"
+                        ]
                     ),
                     "unit_total": (
                         amounts["unit_total"]
                     ),
                     "line_subtotal": (
-                        amounts["line_subtotal"]
+                        amounts[
+                            "line_subtotal"
+                        ]
                     ),
                     "line_discount_amount": (
                         amounts[
@@ -1993,7 +2336,9 @@ def get_category_comparison_matrix(
                         ]
                     ),
                     "line_tax_amount": (
-                        amounts["line_tax_amount"]
+                        amounts[
+                            "line_tax_amount"
+                        ]
                     ),
                     "line_total": (
                         amounts["line_total"]
@@ -2016,19 +2361,25 @@ def get_category_comparison_matrix(
                     "origin_type": (
                         quotation_line.origin_type
                     ),
-                    "notes": quotation_line.notes,
-                    "status": quotation_line.status,
-                    "is_selectable": is_selectable,
-                    "is_selected": is_selected,
+                    "notes": (
+                        quotation_line.notes
+                    ),
+                    "status": (
+                        quotation_line.status
+                    ),
+                    "is_selectable": (
+                        is_selectable
+                    ),
+                    "is_selected": (
+                        is_selected
+                    ),
                     "selection_status": (
                         selected_candidate.status
                         if is_selected
                         else None
                     ),
-                    "is_selection_locked": bool(
-                        is_selected
-                        and selected_candidate.status
-                        == "USED"
+                    "is_selection_locked": (
+                        is_selection_locked
                     ),
                     "is_best_price": False,
                 },
@@ -2037,47 +2388,42 @@ def get_category_comparison_matrix(
             cells.append(cell)
             calculated_cells.append(cell)
 
-        has_mixed_currencies = (
-            len(line_currency_codes) > 1
-        )
+        cells_by_currency: dict[
+            str,
+            list[dict],
+        ] = {}
 
-        if calculated_cells:
-            cells_by_currency: dict[
-                str,
-                list[dict],
-            ] = {}
+        for cell in calculated_cells:
+            cell_currency = (
+                cell["quotation"][
+                    "currency_code"
+                ]
+            )
 
-            for cell in calculated_cells:
-                currency_code = (
-                    cell["quotation"][
-                        "currency_code"
-                    ]
-                )
+            cells_by_currency.setdefault(
+                cell_currency,
+                [],
+            ).append(cell)
 
-                cells_by_currency.setdefault(
-                    currency_code,
-                    [],
-                ).append(cell)
+        for currency_cells in (
+            cells_by_currency.values()
+        ):
+            minimum_unit_total = min(
+                cell["quotation"][
+                    "unit_total"
+                ]
+                for cell in currency_cells
+            )
 
-            for currency_cells in (
-                cells_by_currency.values()
-            ):
-                minimum_unit_total = min(
+            for cell in currency_cells:
+                cell["quotation"][
+                    "is_best_price"
+                ] = (
                     cell["quotation"][
                         "unit_total"
                     ]
-                    for cell in currency_cells
+                    == minimum_unit_total
                 )
-
-                for cell in currency_cells:
-                    cell["quotation"][
-                        "is_best_price"
-                    ] = (
-                        cell["quotation"][
-                            "unit_total"
-                        ]
-                        == minimum_unit_total
-                    )
 
         selected_is_latest = False
 
@@ -2101,6 +2447,23 @@ def get_category_comparison_matrix(
                 ]
             )
 
+        if request_line.article_id is not None:
+            item_type = "ARTICLE"
+            item_id = request_line.article_id
+
+        elif (
+            request_line.pending_article_id
+            is not None
+        ):
+            item_type = "PENDING"
+            item_id = (
+                request_line.pending_article_id
+            )
+
+        else:
+            item_type = None
+            item_id = None
+
         matrix_lines.append(
             {
                 "purchase_request_line_id": (
@@ -2114,12 +2477,20 @@ def get_category_comparison_matrix(
                 ),
                 "item_type": item_type,
                 "item_id": item_id,
-                "item_code": item_code,
-                "item_name": item_name,
+                "item_code": (
+                    request_line.item_code
+                    or "-"
+                ),
+                "item_name": (
+                    request_line.item_name
+                    or "Sin artículo"
+                ),
                 "quantity_requested": (
                     quantity_requested
                 ),
-                "unit_id": request_line.unit_id,
+                "unit_id": (
+                    request_line.unit_id
+                ),
                 "unit": request_line.unit,
                 "line_notes": (
                     request_line.line_notes
@@ -2132,7 +2503,9 @@ def get_category_comparison_matrix(
                 ),
                 "category_id": category_id,
                 "category_code": category_id,
-                "category_label": category_label,
+                "category_label": (
+                    category_label
+                ),
                 "cells": cells,
                 "has_quotations": bool(
                     calculated_cells
@@ -2144,7 +2517,9 @@ def get_category_comparison_matrix(
                     line_currency_codes
                 ),
                 "has_mixed_currencies": (
-                    has_mixed_currencies
+                    len(
+                        line_currency_codes
+                    ) > 1
                 ),
                 "selected_candidate": (
                     selected_candidate
@@ -2172,30 +2547,1084 @@ def get_category_comparison_matrix(
         )
 
     return {
-        "purchase_request_id": purchase_request.id,
-        "purchase_request_number": (
-            purchase_request.number
-        ),
-        "purchase_request_status": (
-            purchase_request.status
-        ),
-        "purchase_request": purchase_request,
-        "category_id": category_id,
-        "category_code": category_id,
-        "category_label": category_label,
-        "quotation_category": quotation_category,
-        "is_uncategorized": category_id is None,
+        **base_result,
         "suppliers": suppliers,
         "lines": matrix_lines,
-        "total_lines": len(matrix_lines),
-        "total_suppliers": len(suppliers),
-        "total_quotations": total_quotations,
-        "selected_lines": selected_lines,
+        "total_lines": len(
+            matrix_lines
+        ),
+        "total_suppliers": len(
+            suppliers
+        ),
+        "total_quotations": (
+            total_quotations
+        ),
+        "selected_lines": (
+            selected_lines
+        ),
         "pending_selection_lines": (
             len(matrix_lines)
             - selected_lines
         ),
     }
+
+def list_suppliers_for_category_comparison(
+    *,
+    purchase_request_id: int,
+    quotation_category_id: int | None,
+    exclude_supplier_ids: list[int] | None = None,
+    search: str | None = None,
+) -> list[dict]:
+    """
+    Lista proveedores disponibles para agregar al comparativo.
+
+    El orden es:
+    1. proveedores relacionados con más artículos;
+    2. resto de proveedores activos;
+    3. orden alfabético dentro de cada grupo.
+
+    related_article_count indica cuántos artículos normales de la
+    categoría ya están ligados al proveedor.
+    """
+
+    purchase_request = PurchaseRequest.query.get(
+        purchase_request_id
+    )
+
+    if not purchase_request:
+        raise QuotationServiceError(
+            "La solicitud de compra indicada no existe."
+        )
+
+    category_id = _normalize_category_id(
+        quotation_category_id
+    )
+
+    _get_quotation_category_or_error(
+        category_id
+    )
+
+    request_lines = _get_category_request_lines(
+        purchase_request_id=purchase_request_id,
+        category_id=category_id,
+    )
+
+    article_ids = {
+        line.article_id
+        for line in request_lines
+        if line.article_id is not None
+    }
+
+    excluded_ids = {
+        int(supplier_id)
+        for supplier_id in (
+            exclude_supplier_ids or []
+        )
+        if supplier_id
+    }
+
+    related_count_map: dict[
+        int,
+        int,
+    ] = {}
+
+    if article_ids:
+        related_rows = (
+            db.session.query(
+                ArticleSupplier.supplier_id,
+                func.count(
+                    func.distinct(
+                        ArticleSupplier.article_id
+                    )
+                ).label(
+                    "related_article_count"
+                ),
+            )
+            .filter(
+                ArticleSupplier.article_id.in_(
+                    article_ids
+                ),
+                ArticleSupplier.is_active.is_(
+                    True
+                ),
+            )
+            .group_by(
+                ArticleSupplier.supplier_id
+            )
+            .all()
+        )
+
+        related_count_map = {
+            row.supplier_id: int(
+                row.related_article_count
+                or 0
+            )
+            for row in related_rows
+        }
+
+    supplier_query = Supplier.query.filter(
+        Supplier.is_active.is_(True)
+    )
+
+    if excluded_ids:
+        supplier_query = supplier_query.filter(
+            Supplier.id.notin_(
+                excluded_ids
+            )
+        )
+
+    normalized_search = (
+        search or ""
+    ).strip()
+
+    if normalized_search:
+        like_value = (
+            f"%{normalized_search}%"
+        )
+
+        supplier_query = (
+            supplier_query.filter(
+                db.or_(
+                    Supplier.commercial_name.ilike(
+                        like_value
+                    ),
+                    Supplier.legal_name.ilike(
+                        like_value
+                    ),
+                    Supplier.tax_id.ilike(
+                        like_value
+                    ),
+                )
+            )
+        )
+
+    suppliers = supplier_query.all()
+
+    result = []
+
+    total_article_count = len(
+        article_ids
+    )
+
+    for supplier in suppliers:
+        related_article_count = (
+            related_count_map.get(
+                supplier.id,
+                0,
+            )
+        )
+
+        result.append(
+            {
+                "supplier_id": supplier.id,
+                "supplier_name": (
+                    supplier.commercial_name
+                    or supplier.legal_name
+                    or f"Proveedor {supplier.id}"
+                ),
+                "commercial_name": (
+                    supplier.commercial_name
+                    or ""
+                ),
+                "legal_name": (
+                    supplier.legal_name
+                    or ""
+                ),
+                "tax_id": (
+                    supplier.tax_id
+                    or ""
+                ),
+                "related_article_count": (
+                    related_article_count
+                ),
+                "total_article_count": (
+                    total_article_count
+                ),
+                "is_related": (
+                    related_article_count > 0
+                ),
+                "covers_all_articles": bool(
+                    total_article_count > 0
+                    and related_article_count
+                    == total_article_count
+                ),
+            }
+        )
+
+    result.sort(
+        key=lambda item: (
+            0
+            if item[
+                "covers_all_articles"
+            ]
+            else 1
+            if item[
+                "is_related"
+            ]
+            else 2,
+            -item[
+                "related_article_count"
+            ],
+            item[
+                "supplier_name"
+            ].lower(),
+            item[
+                "supplier_id"
+            ],
+        )
+    )
+
+    return result
+
+
+def save_category_comparison_matrix(
+    *,
+    purchase_request_id: int,
+    quotation_category_id: int | None,
+    created_by_user_id: int,
+    supplier_columns: list[dict],
+) -> dict:
+    """
+    Guarda todos los cambios del comparativo en una sola transacción.
+
+    Cada elemento de supplier_columns representa una columna:
+
+    {
+        "supplier_id": 10,
+        "new_supplier_name": None,
+        "quote_date": ...,
+        "currency_code": "CRC",
+        "payment_type": "CONTADO",
+        "payment_term_months": None,
+        "origin_type": "LOCAL",
+        "lead_time_days": 3,
+        "brand_model": None,
+        "notes": None,
+        "lines": [
+            {
+                "purchase_request_line_id": 15,
+                "unit_price": "5000",
+                "discount_pct": "0",
+                "tax_pct": "13",
+                "tax_included": False,
+                "lead_time_days": None,
+                "brand_model": None,
+                "notes": None,
+            }
+        ],
+    }
+
+    Reglas:
+    - una celda vacía sin cotización previa no crea nada;
+    - una celda vacía no elimina el historial existente;
+    - una celda sin cambios no crea una nueva versión;
+    - una celda modificada crea una nueva QuotationLine;
+    - se crea un QuotationBatch por proveedor modificado;
+    - un proveedor nuevo se crea dentro de la misma transacción;
+    - ArticleSupplier se crea o reactiva únicamente para artículos
+      que realmente tengan precio;
+    - se realiza un único commit.
+    """
+
+    if not created_by_user_id:
+        raise QuotationServiceError(
+            "No se pudo identificar el usuario que guarda el comparativo."
+        )
+
+    if not isinstance(
+        supplier_columns,
+        list,
+    ):
+        raise QuotationServiceError(
+            "La información del comparativo no es válida."
+        )
+
+    purchase_request = PurchaseRequest.query.get(
+        purchase_request_id
+    )
+
+    if not purchase_request:
+        raise QuotationServiceError(
+            "La solicitud de compra indicada no existe."
+        )
+
+    category_id = _normalize_category_id(
+        quotation_category_id
+    )
+
+    _get_quotation_category_or_error(
+        category_id
+    )
+
+    request_lines = _get_category_request_lines(
+        purchase_request_id=purchase_request_id,
+        category_id=category_id,
+    )
+
+    if not request_lines:
+        raise QuotationServiceError(
+            "La categoría no tiene líneas activas para cotizar."
+        )
+
+    request_line_map = {
+        line.id: line
+        for line in request_lines
+    }
+
+    request_line_ids = set(
+        request_line_map
+    )
+
+    normalized_columns = []
+
+    for column_index, column in enumerate(
+        supplier_columns,
+        start=1,
+    ):
+        if not isinstance(column, dict):
+            raise QuotationServiceError(
+                f"La columna {column_index} no es válida."
+            )
+
+        supplier_id = column.get(
+            "supplier_id"
+        )
+
+        new_supplier_name = (
+            column.get(
+                "new_supplier_name"
+            )
+            or ""
+        ).strip()
+
+        if supplier_id not in {
+            None,
+            "",
+        }:
+            try:
+                supplier_id = int(
+                    supplier_id
+                )
+            except (
+                TypeError,
+                ValueError,
+            ) as exc:
+                raise QuotationServiceError(
+                    f"El proveedor de la columna {column_index} no es válido."
+                ) from exc
+
+        else:
+            supplier_id = None
+
+        if supplier_id and new_supplier_name:
+            raise QuotationServiceError(
+                f"La columna {column_index} no puede utilizar un proveedor existente y uno nuevo al mismo tiempo."
+            )
+
+        if not supplier_id and not new_supplier_name:
+            # Una columna temporal vacía puede ignorarse.
+            continue
+
+        raw_lines = (
+            column.get("lines")
+            or []
+        )
+
+        if not isinstance(
+            raw_lines,
+            list,
+        ):
+            raise QuotationServiceError(
+                f"Las líneas de la columna {column_index} no son válidas."
+            )
+
+        normalized_columns.append(
+            {
+                "supplier_id": supplier_id,
+                "new_supplier_name": (
+                    new_supplier_name
+                    or None
+                ),
+                "quote_date": (
+                    column.get(
+                        "quote_date"
+                    )
+                    or datetime.now(
+                        UTC
+                    )
+                ),
+                "currency_code": (
+                    _normalize_currency_code(
+                        column.get(
+                            "currency_code"
+                        )
+                    )
+                ),
+                "payment_type": (
+                    column.get(
+                        "payment_type"
+                    )
+                    or None
+                ),
+                "payment_term_months": (
+                    _normalize_optional_int(
+                        column.get(
+                            "payment_term_months"
+                        ),
+                        "plazo de pago",
+                    )
+                ),
+                "origin_type": (
+                    column.get(
+                        "origin_type"
+                    )
+                    or None
+                ),
+                "lead_time_days": (
+                    _normalize_optional_int(
+                        column.get(
+                            "lead_time_days"
+                        ),
+                        "plazo de entrega",
+                    )
+                ),
+                "brand_model": (
+                    _normalize_optional_text(
+                        column.get(
+                            "brand_model"
+                        )
+                    )
+                ),
+                "notes": (
+                    _normalize_optional_text(
+                        column.get(
+                            "notes"
+                        )
+                    )
+                ),
+                "lines": raw_lines,
+            }
+        )
+
+    if not normalized_columns:
+        raise QuotationServiceError(
+            "No se recibieron columnas de proveedor para guardar."
+        )
+
+    created_batches: list[
+        QuotationBatch
+    ] = []
+
+    created_lines = 0
+    unchanged_lines = 0
+    ignored_empty_lines = 0
+    created_suppliers = 0
+
+    try:
+        now = datetime.now(UTC)
+
+        for column_index, column in enumerate(
+            normalized_columns,
+            start=1,
+        ):
+            supplier_id = column[
+                "supplier_id"
+            ]
+
+            if column[
+                "new_supplier_name"
+            ]:
+                supplier = (
+                    create_minimal_supplier_for_quotation(
+                        commercial_name=column[
+                            "new_supplier_name"
+                        ],
+                    )
+                )
+
+                supplier_id = supplier.id
+                created_suppliers += 1
+
+            else:
+                supplier = (
+                    Supplier.query
+                    .filter(
+                        Supplier.id
+                        == supplier_id
+                    )
+                    .with_for_update()
+                    .first()
+                )
+
+                if not supplier:
+                    raise QuotationServiceError(
+                        f"El proveedor de la columna {column_index} no existe."
+                    )
+
+                if not supplier.is_active:
+                    raise QuotationServiceError(
+                        f"El proveedor de la columna {column_index} está inactivo."
+                    )
+
+            submitted_line_ids = []
+
+            for raw_line in column[
+                "lines"
+            ]:
+                if not isinstance(
+                    raw_line,
+                    dict,
+                ):
+                    continue
+
+                raw_line_id = (
+                    raw_line.get(
+                        "purchase_request_line_id"
+                    )
+                )
+
+                try:
+                    request_line_id = int(
+                        raw_line_id
+                    )
+                except (
+                    TypeError,
+                    ValueError,
+                ):
+                    continue
+
+                if (
+                    request_line_id
+                    in request_line_ids
+                ):
+                    submitted_line_ids.append(
+                        request_line_id
+                    )
+
+            latest_quotation_map: dict[
+                int,
+                QuotationLine,
+            ] = {}
+
+            if submitted_line_ids:
+                ranked_existing = (
+                    db.session.query(
+                        QuotationLine.id.label(
+                            "quotation_line_id"
+                        ),
+                        func.row_number()
+                        .over(
+                            partition_by=(
+                                QuotationLine.purchase_request_line_id
+                            ),
+                            order_by=(
+                                QuotationLine.quote_date.desc(),
+                                QuotationLine.created_at.desc(),
+                                QuotationLine.id.desc(),
+                            ),
+                        )
+                        .label(
+                            "quotation_rank"
+                        ),
+                    )
+                    .filter(
+                        QuotationLine.purchase_request_line_id.in_(
+                            submitted_line_ids
+                        ),
+                        QuotationLine.supplier_id
+                        == supplier_id,
+                        QuotationLine.status
+                        != "DESCARTADA",
+                    )
+                    .subquery()
+                )
+
+                latest_existing = (
+                    QuotationLine.query
+                    .join(
+                        ranked_existing,
+                        ranked_existing.c.quotation_line_id
+                        == QuotationLine.id,
+                    )
+                    .filter(
+                        ranked_existing.c.quotation_rank
+                        == 1
+                    )
+                    .all()
+                )
+
+                latest_quotation_map = {
+                    line.purchase_request_line_id: line
+                    for line in latest_existing
+                }
+
+            lines_to_create = []
+
+            for line_index, raw_line in enumerate(
+                column["lines"],
+                start=1,
+            ):
+                if not isinstance(
+                    raw_line,
+                    dict,
+                ):
+                    continue
+
+                try:
+                    request_line_id = int(
+                        raw_line.get(
+                            "purchase_request_line_id"
+                        )
+                    )
+                except (
+                    TypeError,
+                    ValueError,
+                ):
+                    continue
+
+                request_line = (
+                    request_line_map.get(
+                        request_line_id
+                    )
+                )
+
+                if not request_line:
+                    raise QuotationServiceError(
+                        f"La línea {line_index} de la columna {column_index} no pertenece a esta categoría."
+                    )
+
+                raw_unit_price = (
+                    raw_line.get(
+                        "unit_price"
+                    )
+                )
+
+                if raw_unit_price in {
+                    None,
+                    "",
+                }:
+                    ignored_empty_lines += 1
+                    continue
+
+                unit_price = (
+                    _normalize_decimal(
+                        raw_unit_price,
+                        "precio unitario",
+                    )
+                )
+
+                if unit_price <= 0:
+                    raise QuotationServiceError(
+                        f"El precio de la línea {line_index} de la columna {column_index} debe ser mayor que cero."
+                    )
+
+                discount_pct = (
+                    _normalize_decimal(
+                        raw_line.get(
+                            "discount_pct"
+                        )
+                        or Decimal("0"),
+                        "descuento",
+                    )
+                )
+
+                tax_pct = (
+                    _normalize_decimal(
+                        raw_line.get(
+                            "tax_pct"
+                        )
+                        or Decimal("0"),
+                        "impuesto",
+                    )
+                )
+
+                if (
+                    discount_pct < 0
+                    or discount_pct > 100
+                ):
+                    raise QuotationServiceError(
+                        f"El descuento de la línea {line_index} debe estar entre 0 y 100."
+                    )
+
+                if tax_pct < 0:
+                    raise QuotationServiceError(
+                        f"El impuesto de la línea {line_index} no puede ser negativo."
+                    )
+
+                tax_included = (
+                    _normalize_boolean(
+                        raw_line.get(
+                            "tax_included"
+                        )
+                    )
+                )
+
+                lead_time_days = (
+                    _normalize_optional_int(
+                        raw_line.get(
+                            "lead_time_days"
+                        )
+                        if raw_line.get(
+                            "lead_time_days"
+                        )
+                        not in {
+                            None,
+                            "",
+                        }
+                        else column[
+                            "lead_time_days"
+                        ],
+                        "plazo de entrega",
+                    )
+                )
+
+                brand_model = (
+                    _normalize_optional_text(
+                        raw_line.get(
+                            "brand_model"
+                        )
+                        if raw_line.get(
+                            "brand_model"
+                        )
+                        not in {
+                            None,
+                            "",
+                        }
+                        else column[
+                            "brand_model"
+                        ]
+                    )
+                )
+
+                notes = (
+                    _normalize_optional_text(
+                        raw_line.get(
+                            "notes"
+                        )
+                        if raw_line.get(
+                            "notes"
+                        )
+                        not in {
+                            None,
+                            "",
+                        }
+                        else column[
+                            "notes"
+                        ]
+                    )
+                )
+
+                currency_code = (
+                    _normalize_currency_code(
+                        raw_line.get(
+                            "currency_code"
+                        )
+                        or column[
+                            "currency_code"
+                        ]
+                    )
+                )
+
+                payment_type = (
+                    raw_line.get(
+                        "payment_type"
+                    )
+                    or column[
+                        "payment_type"
+                    ]
+                    or None
+                )
+
+                payment_term_months = (
+                    _normalize_optional_int(
+                        raw_line.get(
+                            "payment_term_months"
+                        )
+                        if raw_line.get(
+                            "payment_term_months"
+                        )
+                        not in {
+                            None,
+                            "",
+                        }
+                        else column[
+                            "payment_term_months"
+                        ],
+                        "plazo de pago",
+                    )
+                )
+
+                origin_type = (
+                    raw_line.get(
+                        "origin_type"
+                    )
+                    or column[
+                        "origin_type"
+                    ]
+                    or None
+                )
+
+                payload = QuotationLinePayload(
+                    purchase_request_line_id=(
+                        request_line.id
+                    ),
+                    supplier_id=supplier_id,
+                    quote_date=column[
+                        "quote_date"
+                    ],
+                    unit_price=unit_price,
+                    currency_code=currency_code,
+                    article_id=(
+                        request_line.article_id
+                    ),
+                    pending_article_id=(
+                        request_line.pending_article_id
+                    ),
+                    discount_pct=discount_pct,
+                    tax_pct=tax_pct,
+                    tax_included=tax_included,
+                    lead_time_days=(
+                        lead_time_days
+                    ),
+                    brand_model=brand_model,
+                    notes=notes,
+                    status="COTIZADA",
+                    payment_type=(
+                        payment_type
+                    ),
+                    payment_term_months=(
+                        payment_term_months
+                    ),
+                    origin_type=(
+                        origin_type
+                    ),
+                )
+
+                _validate_quotation_line(
+                    payload
+                )
+
+                current_quotation = (
+                    latest_quotation_map.get(
+                        request_line.id
+                    )
+                )
+
+                if (
+                    current_quotation
+                    and _quotation_values_are_equal(
+                        quotation_line=(
+                            current_quotation
+                        ),
+                        unit_price=unit_price,
+                        currency_code=(
+                            currency_code
+                        ),
+                        discount_pct=(
+                            discount_pct
+                        ),
+                        tax_pct=tax_pct,
+                        tax_included=(
+                            tax_included
+                        ),
+                        lead_time_days=(
+                            lead_time_days
+                        ),
+                        brand_model=(
+                            brand_model
+                        ),
+                        notes=notes,
+                        payment_type=(
+                            payment_type
+                        ),
+                        payment_term_months=(
+                            payment_term_months
+                        ),
+                        origin_type=(
+                            origin_type
+                        ),
+                    )
+                ):
+                    unchanged_lines += 1
+                    continue
+
+                lines_to_create.append(
+                    payload
+                )
+
+            if not lines_to_create:
+                continue
+
+            quotation_batch = (
+                QuotationBatch(
+                    number=(
+                        _generate_quotation_number()
+                    ),
+                    purchase_request_id=(
+                        purchase_request_id
+                    ),
+                    created_by_user_id=(
+                        created_by_user_id
+                    ),
+                    quote_date=column[
+                        "quote_date"
+                    ],
+                    notes=column[
+                        "notes"
+                    ],
+                )
+            )
+
+            db.session.add(
+                quotation_batch
+            )
+
+            db.session.flush()
+
+            for payload in lines_to_create:
+                quotation_line = (
+                    QuotationLine(
+                        quotation_batch_id=(
+                            quotation_batch.id
+                        ),
+                        purchase_request_line_id=(
+                            payload.purchase_request_line_id
+                        ),
+                        article_id=(
+                            payload.article_id
+                        ),
+                        pending_article_id=(
+                            payload.pending_article_id
+                        ),
+                        supplier_id=(
+                            payload.supplier_id
+                        ),
+                        quote_date=(
+                            payload.quote_date
+                        ),
+                        currency_code=(
+                            payload.currency_code
+                        ),
+                        unit_price=(
+                            payload.unit_price
+                        ),
+                        discount_pct=(
+                            payload.discount_pct
+                        ),
+                        tax_pct=(
+                            payload.tax_pct
+                        ),
+                        tax_included=(
+                            payload.tax_included
+                        ),
+                        lead_time_days=(
+                            payload.lead_time_days
+                        ),
+                        brand_model=(
+                            payload.brand_model
+                        ),
+                        status="COTIZADA",
+                        payment_type=(
+                            payload.payment_type
+                        ),
+                        payment_term_months=(
+                            payload.payment_term_months
+                        ),
+                        origin_type=(
+                            payload.origin_type
+                        ),
+                        notes=payload.notes,
+                        created_at=now,
+                    )
+                )
+
+                db.session.add(
+                    quotation_line
+                )
+
+                _ensure_article_supplier(
+                    article_id=(
+                        payload.article_id
+                    ),
+                    supplier_id=(
+                        payload.supplier_id
+                    ),
+                )
+
+                _mark_purchase_request_line_as_quoted(
+                    purchase_request_line_id=(
+                        payload.purchase_request_line_id
+                    ),
+                    quoted_status="COTIZADA",
+                )
+
+                created_lines += 1
+
+            created_batches.append(
+                quotation_batch
+            )
+
+        if not created_batches:
+            db.session.rollback()
+
+            return {
+                "created_batches": 0,
+                "created_lines": 0,
+                "unchanged_lines": (
+                    unchanged_lines
+                ),
+                "ignored_empty_lines": (
+                    ignored_empty_lines
+                ),
+                "created_suppliers": (
+                    created_suppliers
+                ),
+                "message": (
+                    "No se detectaron cambios para guardar."
+                ),
+            }
+
+        db.session.flush()
+
+        _update_purchase_request_status(
+            purchase_request_id=(
+                purchase_request_id
+            )
+        )
+
+        db.session.commit()
+
+        return {
+            "created_batches": len(
+                created_batches
+            ),
+            "created_lines": (
+                created_lines
+            ),
+            "unchanged_lines": (
+                unchanged_lines
+            ),
+            "ignored_empty_lines": (
+                ignored_empty_lines
+            ),
+            "created_suppliers": (
+                created_suppliers
+            ),
+            "message": (
+                "Comparativo guardado correctamente."
+            ),
+        }
+
+    except QuotationServiceError:
+        db.session.rollback()
+        raise
+
+    except Exception as exc:
+        db.session.rollback()
+
+        raise QuotationServiceError(
+            "No fue posible guardar el comparativo."
+        ) from exc
 
 def get_purchase_order_candidate_for_request_line(
     *,
@@ -2881,8 +4310,6 @@ def list_pending_purchase_order_candidates_by_supplier(
             item["supplier_name"].lower()
         )
     )
-
-    return result
 
     return result
 

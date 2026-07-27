@@ -1,7 +1,22 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container-fluid py-4 quotation-comparison-page">
+<div
+    class="container-fluid py-4 quotation-comparison-page"
+    id="quotationComparisonPage"
+    data-request-id="{{ purchase_request.id }}"
+    data-category-id="{{ category_id }}"
+    data-suppliers-url="{{ url_for(
+        'purchases.quotation_category_suppliers',
+        request_id=purchase_request.id,
+        category_id=category_id
+    ) }}"
+    data-save-url="{{ url_for(
+        'purchases.save_category_comparison',
+        request_id=purchase_request.id,
+        category_id=category_id
+    ) }}"
+>
 
     {# =========================================================
        ENCABEZADO Y NAVEGACIÓN
@@ -45,6 +60,13 @@
                         {{ comparison_matrix.category_label }}
                     </span>
                 {% endif %}
+
+                <span
+                    id="editModeBadge"
+                    class="badge rounded-pill text-bg-warning d-none"
+                >
+                    Modo edición
+                </span>
             </div>
 
             <p class="text-muted mb-1">
@@ -60,7 +82,7 @@
             </p>
         </div>
 
-        <div class="d-flex flex-wrap gap-2">
+        <div class="d-flex flex-wrap gap-2 comparison-toolbar">
             <a
                 href="{{ url_for(
                     'purchases.quotation_request_lines',
@@ -70,6 +92,67 @@
             >
                 <i class="bi bi-arrow-left me-2"></i>
                 Volver a categorías
+            </a>
+
+            <button
+                type="button"
+                id="startEditButton"
+                class="btn btn-primary rounded-3"
+            >
+                <i class="bi bi-pencil-square me-2"></i>
+                Editar comparativo
+            </button>
+
+            <button
+                type="button"
+                id="addSupplierButton"
+                class="btn btn-outline-primary rounded-3 d-none"
+            >
+                <i class="bi bi-person-plus me-2"></i>
+                Agregar proveedor
+            </button>
+
+            <button
+                type="button"
+                id="saveComparisonButton"
+                class="btn btn-success rounded-3 d-none"
+            >
+                <i class="bi bi-floppy me-2"></i>
+                Guardar cambios
+            </button>
+
+            <button
+                type="button"
+                id="cancelEditButton"
+                class="btn btn-outline-secondary rounded-3 d-none"
+            >
+                <i class="bi bi-x-lg me-2"></i>
+                Cancelar edición
+            </button>
+
+            <a
+                href="{{ url_for(
+                    'purchases.export_category_comparison_excel',
+                    request_id=purchase_request.id,
+                    category_id=category_id
+                ) }}"
+                class="btn btn-outline-success rounded-3"
+            >
+                <i class="bi bi-file-earmark-excel me-2"></i>
+                Excel
+            </a>
+
+            <a
+                href="{{ url_for(
+                    'purchases.print_category_comparison',
+                    request_id=purchase_request.id,
+                    category_id=category_id
+                ) }}"
+                class="btn btn-outline-dark rounded-3"
+                target="_blank"
+            >
+                <i class="bi bi-printer me-2"></i>
+                Imprimir
             </a>
 
             <a
@@ -98,7 +181,7 @@
         <div class="col-6 col-md-4 col-xl">
             <div class="summary-card h-100">
                 <div class="summary-label">Proveedores</div>
-                <div class="summary-value">
+                <div class="summary-value" id="supplierCount">
                     {{ comparison_matrix.total_suppliers or 0 }}
                 </div>
             </div>
@@ -220,7 +303,7 @@
             <div class="comparison-scroll-wrapper" id="comparisonScrollWrapper">
                 <table class="comparison-table" id="comparisonTable">
                     <thead>
-                        <tr>
+                        <tr id="supplierHeaderRow">
                             <th class="sticky-column sticky-code comparison-header-code">
                                 Cód.
                             </th>
@@ -234,7 +317,13 @@
                             </th>
 
                             {% for supplier in comparison_matrix.suppliers %}
-                                <th class="supplier-header">
+                                <th
+                                    class="supplier-header"
+                                    data-supplier-column
+                                    data-supplier-id="{{ supplier.supplier_id }}"
+                                    data-new-supplier="0"
+                                    data-supplier-name="{{ supplier.supplier_name }}"
+                                >
                                     <div class="supplier-header-content">
                                         <span class="supplier-header-index">
                                             {{ loop.index }}
@@ -243,6 +332,34 @@
                                         <span class="supplier-header-name">
                                             {{ supplier.supplier_name }}
                                         </span>
+                                    </div>
+
+                                    <div class="supplier-column-settings edit-only d-none">
+                                        <select class="form-select form-select-sm column-currency">
+                                            <option value="CRC">CRC</option>
+                                            <option value="USD">USD</option>
+                                            <option value="EUR">EUR</option>
+                                        </select>
+
+                                        <select class="form-select form-select-sm column-payment-type">
+                                            <option value="">Pago</option>
+                                            <option value="CONTADO">Contado</option>
+                                            <option value="CREDITO">Crédito</option>
+                                        </select>
+
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            class="form-control form-control-sm column-payment-months"
+                                            placeholder="Meses"
+                                        >
+
+                                        <select class="form-select form-select-sm column-origin-type">
+                                            <option value="">Origen</option>
+                                            <option value="LOCAL">Local</option>
+                                            <option value="IMPORTACION">Importación</option>
+                                        </select>
                                     </div>
                                 </th>
                             {% endfor %}
@@ -253,6 +370,9 @@
                         {% for line in comparison_matrix.lines %}
                             <tr
                                 class="comparison-row"
+                                data-request-line-id="{{ line.purchase_request_line_id }}"
+                                data-article-id="{{ line.article_id or '' }}"
+                                data-pending-article-id="{{ line.pending_article_id or '' }}"
                                 data-search-text="{{ (
                                     (line.item_code or '') ~ ' ' ~
                                     (line.item_name or '')
@@ -320,8 +440,13 @@
                                             {% set cell_classes = cell_classes + ["quotation-cell-normal"] %}
                                         {% endif %}
 
-                                        <td class="supplier-cell {{ cell_classes|join(' ') }}">
-                                            <div class="quotation-cell-content">
+                                        <td
+                                            class="supplier-cell {{ cell_classes|join(' ') }}"
+                                            data-supplier-cell
+                                            data-supplier-id="{{ cell.supplier_id }}"
+                                            data-has-quotation="1"
+                                        >
+                                            <div class="quotation-cell-content read-cell-view">
 
                                                 <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                                                     <span class="currency-badge">
@@ -560,12 +685,161 @@
                                                     {% endif %}
                                                 </div>
                                             </div>
+
+                                            <div class="edit-cell-view d-none">
+                                                <div class="edit-cell-form">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.0001"
+                                                        class="form-control form-control-sm quote-unit-price"
+                                                        placeholder="Precio"
+                                                        value="{{ quotation.unit_price }}"
+                                                    >
+
+                                                    <div class="row g-2">
+                                                        <div class="col-6">
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max="100"
+                                                                step="0.01"
+                                                                class="form-control form-control-sm quote-discount"
+                                                                placeholder="Desc. %"
+                                                                value="{{ quotation.discount_pct or 0 }}"
+                                                            >
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                class="form-control form-control-sm quote-tax"
+                                                                placeholder="IVA %"
+                                                                value="{{ quotation.tax_pct or 0 }}"
+                                                            >
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="form-check">
+                                                        <input
+                                                            class="form-check-input quote-tax-included"
+                                                            type="checkbox"
+                                                            {% if quotation.tax_included %}checked{% endif %}
+                                                        >
+                                                        <label class="form-check-label small">
+                                                            Precio con IVA incluido
+                                                        </label>
+                                                    </div>
+
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="1"
+                                                        class="form-control form-control-sm quote-lead-time"
+                                                        placeholder="Entrega en días"
+                                                        value="{{ quotation.lead_time_days if quotation.lead_time_days is not none else '' }}"
+                                                    >
+
+                                                    <input
+                                                        type="text"
+                                                        class="form-control form-control-sm quote-brand-model"
+                                                        placeholder="Marca / modelo"
+                                                        value="{{ quotation.brand_model or '' }}"
+                                                    >
+
+                                                    <textarea
+                                                        class="form-control form-control-sm quote-notes"
+                                                        rows="2"
+                                                        placeholder="Notas"
+                                                    >{{ quotation.notes or '' }}</textarea>
+
+                                                    <div class="small text-muted">
+                                                        Solo se creará una nueva versión si cambias algún valor.
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </td>
                                     {% else %}
-                                        <td class="supplier-cell quotation-cell-empty">
-                                            <div class="empty-quotation">
+                                        <td
+                                            class="supplier-cell quotation-cell-empty"
+                                            data-supplier-cell
+                                            data-supplier-id="{{ cell.supplier_id }}"
+                                            data-has-quotation="0"
+                                        >
+                                            <div class="empty-quotation read-cell-view">
                                                 <span>-</span>
                                                 <small>Sin cotización</small>
+                                            </div>
+
+                                            <div class="edit-cell-view d-none">
+                                                <div class="edit-cell-form">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.0001"
+                                                        class="form-control form-control-sm quote-unit-price"
+                                                        placeholder="Precio"
+                                                    >
+
+                                                    <div class="row g-2">
+                                                        <div class="col-6">
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max="100"
+                                                                step="0.01"
+                                                                class="form-control form-control-sm quote-discount"
+                                                                placeholder="Desc. %"
+                                                                value="0"
+                                                            >
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                class="form-control form-control-sm quote-tax"
+                                                                placeholder="IVA %"
+                                                                value="13"
+                                                            >
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="form-check">
+                                                        <input
+                                                            class="form-check-input quote-tax-included"
+                                                            type="checkbox"
+                                                        >
+                                                        <label class="form-check-label small">
+                                                            Precio con IVA incluido
+                                                        </label>
+                                                    </div>
+
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="1"
+                                                        class="form-control form-control-sm quote-lead-time"
+                                                        placeholder="Entrega en días"
+                                                    >
+
+                                                    <input
+                                                        type="text"
+                                                        class="form-control form-control-sm quote-brand-model"
+                                                        placeholder="Marca / modelo"
+                                                    >
+
+                                                    <textarea
+                                                        class="form-control form-control-sm quote-notes"
+                                                        rows="2"
+                                                        placeholder="Notas"
+                                                    ></textarea>
+
+                                                    <div class="small text-muted">
+                                                        Deja el precio vacío para no crear cotización.
+                                                    </div>
+                                                </div>
                                             </div>
                                         </td>
                                     {% endif %}
@@ -659,6 +933,26 @@
         </div>
     {% endif %}
 </div>
+
+<div class="modal fade" id="supplierModal" tabindex="-1" aria-labelledby="supplierModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow rounded-4">
+            <div class="modal-header">
+                <div><h5 class="modal-title fw-bold" id="supplierModalLabel">Agregar proveedor</h5><div class="small text-muted">Primero se muestran los proveedores con mayor relación con los artículos solicitados.</div></div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3"><span class="input-group-text bg-white"><i class="bi bi-search"></i></span><input type="search" id="supplierSearchInput" class="form-control" placeholder="Buscar proveedor, razón social o identificación..."><button type="button" id="supplierSearchButton" class="btn btn-outline-primary">Buscar</button></div>
+                <div id="supplierLoading" class="text-center py-5 d-none"><div class="spinner-border text-primary" role="status"></div><div class="small text-muted mt-2">Cargando proveedores...</div></div>
+                <div id="supplierList"></div>
+                <div id="supplierEmpty" class="text-center py-5 d-none"><i class="bi bi-people fs-1 text-muted"></i><h6 class="fw-bold mt-3">No se encontraron proveedores</h6></div>
+                <hr class="my-4">
+                <div class="card border rounded-4"><div class="card-body"><h6 class="fw-bold mb-2">Crear proveedor nuevo</h6><p class="text-muted small">El proveedor se creará al guardar el comparativo. Solo se requiere el nombre comercial.</p><div class="row g-2"><div class="col-lg-9"><input type="text" id="newSupplierName" class="form-control" placeholder="Nombre comercial"></div><div class="col-lg-3 d-grid"><button type="button" id="addNewSupplierButton" class="btn btn-dark"><i class="bi bi-plus-circle me-2"></i>Agregar columna</button></div></div></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 
 <style>
     .quotation-comparison-page {
@@ -1084,6 +1378,50 @@
         }
     }
 
+
+    .supplier-column-settings {
+        display: grid;
+        gap: 0.35rem;
+        margin-top: 0.55rem;
+    }
+
+    .supplier-header[data-new-supplier="1"] {
+        background: #fff7d6;
+        box-shadow: inset 0 0 0 2px #d97706;
+    }
+
+    .supplier-cell[data-new-supplier="1"] {
+        background: #fffdf3;
+    }
+
+    .edit-cell-form {
+        display: grid;
+        gap: 0.55rem;
+        padding: 0.65rem;
+        min-height: 230px;
+        background: #ffffff;
+    }
+
+    .supplier-result {
+        display: grid;
+        grid-template-columns: minmax(180px, 1fr) auto auto;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.85rem 1rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.85rem;
+        margin-bottom: 0.65rem;
+    }
+
+    .supplier-result:hover {
+        background: #f8fafc;
+    }
+
+    .supplier-related-badge {
+        min-width: 110px;
+        text-align: center;
+    }
+ 
     @media (max-width: 991.98px) {
         .quotation-comparison-page {
             --sticky-code-width: 90px;
@@ -1130,214 +1468,14 @@
         .quotation-price {
             font-size: 1rem;
         }
+
+        .supplier-result {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 
 <script>
-(function () {
-    const searchInput = document.getElementById("comparisonSearch");
-    const clearSearchButton = document.getElementById("clearComparisonSearch");
-    const table = document.getElementById("comparisonTable");
-    const noSearchResults = document.getElementById("noSearchResults");
-    const scrollWrapper = document.getElementById("comparisonScrollWrapper");
-    const scrollToSelectedButton = document.getElementById("scrollToSelected");
-
-    function normalizeText(value) {
-        return String(value || "")
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .toLowerCase()
-            .trim();
-    }
-
-    function filterRows() {
-        if (!table || !searchInput) {
-            return;
-        }
-
-        const term = normalizeText(searchInput.value);
-        const rows = table.querySelectorAll("tbody .comparison-row");
-        let visibleRows = 0;
-
-        rows.forEach(function (row) {
-            const searchableText = normalizeText(
-                row.dataset.searchText || ""
-            );
-
-            const matches = !term || searchableText.includes(term);
-
-            row.classList.toggle("is-hidden", !matches);
-
-            if (matches) {
-                visibleRows += 1;
-            }
-        });
-
-        if (noSearchResults) {
-            noSearchResults.classList.toggle(
-                "d-none",
-                visibleRows > 0
-            );
-        }
-
-        if (scrollWrapper) {
-            scrollWrapper.classList.toggle(
-                "d-none",
-                visibleRows === 0
-            );
-        }
-    }
-
-    if (searchInput) {
-        searchInput.addEventListener("input", filterRows);
-    }
-
-    if (clearSearchButton) {
-        clearSearchButton.addEventListener("click", function () {
-            if (!searchInput) {
-                return;
-            }
-
-            searchInput.value = "";
-            filterRows();
-            searchInput.focus();
-        });
-    }
-
-    if (scrollToSelectedButton && table) {
-        scrollToSelectedButton.addEventListener("click", function () {
-            const selectedRow = table.querySelector(
-                'tbody .comparison-row[data-has-selection="1"]:not(.is-hidden)'
-            );
-
-            if (!selectedRow) {
-                window.alert(
-                    "No hay líneas seleccionadas visibles en esta categoría."
-                );
-                return;
-            }
-
-            selectedRow.scrollIntoView({
-                behavior: "smooth",
-                block: "center",
-                inline: "nearest",
-            });
-
-            selectedRow.classList.add("highlight-selected");
-
-            window.setTimeout(function () {
-                selectedRow.classList.remove("highlight-selected");
-            }, 1400);
-        });
-    }
-
-    document
-        .querySelectorAll(".select-quotation-form")
-        .forEach(function (form) {
-            form.addEventListener("submit", function (event) {
-                const supplierName =
-                    form.dataset.supplierName || "este proveedor";
-
-                const itemName =
-                    form.dataset.itemName || "este artículo";
-
-                const confirmed = window.confirm(
-                    `¿Seleccionar la cotización de ${supplierName} para ${itemName}?`
-                );
-
-                if (!confirmed) {
-                    event.preventDefault();
-                    return;
-                }
-
-                const button = form.querySelector(
-                    'button[type="submit"]'
-                );
-
-                if (button) {
-                    button.disabled = true;
-                    button.innerHTML = `
-                        <span
-                            class="spinner-border spinner-border-sm me-2"
-                            aria-hidden="true"
-                        ></span>
-                        Seleccionando...
-                    `;
-                }
-            });
-        });
-
-    document
-        .querySelectorAll(".clear-selection-form")
-        .forEach(function (form) {
-            form.addEventListener("submit", function (event) {
-                const confirmed = window.confirm(
-                    "¿Deseas quitar esta selección de la preorden?"
-                );
-
-                if (!confirmed) {
-                    event.preventDefault();
-                    return;
-                }
-
-                const button = form.querySelector(
-                    'button[type="submit"]'
-                );
-
-                if (button) {
-                    button.disabled = true;
-                    button.innerHTML = `
-                        <span
-                            class="spinner-border spinner-border-sm me-2"
-                            aria-hidden="true"
-                        ></span>
-                        Quitando...
-                    `;
-                }
-            });
-        });
-
-    if (scrollWrapper) {
-        const storageKey = [
-            "quotation-comparison-scroll",
-            "{{ purchase_request.id }}",
-            "{{ category_id }}",
-        ].join("-");
-
-        const savedScrollLeft = window.sessionStorage.getItem(
-            `${storageKey}-left`
-        );
-
-        const savedScrollTop = window.sessionStorage.getItem(
-            `${storageKey}-top`
-        );
-
-        if (savedScrollLeft !== null) {
-            scrollWrapper.scrollLeft = Number(savedScrollLeft) || 0;
-        }
-
-        if (savedScrollTop !== null) {
-            scrollWrapper.scrollTop = Number(savedScrollTop) || 0;
-        }
-
-        let saveTimer = null;
-
-        scrollWrapper.addEventListener("scroll", function () {
-            window.clearTimeout(saveTimer);
-
-            saveTimer = window.setTimeout(function () {
-                window.sessionStorage.setItem(
-                    `${storageKey}-left`,
-                    String(scrollWrapper.scrollLeft)
-                );
-
-                window.sessionStorage.setItem(
-                    `${storageKey}-top`,
-                    String(scrollWrapper.scrollTop)
-                );
-            }, 100);
-        });
-    }
-})();
+(function(){"use strict";const page=document.getElementById("quotationComparisonPage"),table=document.getElementById("comparisonTable");if(!page||!table)return;const startEditButton=document.getElementById("startEditButton"),addSupplierButton=document.getElementById("addSupplierButton"),saveComparisonButton=document.getElementById("saveComparisonButton"),cancelEditButton=document.getElementById("cancelEditButton"),editModeBadge=document.getElementById("editModeBadge"),saveStatus=document.getElementById("saveStatus"),supplierCount=document.getElementById("supplierCount"),searchInput=document.getElementById("comparisonSearch"),clearSearchButton=document.getElementById("clearComparisonSearch"),noSearchResults=document.getElementById("noSearchResults"),scrollWrapper=document.getElementById("comparisonScrollWrapper"),scrollToSelectedButton=document.getElementById("scrollToSelected"),supplierModalElement=document.getElementById("supplierModal"),supplierSearchInput=document.getElementById("supplierSearchInput"),supplierSearchButton=document.getElementById("supplierSearchButton"),supplierLoading=document.getElementById("supplierLoading"),supplierList=document.getElementById("supplierList"),supplierEmpty=document.getElementById("supplierEmpty"),newSupplierName=document.getElementById("newSupplierName"),addNewSupplierButton=document.getElementById("addNewSupplierButton");let editMode=false,supplierModal=null,temporarySupplierCounter=0;if(window.bootstrap&&supplierModalElement)supplierModal=new window.bootstrap.Modal(supplierModalElement);function normalizeText(v){return String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim()}function setStatus(m,c){if(!saveStatus)return;saveStatus.className=`small ${c||"text-muted"}`;saveStatus.textContent=m||""}function setEditMode(enabled){editMode=Boolean(enabled);document.querySelectorAll(".read-cell-view").forEach(e=>e.classList.toggle("d-none",editMode));document.querySelectorAll(".edit-cell-view").forEach(e=>e.classList.toggle("d-none",!editMode));document.querySelectorAll(".edit-only").forEach(e=>e.classList.toggle("d-none",!editMode));startEditButton.classList.toggle("d-none",editMode);addSupplierButton.classList.toggle("d-none",!editMode);saveComparisonButton.classList.toggle("d-none",!editMode);cancelEditButton.classList.toggle("d-none",!editMode);editModeBadge.classList.toggle("d-none",!editMode);setStatus(editMode?"Realiza los cambios y presiona Guardar cambios.":"",editMode?"text-warning fw-semibold":"text-muted")}function filterRows(){const term=normalizeText(searchInput?searchInput.value:"");const rows=table.querySelectorAll("tbody .comparison-row");let visibleRows=0;rows.forEach(row=>{const matches=!term||normalizeText(row.dataset.searchText||"").includes(term);row.classList.toggle("is-hidden",!matches);if(matches)visibleRows++});if(noSearchResults)noSearchResults.classList.toggle("d-none",visibleRows>0);if(scrollWrapper)scrollWrapper.classList.toggle("d-none",visibleRows===0)}function getExistingSupplierIds(){return Array.from(table.querySelectorAll("thead [data-supplier-column][data-supplier-id]")).map(h=>Number(h.dataset.supplierId||0)).filter(id=>id>0)}function updateSupplierIndexes(){table.querySelectorAll("thead [data-supplier-column]").forEach((header,index)=>{const el=header.querySelector(".supplier-header-index");if(el)el.textContent=String(index+1)});if(supplierCount)supplierCount.textContent=String(table.querySelectorAll("thead [data-supplier-column]").length)}function createSupplierHeader(options){const supplierId=options.supplierId||"",supplierName=options.supplierName,isNew=Boolean(options.isNew),temporaryId=options.temporaryId||"";const header=document.createElement("th");header.className="supplier-header";header.dataset.supplierColumn="1";header.dataset.supplierId=String(supplierId);header.dataset.newSupplier=isNew?"1":"0";header.dataset.temporarySupplierId=temporaryId;header.dataset.supplierName=supplierName;header.innerHTML=`<div class="supplier-header-content"><span class="supplier-header-index"></span><span class="supplier-header-name"></span></div><div class="supplier-column-settings edit-only"><select class="form-select form-select-sm column-currency"><option value="CRC">CRC</option><option value="USD">USD</option><option value="EUR">EUR</option></select><select class="form-select form-select-sm column-payment-type"><option value="">Pago</option><option value="CONTADO">Contado</option><option value="CREDITO">Crédito</option></select><input type="number" min="0" step="1" class="form-control form-control-sm column-payment-months" placeholder="Meses"><select class="form-select form-select-sm column-origin-type"><option value="">Origen</option><option value="LOCAL">Local</option><option value="IMPORTACION">Importación</option></select><button type="button" class="btn btn-sm btn-outline-danger remove-temporary-supplier"><i class="bi bi-trash me-1"></i>Quitar</button></div>`;header.querySelector(".supplier-header-name").textContent=supplierName;return header}function createSupplierCell(options){const supplierId=options.supplierId||"",temporaryId=options.temporaryId||"";const cell=document.createElement("td");cell.className="supplier-cell quotation-cell-empty";cell.dataset.supplierCell="1";cell.dataset.supplierId=String(supplierId);cell.dataset.temporarySupplierId=temporaryId;cell.dataset.newSupplier="1";cell.dataset.hasQuotation="0";cell.innerHTML=`<div class="read-cell-view d-none"><div class="empty-quotation"><span>-</span><small>Sin cotización</small></div></div><div class="edit-cell-view"><div class="edit-cell-form"><input type="number" min="0" step="0.0001" class="form-control form-control-sm quote-unit-price" placeholder="Precio"><div class="row g-2"><div class="col-6"><input type="number" min="0" max="100" step="0.01" class="form-control form-control-sm quote-discount" placeholder="Desc. %" value="0"></div><div class="col-6"><input type="number" min="0" step="0.01" class="form-control form-control-sm quote-tax" placeholder="IVA %" value="13"></div></div><div class="form-check"><input class="form-check-input quote-tax-included" type="checkbox"><label class="form-check-label small">Precio con IVA incluido</label></div><input type="number" min="0" step="1" class="form-control form-control-sm quote-lead-time" placeholder="Entrega en días"><input type="text" class="form-control form-control-sm quote-brand-model" placeholder="Marca / modelo"><textarea class="form-control form-control-sm quote-notes" rows="2" placeholder="Notas"></textarea><div class="small text-muted">Deja el precio vacío para no crear cotización.</div></div></div>`;return cell}function addSupplierColumn(options){const headerRow=document.getElementById("supplierHeaderRow"),rows=table.querySelectorAll("tbody .comparison-row");const duplicate=Array.from(headerRow.querySelectorAll("[data-supplier-column]")).some(header=>options.supplierId?Number(header.dataset.supplierId||0)===Number(options.supplierId):normalizeText(header.dataset.supplierName)===normalizeText(options.supplierName));if(duplicate){window.alert("Este proveedor ya está incluido en el comparativo.");return false}const temporaryId=`temporary-${++temporarySupplierCounter}`;headerRow.appendChild(createSupplierHeader({supplierId:options.supplierId||"",supplierName:options.supplierName,isNew:true,temporaryId}));rows.forEach(row=>row.appendChild(createSupplierCell({supplierId:options.supplierId||"",temporaryId})));updateSupplierIndexes();if(scrollWrapper)window.setTimeout(()=>{scrollWrapper.scrollLeft=scrollWrapper.scrollWidth},100);return true}function removeTemporarySupplier(id){const header=table.querySelector(`thead [data-temporary-supplier-id="${id}"]`);if(header)header.remove();table.querySelectorAll(`tbody [data-temporary-supplier-id="${id}"]`).forEach(cell=>cell.remove());updateSupplierIndexes()}async function loadSuppliers(){if(!supplierList||!supplierLoading||!supplierEmpty)return;supplierLoading.classList.remove("d-none");supplierList.innerHTML="";supplierEmpty.classList.add("d-none");const url=new URL(page.dataset.suppliersUrl,window.location.origin),search=supplierSearchInput?supplierSearchInput.value.trim():"";if(search)url.searchParams.set("search",search);getExistingSupplierIds().forEach(id=>url.searchParams.append("exclude_supplier_id",String(id)));try{const response=await fetch(url.toString(),{headers:{Accept:"application/json"}}),payload=await response.json();if(!response.ok)throw new Error(payload.error||"No fue posible cargar los proveedores.");const suppliers=payload.items||[];supplierEmpty.classList.toggle("d-none",suppliers.length>0);suppliers.forEach(supplier=>{const row=document.createElement("div");row.className="supplier-result";const nameBlock=document.createElement("div");nameBlock.innerHTML=`<div class="fw-bold"></div><div class="small text-muted"></div>`;nameBlock.querySelector(".fw-bold").textContent=supplier.supplier_name||"Proveedor";nameBlock.querySelector(".small").textContent=supplier.tax_id?`Identificación: ${supplier.tax_id}`:(supplier.legal_name||"");const relationBadge=document.createElement("div");relationBadge.className="supplier-related-badge";relationBadge.innerHTML=supplier.covers_all_articles?`<span class="badge text-bg-success">Relacionado con todos</span>`:supplier.is_related?`<span class="badge text-bg-primary">${supplier.related_article_count}/${supplier.total_article_count}</span>`:`<span class="badge text-bg-light border text-dark">Sin relación previa</span>`;const action=document.createElement("div"),button=document.createElement("button");button.type="button";button.className="btn btn-sm btn-dark";button.innerHTML=`<i class="bi bi-plus-circle me-1"></i>Agregar`;button.addEventListener("click",()=>{const added=addSupplierColumn({supplierId:supplier.supplier_id,supplierName:supplier.supplier_name});if(added&&supplierModal)supplierModal.hide()});action.appendChild(button);row.appendChild(nameBlock);row.appendChild(relationBadge);row.appendChild(action);supplierList.appendChild(row)})}catch(error){supplierEmpty.classList.remove("d-none");supplierEmpty.querySelector("h6").textContent=error.message||"No fue posible cargar los proveedores."}finally{supplierLoading.classList.add("d-none")}}function collectSupplierColumns(){const headers=Array.from(table.querySelectorAll("thead [data-supplier-column]")),rows=Array.from(table.querySelectorAll("tbody .comparison-row"));return headers.map((header,columnIndex)=>{const supplierId=Number(header.dataset.supplierId||0),isNewSupplier=header.dataset.newSupplier==="1",currencyElement=header.querySelector(".column-currency"),paymentTypeElement=header.querySelector(".column-payment-type"),paymentMonthsElement=header.querySelector(".column-payment-months"),originTypeElement=header.querySelector(".column-origin-type"),column={supplier_id:supplierId>0?supplierId:null,new_supplier_name:isNewSupplier&&supplierId<=0?header.dataset.supplierName:null,quote_date:new Date().toISOString(),currency_code:currencyElement?currencyElement.value:"CRC",payment_type:paymentTypeElement?(paymentTypeElement.value||null):null,payment_term_months:paymentMonthsElement?(paymentMonthsElement.value||null):null,origin_type:originTypeElement?(originTypeElement.value||null):null,lines:[]};rows.forEach(row=>{const cell=row.children[columnIndex+3];if(!cell)return;const unitPrice=cell.querySelector(".quote-unit-price"),discount=cell.querySelector(".quote-discount"),tax=cell.querySelector(".quote-tax"),taxIncluded=cell.querySelector(".quote-tax-included"),leadTime=cell.querySelector(".quote-lead-time"),brandModel=cell.querySelector(".quote-brand-model"),notes=cell.querySelector(".quote-notes");column.lines.push({purchase_request_line_id:Number(row.dataset.requestLineId),unit_price:unitPrice?unitPrice.value.trim():"",discount_pct:discount?discount.value.trim():"0",tax_pct:tax?tax.value.trim():"0",tax_included:taxIncluded?taxIncluded.checked:false,lead_time_days:leadTime?leadTime.value.trim():"",brand_model:brandModel?brandModel.value.trim():"",notes:notes?notes.value.trim():""})});return column})}async function saveComparison(){const supplierColumns=collectSupplierColumns();if(!supplierColumns.length){window.alert("No hay columnas de proveedor para guardar.");return}if(!window.confirm("¿Guardar todos los cambios realizados en el comparativo?"))return;saveComparisonButton.disabled=true;addSupplierButton.disabled=true;cancelEditButton.disabled=true;saveComparisonButton.innerHTML=`<span class="spinner-border spinner-border-sm me-2"></span>Guardando...`;setStatus("Guardando comparativo...","text-primary fw-semibold");try{const response=await fetch(page.dataset.saveUrl,{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({supplier_columns:supplierColumns})}),payload=await response.json();if(!response.ok||payload.success===false)throw new Error(payload.error||"No fue posible guardar el comparativo.");setStatus(payload.message||"Comparativo guardado correctamente.","text-success fw-semibold");window.alert(payload.message||"Comparativo guardado correctamente.");window.location.reload()}catch(error){setStatus(error.message||"No fue posible guardar el comparativo.","text-danger fw-semibold");window.alert(error.message||"No fue posible guardar el comparativo.")}finally{saveComparisonButton.disabled=false;addSupplierButton.disabled=false;cancelEditButton.disabled=false;saveComparisonButton.innerHTML=`<i class="bi bi-floppy me-2"></i>Guardar cambios`}}startEditButton.addEventListener("click",()=>setEditMode(true));cancelEditButton.addEventListener("click",()=>{if(window.confirm("Se perderán los cambios no guardados. ¿Deseas continuar?"))window.location.reload()});addSupplierButton.addEventListener("click",()=>{if(!supplierModal){window.alert("No fue posible abrir la ventana de proveedores.");return}supplierSearchInput.value="";newSupplierName.value="";supplierModal.show();loadSuppliers()});supplierSearchButton.addEventListener("click",loadSuppliers);supplierSearchInput.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();loadSuppliers()}});addNewSupplierButton.addEventListener("click",()=>{const supplierName=newSupplierName.value.trim();if(!supplierName){window.alert("Debe indicar el nombre comercial.");newSupplierName.focus();return}const added=addSupplierColumn({supplierId:null,supplierName});if(added){newSupplierName.value="";if(supplierModal)supplierModal.hide()}});table.addEventListener("click",event=>{const button=event.target.closest(".remove-temporary-supplier");if(!button)return;const header=button.closest("[data-supplier-column]");if(!header)return;if(window.confirm("¿Quitar esta columna del comparativo?"))removeTemporarySupplier(header.dataset.temporarySupplierId)});saveComparisonButton.addEventListener("click",saveComparison);if(searchInput)searchInput.addEventListener("input",filterRows);if(clearSearchButton)clearSearchButton.addEventListener("click",()=>{searchInput.value="";filterRows();searchInput.focus()});if(scrollToSelectedButton)scrollToSelectedButton.addEventListener("click",()=>{const selectedRow=table.querySelector('tbody .comparison-row[data-has-selection="1"]:not(.is-hidden)');if(!selectedRow){window.alert("No hay líneas seleccionadas visibles.");return}selectedRow.scrollIntoView({behavior:"smooth",block:"center",inline:"nearest"});selectedRow.classList.add("highlight-selected");window.setTimeout(()=>selectedRow.classList.remove("highlight-selected"),1400)});document.querySelectorAll(".select-quotation-form").forEach(form=>form.addEventListener("submit",event=>{const supplierName=form.dataset.supplierName||"este proveedor",itemName=form.dataset.itemName||"este artículo";if(!window.confirm(`¿Seleccionar la cotización de ${supplierName} para ${itemName}?`))event.preventDefault()}));document.querySelectorAll(".clear-selection-form").forEach(form=>form.addEventListener("submit",event=>{if(!window.confirm("¿Deseas quitar esta selección de la preorden?"))event.preventDefault()}));if(scrollWrapper){const storageKey=["quotation-comparison-scroll",page.dataset.requestId,page.dataset.categoryId].join("-"),savedScrollLeft=window.sessionStorage.getItem(`${storageKey}-left`),savedScrollTop=window.sessionStorage.getItem(`${storageKey}-top`);if(savedScrollLeft!==null)scrollWrapper.scrollLeft=Number(savedScrollLeft)||0;if(savedScrollTop!==null)scrollWrapper.scrollTop=Number(savedScrollTop)||0;let saveTimer=null;scrollWrapper.addEventListener("scroll",()=>{window.clearTimeout(saveTimer);saveTimer=window.setTimeout(()=>{window.sessionStorage.setItem(`${storageKey}-left`,String(scrollWrapper.scrollLeft));window.sessionStorage.setItem(`${storageKey}-top`,String(scrollWrapper.scrollTop))},100)})}updateSupplierIndexes();setEditMode(false)})();
 </script>
 {% endblock %}
