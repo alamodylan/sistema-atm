@@ -6,7 +6,7 @@
         <div>
             <h2 class="fw-bold mb-1">Nueva orden de compra</h2>
             <p class="text-muted mb-0">
-                Cree una OC seleccionando líneas cotizadas. La primera cotización elegida define el proveedor de la orden.
+                Seleccione un proveedor y agregue las líneas previamente elegidas en el comparativo.
             </p>
         </div>
 
@@ -14,7 +14,6 @@
             <a href="{{ url_for('purchases.list_orders') }}" class="btn btn-light rounded-3">
                 <i class="bi bi-arrow-left me-2"></i>Volver
             </a>
-
             <a href="{{ url_for('purchases.create_order_manual') }}" class="btn btn-outline-dark rounded-3">
                 <i class="bi bi-pencil-square me-2"></i>Crear OC sin cotización
             </a>
@@ -22,71 +21,59 @@
     </div>
 
     <form method="post" id="purchase-order-form">
+        <input type="hidden" name="supplier_id" id="supplier-id-input">
+
         <div class="row g-4">
             <div class="col-12 col-xl-4">
                 <div class="card border-0 shadow-sm rounded-4 mb-4">
                     <div class="card-body p-4">
-                        <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+                        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
                             <div>
-                                <h5 class="fw-bold mb-1">Líneas cotizadas</h5>
+                                <h5 class="fw-bold mb-1">Proveedores disponibles</h5>
                                 <p class="text-muted small mb-0">
-                                    Seleccione una línea para ver los proveedores que cotizaron.
+                                    Solo aparecen proveedores con selecciones pendientes de OC.
                                 </p>
                             </div>
                             <span class="badge text-bg-light border">
-                                <span id="quotation-groups-count">0</span> líneas
+                                <span id="supplier-count">0</span>
                             </span>
                         </div>
 
-                        <div class="mb-3">
-                            <div class="input-group">
-                                <span class="input-group-text bg-white">
-                                    <i class="bi bi-search"></i>
-                                </span>
-                                <input type="text"
-                                       id="line-search"
-                                       class="form-control"
-                                       placeholder="Buscar artículo, código o solicitud">
-                            </div>
+                        <div class="input-group mb-3">
+                            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                            <input type="text"
+                                   id="supplier-search"
+                                   class="form-control"
+                                   placeholder="Buscar proveedor, artículo o solicitud"
+                                   autocomplete="off">
                         </div>
 
-                        <div class="d-flex flex-wrap gap-2 mb-3">
-                            <button type="button" class="btn btn-sm btn-dark rounded-pill line-filter-btn active" data-filter="all">
-                                Todas
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill line-filter-btn" data-filter="available">
-                                Disponibles
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill line-filter-btn" data-filter="selected">
-                                Seleccionadas
-                            </button>
-                        </div>
-
-                        <div id="quotation-groups-loading" class="text-center py-4">
+                        <div id="supplier-loading" class="text-center py-4">
                             <div class="spinner-border spinner-border-sm text-dark mb-2"></div>
-                            <div class="small text-muted">Cargando líneas cotizadas...</div>
+                            <div class="small text-muted">Cargando selecciones pendientes...</div>
                         </div>
 
-                        <div id="quotation-groups-list" class="d-flex flex-column gap-2 d-none"></div>
+                        <div id="supplier-list" class="d-flex flex-column gap-2 d-none"></div>
 
-                        <div id="quotation-groups-empty" class="alert alert-light border mb-0 d-none">
-                            No hay líneas cotizadas disponibles para crear OC.
+                        <div id="supplier-empty" class="alert alert-light border mb-0 d-none">
+                            No hay cotizaciones seleccionadas pendientes de orden de compra.
                         </div>
+
+                        <div id="supplier-error" class="alert alert-danger mb-0 d-none"></div>
                     </div>
                 </div>
 
                 <div class="card border-0 shadow-sm rounded-4">
                     <div class="card-body p-4">
                         <h6 class="fw-bold mb-2">
-                            <i class="bi bi-shield-check me-2"></i>Reglas de esta OC
+                            <i class="bi bi-shield-check me-2"></i>Reglas
                         </h6>
-
                         <ul class="text-muted small mb-0 ps-3">
-                            <li>Una orden de compra pertenece a un solo proveedor.</li>
-                            <li>La primera cotización seleccionada fija el proveedor.</li>
-                            <li>Después solo se pueden agregar líneas cotizadas por ese mismo proveedor.</li>
-                            <li>El backend recalcula precios, IVA y totales desde la cotización.</li>
-                            <li>Al guardar, queda en estado <strong>PENDIENTE APROBACIÓN</strong>.</li>
+                            <li>La OC pertenece a un único proveedor.</li>
+                            <li>Solo puede incluir líneas de una misma moneda.</li>
+                            <li>Las líneas provienen de lo seleccionado en el comparativo.</li>
+                            <li>Al crear la OC, dejan de aparecer como disponibles.</li>
+                            <li>La orden queda en estado <strong>PENDIENTE APROBACIÓN</strong>.</li>
                         </ul>
                     </div>
                 </div>
@@ -94,42 +81,72 @@
 
             <div class="col-12 col-xl-8">
                 <div class="card border-0 shadow-sm rounded-4 mb-4">
-                    <div class="card-body p-4">
-                        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-3">
-                            <div>
-                                <h5 class="fw-bold mb-1">Cotizaciones de la línea</h5>
-                                <p class="text-muted mb-0" id="selected-line-subtitle">
-                                    Seleccione una línea cotizada para comparar proveedores.
-                                </p>
-                            </div>
+                    <div class="card-body p-0">
+                        <div class="p-4 border-bottom">
+                            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                                <div>
+                                    <h5 class="fw-bold mb-1">Líneas pendientes de OC</h5>
+                                    <p class="text-muted mb-0" id="selected-supplier-subtitle">
+                                        Seleccione un proveedor para visualizar sus líneas.
+                                    </p>
+                                </div>
 
-                            <div id="locked-supplier-badge" class="d-none">
-                                <span class="badge text-bg-dark rounded-pill px-3 py-2">
-                                    <i class="bi bi-lock-fill me-1"></i>
-                                    Proveedor fijo: <span id="locked-supplier-name"></span>
-                                </span>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <span id="selected-supplier-badge"
+                                          class="badge text-bg-dark rounded-pill px-3 py-2 d-none">
+                                        <i class="bi bi-building me-1"></i>
+                                        <span id="selected-supplier-name"></span>
+                                    </span>
+
+                                    <span id="locked-currency-badge"
+                                          class="badge text-bg-info rounded-pill px-3 py-2 d-none">
+                                        <i class="bi bi-cash-coin me-1"></i>
+                                        Moneda: <span id="locked-currency-name"></span>
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
-                        <div id="quotation-options-empty" class="alert alert-light border mb-0">
-                            Aún no se ha seleccionado ninguna línea.
+                        <div id="lines-empty" class="p-5 text-center">
+                            <i class="bi bi-card-checklist fs-1 text-muted"></i>
+                            <h6 class="fw-bold mt-3">Seleccione un proveedor</h6>
+                            <p class="text-muted mb-0">
+                                Aquí aparecerán las cotizaciones seleccionadas para ese proveedor.
+                            </p>
                         </div>
 
-                        <div id="quotation-options-container" class="d-none">
+                        <div id="lines-wrapper" class="d-none">
+                            <div class="p-3 border-bottom bg-light-subtle">
+                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+                                    <div class="form-check mb-0">
+                                        <input class="form-check-input" type="checkbox" id="select-all-lines">
+                                        <label class="form-check-label fw-semibold" for="select-all-lines">
+                                            Seleccionar todas las líneas compatibles
+                                        </label>
+                                    </div>
+                                    <span class="small text-muted">
+                                        <span id="selected-lines-count">0</span> seleccionadas
+                                    </span>
+                                </div>
+                            </div>
+
                             <div class="table-responsive">
-                                <table class="table align-middle">
+                                <table class="table align-middle mb-0">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Proveedor</th>
-                                            <th>Precio unitario</th>
-                                            <th>Tipo precio</th>
-                                            <th>Pago</th>
-                                            <th>Origen</th>
-                                            <th>Total estimado</th>
-                                            <th class="text-end">Acción</th>
+                                            <th class="ps-4" style="width:44px;"></th>
+                                            <th>Artículo</th>
+                                            <th>Solicitud</th>
+                                            <th>Categoría</th>
+                                            <th class="text-end">Cantidad</th>
+                                            <th>Moneda</th>
+                                            <th class="text-end">Precio</th>
+                                            <th class="text-end">Subtotal</th>
+                                            <th class="text-end">IVA</th>
+                                            <th class="text-end pe-4">Total</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="quotation-options-body"></tbody>
+                                    <tbody id="lines-body"></tbody>
                                 </table>
                             </div>
                         </div>
@@ -137,109 +154,97 @@
                 </div>
 
                 <div class="card border-0 shadow-sm rounded-4">
-                    <div class="card-body p-0">
-                        <div class="p-4 border-bottom">
-                            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
-                                <div>
-                                    <h5 class="fw-bold mb-1">OC en construcción</h5>
-                                    <p class="text-muted mb-0">
-                                        Revise las líneas seleccionadas antes de crear la orden.
-                                    </p>
+                    <div class="card-body p-4">
+                        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+                            <div>
+                                <h5 class="fw-bold mb-1">Resumen de la orden</h5>
+                                <p class="text-muted mb-0">
+                                    El backend validará nuevamente proveedor, moneda, precios y disponibilidad.
+                                </p>
+                            </div>
+                            <span class="badge text-bg-warning rounded-pill px-3 py-2">
+                                PENDIENTE APROBACIÓN
+                            </span>
+                        </div>
+
+                        <div class="row g-4">
+                            <div class="col-12 col-lg-7">
+                                <div class="mb-3">
+                                    <label for="payment-terms" class="form-label fw-semibold">
+                                        Condiciones de pago
+                                    </label>
+                                    <input type="text"
+                                           name="payment_terms"
+                                           id="payment-terms"
+                                           class="form-control rounded-3"
+                                           placeholder="Ejemplo: Crédito 30 días">
+                                    <div class="form-text">
+                                        Puede dejarlo vacío para usar la condición detectada en las cotizaciones.
+                                    </div>
                                 </div>
 
-                                <span class="badge text-bg-warning rounded-pill px-3 py-2">
-                                    PENDIENTE APROBACIÓN
-                                </span>
-                            </div>
-                        </div>
-
-                        <div id="selected-lines-empty" class="p-5 text-center">
-                            <i class="bi bi-cart-plus fs-1 text-muted"></i>
-                            <h6 class="fw-bold mt-3">No hay líneas seleccionadas</h6>
-                            <p class="text-muted mb-0">
-                                Seleccione una línea cotizada y elija el proveedor para agregarla a la OC.
-                            </p>
-                        </div>
-
-                        <div id="selected-lines-wrapper" class="table-responsive d-none">
-                            <table class="table align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th class="ps-4">Artículo</th>
-                                        <th>Solicitud</th>
-                                        <th>Proveedor</th>
-                                        <th>Cantidad</th>
-                                        <th>Precio</th>
-                                        <th>IVA</th>
-                                        <th>Total</th>
-                                        <th>Notas</th>
-                                        <th class="pe-4 text-end"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="selected-lines-body"></tbody>
-                            </table>
-                        </div>
-
-                        <div class="border-top p-4">
-                            <div class="row g-4">
-                                <div class="col-12 col-lg-7">
-                                    <label class="form-label fw-semibold">Notas generales de la OC</label>
+                                <div>
+                                    <label for="order-notes" class="form-label fw-semibold">
+                                        Notas generales
+                                    </label>
                                     <textarea name="notes"
                                               id="order-notes"
-                                              rows="3"
+                                              rows="4"
                                               class="form-control rounded-3"
-                                              placeholder="Observaciones generales para la orden de compra"></textarea>
+                                              placeholder="Observaciones generales para la orden"></textarea>
                                 </div>
+                            </div>
 
-                                <div class="col-12 col-lg-5">
-                                    <div class="border rounded-4 p-3 bg-light-subtle">
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span class="text-muted">Proveedor</span>
-                                            <strong id="summary-supplier">-</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span class="text-muted">Moneda</span>
-                                            <strong id="summary-currency">-</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span class="text-muted">Subtotal</span>
-                                            <strong id="summary-subtotal">0.00</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span class="text-muted">IVA</span>
-                                            <strong id="summary-tax">0.00</strong>
-                                        </div>
-                                        <hr>
-                                        <div class="d-flex justify-content-between fs-5">
-                                            <span class="fw-bold">Total</span>
-                                            <strong id="summary-total">0.00</strong>
-                                        </div>
+                            <div class="col-12 col-lg-5">
+                                <div class="border rounded-4 p-3 bg-light-subtle">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">Proveedor</span>
+                                        <strong id="summary-supplier">-</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">Moneda</span>
+                                        <strong id="summary-currency">-</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">Líneas</span>
+                                        <strong id="summary-lines">0</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">Subtotal</span>
+                                        <strong id="summary-subtotal">0,00</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">Descuento</span>
+                                        <strong id="summary-discount">0,00</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">IVA</span>
+                                        <strong id="summary-tax">0,00</strong>
+                                    </div>
+                                    <hr>
+                                    <div class="d-flex justify-content-between fs-5">
+                                        <span class="fw-bold">Total</span>
+                                        <strong id="summary-total">0,00</strong>
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <div id="hidden-fields"></div>
+                        <div id="candidate-hidden-fields"></div>
 
-                            <div class="d-flex justify-content-end gap-2 mt-4">
-                                <a href="{{ url_for('purchases.list_orders') }}" class="btn btn-light rounded-3">
-                                    Cancelar
-                                </a>
-
-                                <button type="submit"
-                                        id="submit-btn"
-                                        class="btn btn-dark rounded-3"
-                                        disabled>
-                                    <i class="bi bi-file-earmark-check me-2"></i>Crear OC pendiente de aprobación
-                                </button>
-                            </div>
+                        <div class="d-flex justify-content-end gap-2 mt-4">
+                            <a href="{{ url_for('purchases.list_orders') }}" class="btn btn-light rounded-3">
+                                Cancelar
+                            </a>
+                            <button type="submit"
+                                    id="submit-btn"
+                                    class="btn btn-dark rounded-3"
+                                    disabled>
+                                <i class="bi bi-file-earmark-check me-2"></i>
+                                Crear OC pendiente de aprobación
+                            </button>
                         </div>
                     </div>
-                </div>
-
-                <div class="alert alert-info border-0 rounded-4 mt-4 mb-0">
-                    <strong>Nota:</strong>
-                    puede modificar la cantidad antes de crear la OC. El precio viene de la cotización seleccionada;
-                    si cambió el precio, lo correcto es actualizar o registrar una nueva cotización antes de crear la OC.
                 </div>
             </div>
         </div>
@@ -248,59 +253,46 @@
 
 <script>
 (function () {
-    const TAX_FACTOR = 1.13;
+    const groupsUrl = "{{ url_for('purchases.create_order_quotation_groups_partial') }}";
+    const initialSupplierId = "{{ selected_supplier_id or '' }}";
 
     const form = document.getElementById("purchase-order-form");
-    const groupsList = document.getElementById("quotation-groups-list");
-    const groupsLoading = document.getElementById("quotation-groups-loading");
-    const groupsEmpty = document.getElementById("quotation-groups-empty");
-    const groupsCount = document.getElementById("quotation-groups-count");
+    const supplierIdInput = document.getElementById("supplier-id-input");
+    const supplierSearch = document.getElementById("supplier-search");
+    const supplierCount = document.getElementById("supplier-count");
+    const supplierLoading = document.getElementById("supplier-loading");
+    const supplierList = document.getElementById("supplier-list");
+    const supplierEmpty = document.getElementById("supplier-empty");
+    const supplierError = document.getElementById("supplier-error");
 
-    const lineSearch = document.getElementById("line-search");
-    const filterButtons = document.querySelectorAll(".line-filter-btn");
+    const selectedSupplierSubtitle = document.getElementById("selected-supplier-subtitle");
+    const selectedSupplierBadge = document.getElementById("selected-supplier-badge");
+    const selectedSupplierName = document.getElementById("selected-supplier-name");
+    const lockedCurrencyBadge = document.getElementById("locked-currency-badge");
+    const lockedCurrencyName = document.getElementById("locked-currency-name");
 
-    const selectedLineSubtitle = document.getElementById("selected-line-subtitle");
-    const quotationOptionsEmpty = document.getElementById("quotation-options-empty");
-    const quotationOptionsContainer = document.getElementById("quotation-options-container");
-    const quotationOptionsBody = document.getElementById("quotation-options-body");
-
-    const lockedSupplierBadge = document.getElementById("locked-supplier-badge");
-    const lockedSupplierName = document.getElementById("locked-supplier-name");
-
-    const selectedLinesEmpty = document.getElementById("selected-lines-empty");
-    const selectedLinesWrapper = document.getElementById("selected-lines-wrapper");
-    const selectedLinesBody = document.getElementById("selected-lines-body");
+    const linesEmpty = document.getElementById("lines-empty");
+    const linesWrapper = document.getElementById("lines-wrapper");
+    const linesBody = document.getElementById("lines-body");
+    const selectAllLines = document.getElementById("select-all-lines");
+    const selectedLinesCount = document.getElementById("selected-lines-count");
 
     const summarySupplier = document.getElementById("summary-supplier");
     const summaryCurrency = document.getElementById("summary-currency");
+    const summaryLines = document.getElementById("summary-lines");
     const summarySubtotal = document.getElementById("summary-subtotal");
+    const summaryDiscount = document.getElementById("summary-discount");
     const summaryTax = document.getElementById("summary-tax");
     const summaryTotal = document.getElementById("summary-total");
-
-    const hiddenFields = document.getElementById("hidden-fields");
+    const hiddenFields = document.getElementById("candidate-hidden-fields");
     const submitBtn = document.getElementById("submit-btn");
 
-    let quotationGroups = [];
-    let activeGroupKey = null;
-    let activeFilter = "all";
-    let lockedSupplierId = null;
-    let lockedSupplierLabel = null;
+    let candidateGroups = [];
+    let selectedSupplierId = null;
+    let selectedSupplierLabel = null;
     let lockedCurrency = null;
     let searchTimer = null;
-
-    const selectedLines = new Map();
-
-    function toNumber(value) {
-        const parsed = Number(value);
-        return Number.isFinite(parsed) ? parsed : 0;
-    }
-
-    function formatMoney(value) {
-        return toNumber(value).toLocaleString("es-CR", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        });
-    }
+    const selectedCandidates = new Map();
 
     function escapeHtml(value) {
         return String(value ?? "")
@@ -311,511 +303,450 @@
             .replaceAll("'", "&#039;");
     }
 
-    function findGroup(key) {
-        return quotationGroups.find(group => String(group.key) === String(key));
+    function toNumber(value) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : 0;
     }
 
-    function selectedGroupKeys() {
-        const keys = new Set();
-        selectedLines.forEach(line => keys.add(String(line.group_key)));
-        return keys;
-    }
-
-    function calculateFromOption(option, quantity) {
-        const unitPrice = toNumber(option.unit_price);
-        const taxIncluded = Boolean(option.tax_included);
-
-        let subtotal = 0;
-        let total = 0;
-
-        if (taxIncluded) {
-            subtotal = (unitPrice / TAX_FACTOR) * quantity;
-            total = unitPrice * quantity;
-        } else {
-            subtotal = unitPrice * quantity;
-            total = subtotal * TAX_FACTOR;
-        }
-
-        const tax = total - subtotal;
-
-        return {
-            subtotal,
-            tax,
-            total,
-            taxIncluded
-        };
-    }
-
-    function getSearchText(group) {
-        return [
-            group.purchase_request_number,
-            group.item_code,
-            group.item_name,
-            group.quantity_requested,
-            group.unit_name
-        ].join(" ").toLowerCase();
-    }
-
-    function groupHasAvailableOptions(group) {
-        return (group.options || []).some(option => {
-            if (selectedLines.has(String(option.quotation_line_id))) return false;
-            if (lockedSupplierId && String(option.supplier_id) !== String(lockedSupplierId)) return false;
-            return true;
+    function formatMoney(value) {
+        return toNumber(value).toLocaleString("es-ES", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
         });
     }
 
-    async function loadQuotationGroups() {
-        const search = (lineSearch.value || "").trim();
+    function normalizeCurrency(value) {
+        return String(value || "CRC").trim().toUpperCase();
+    }
 
-        groupsLoading.classList.remove("d-none");
-        groupsList.classList.add("d-none");
-        groupsEmpty.classList.add("d-none");
+    function getSupplierId(group) {
+        return String(group.supplier_id ?? "");
+    }
+
+    function getSupplierName(group) {
+        return group.supplier_name || group.commercial_name || "Proveedor sin nombre";
+    }
+
+    function getGroupLines(group) {
+        return Array.isArray(group.lines) ? group.lines : [];
+    }
+
+    function getCandidateId(line) {
+        return line.candidate_id ?? line.purchase_order_candidate_id ?? null;
+    }
+
+    function getCurrency(line) {
+        return normalizeCurrency(line.currency_code);
+    }
+
+    function valueOf(line, ...keys) {
+        for (const key of keys) {
+            if (line[key] !== undefined && line[key] !== null) {
+                return toNumber(line[key]);
+            }
+        }
+        return 0;
+    }
+
+    function findSelectedGroup() {
+        return candidateGroups.find(
+            group => getSupplierId(group) === String(selectedSupplierId)
+        );
+    }
+
+    async function loadGroups() {
+        const search = (supplierSearch.value || "").trim();
+
+        supplierLoading.classList.remove("d-none");
+        supplierList.classList.add("d-none");
+        supplierEmpty.classList.add("d-none");
+        supplierError.classList.add("d-none");
 
         try {
-            const params = new URLSearchParams({
-                search: search
+            const params = new URLSearchParams();
+            if (search) params.set("search", search);
+
+            const response = await fetch(`${groupsUrl}?${params.toString()}`, {
+                headers: {"X-Requested-With": "XMLHttpRequest"}
             });
-
-            const response = await fetch(
-                `/purchases/orders/create/partial/quotation-groups?${params.toString()}`,
-                {
-                    headers: {
-                        "X-Requested-With": "XMLHttpRequest"
-                    }
-                }
-            );
-
-            if (!response.ok) {
-                throw new Error("Error cargando líneas cotizadas.");
-            }
 
             const data = await response.json();
 
-            quotationGroups = data.items || [];
-            groupsCount.textContent = quotationGroups.length;
-
-            groupsLoading.classList.add("d-none");
-
-            if (!quotationGroups.length) {
-                groupsList.classList.add("d-none");
-                groupsEmpty.classList.remove("d-none");
-            } else {
-                groupsList.classList.remove("d-none");
-                groupsEmpty.classList.add("d-none");
+            if (!response.ok) {
+                throw new Error(data.error || "No fue posible cargar las líneas.");
             }
 
-            activeGroupKey = null;
-            renderGroups();
-            renderQuotationOptions();
+            candidateGroups = Array.isArray(data.items) ? data.items : [];
+            supplierCount.textContent = candidateGroups.length;
+            supplierLoading.classList.add("d-none");
 
+            if (!candidateGroups.length) {
+                supplierEmpty.classList.remove("d-none");
+                clearSelection();
+                return;
+            }
+
+            supplierList.classList.remove("d-none");
+
+            if (
+                selectedSupplierId &&
+                !candidateGroups.some(group => getSupplierId(group) === String(selectedSupplierId))
+            ) {
+                clearSelection();
+            }
+
+            if (!selectedSupplierId && initialSupplierId) {
+                const initialGroup = candidateGroups.find(
+                    group => getSupplierId(group) === String(initialSupplierId)
+                );
+                if (initialGroup) selectSupplier(initialGroup);
+            }
+
+            renderSupplierList();
         } catch (error) {
             console.error(error);
-
-            groupsLoading.classList.add("d-none");
-            groupsList.classList.add("d-none");
-            groupsEmpty.classList.remove("d-none");
-            groupsEmpty.textContent = "Error cargando líneas cotizadas.";
+            supplierLoading.classList.add("d-none");
+            supplierError.classList.remove("d-none");
+            supplierError.textContent = error.message || "No fue posible cargar las líneas.";
+            clearSelection();
         }
     }
 
-    function renderGroups() {
-        if (!groupsList) return;
+    function renderSupplierList() {
+        supplierList.innerHTML = "";
+        const query = (supplierSearch.value || "").trim().toLowerCase();
+        let visible = 0;
 
-        const query = (lineSearch.value || "").trim().toLowerCase();
-        const selectedKeys = selectedGroupKeys();
+        candidateGroups.forEach(group => {
+            const supplierName = getSupplierName(group);
+            const lines = getGroupLines(group);
+            const searchText = [
+                supplierName,
+                ...lines.map(line => [
+                    line.purchase_request_number,
+                    line.item_code,
+                    line.item_name,
+                    line.quotation_category_label,
+                    line.currency_code
+                ].join(" "))
+            ].join(" ").toLowerCase();
 
-        groupsList.innerHTML = "";
+            if (query && !searchText.includes(query)) return;
+            visible++;
 
-        let visibleCount = 0;
+            const supplierId = getSupplierId(group);
+            const currencies = [...new Set(lines.map(getCurrency))];
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "text-start border rounded-4 p-3 bg-white w-100";
 
-        quotationGroups.forEach(group => {
-            const groupKey = String(group.key);
-            const isSelected = selectedKeys.has(groupKey);
-            const hasAvailable = groupHasAvailableOptions(group);
-
-            if (query && !getSearchText(group).includes(query)) return;
-            if (activeFilter === "available" && (!hasAvailable || isSelected)) return;
-            if (activeFilter === "selected" && !isSelected) return;
-
-            visibleCount++;
-
-            const card = document.createElement("button");
-            card.type = "button";
-            card.className = "text-start border rounded-4 p-3 bg-white quotation-group-card w-100";
-            card.dataset.key = groupKey;
-
-            if (String(activeGroupKey) === groupKey) {
-                card.classList.add("border-dark", "shadow-sm");
+            if (String(selectedSupplierId) === supplierId) {
+                button.classList.add("border-dark", "shadow-sm");
             }
 
-            const optionsCount = (group.options || []).length;
-            const sameSupplierOptions = lockedSupplierId
-                ? (group.options || []).filter(option => String(option.supplier_id) === String(lockedSupplierId)).length
-                : optionsCount;
-
-            let statusBadge = "";
-            if (isSelected) {
-                statusBadge = '<span class="badge text-bg-success">Agregada</span>';
-            } else if (!hasAvailable && lockedSupplierId) {
-                statusBadge = '<span class="badge text-bg-light border text-muted">Sin cotización del proveedor fijo</span>';
-            } else {
-                statusBadge = '<span class="badge text-bg-primary">Disponible</span>';
-            }
-
-            card.innerHTML = `
-                <div class="d-flex justify-content-between align-items-start gap-2">
+            button.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start gap-3">
                     <div>
-                        <div class="fw-bold">${escapeHtml(group.item_code ? group.item_code + " - " + group.item_name : group.item_name)}</div>
-                        <div class="text-muted small">
-                            Solicitud: ${escapeHtml(group.purchase_request_number || "-")}
+                        <div class="fw-bold">${escapeHtml(supplierName)}</div>
+                        <div class="small text-muted mt-1">
+                            ${lines.length} línea${lines.length === 1 ? "" : "s"} pendiente${lines.length === 1 ? "" : "s"}
                         </div>
-                        <div class="text-muted small">
-                            Cantidad: ${escapeHtml(group.quantity_requested || "1")} ${escapeHtml(group.unit_name || "")}
-                        </div>
-                    </div>
-                    <div class="text-end">
-                        ${statusBadge}
-                        <div class="small text-muted mt-2">
-                            ${sameSupplierOptions}/${optionsCount} cotizaciones
+                        <div class="small text-muted">
+                            Moneda${currencies.length === 1 ? "" : "s"}: ${escapeHtml(currencies.join(", ") || "-")}
                         </div>
                     </div>
+                    <span class="badge ${String(selectedSupplierId) === supplierId ? "text-bg-dark" : "text-bg-light border"}">
+                        ${String(selectedSupplierId) === supplierId ? "Seleccionado" : "Ver líneas"}
+                    </span>
                 </div>
             `;
 
-            card.addEventListener("click", function () {
-                activeGroupKey = groupKey;
-                renderGroups();
-                renderQuotationOptions();
-            });
-
-            groupsList.appendChild(card);
+            button.addEventListener("click", () => selectSupplier(group));
+            supplierList.appendChild(button);
         });
 
-        if (!visibleCount) {
-            groupsList.innerHTML = `
+        if (!visible) {
+            supplierList.innerHTML = `
                 <div class="alert alert-light border mb-0">
-                    No hay líneas que coincidan con el filtro actual.
+                    No hay proveedores que coincidan con la búsqueda.
                 </div>
             `;
         }
     }
 
-    function renderQuotationOptions() {
-        quotationOptionsBody.innerHTML = "";
+    function selectSupplier(group) {
+        const newSupplierId = getSupplierId(group);
 
-        if (!activeGroupKey) {
-            quotationOptionsContainer.classList.add("d-none");
-            quotationOptionsEmpty.classList.remove("d-none");
-            quotationOptionsEmpty.textContent = "Aún no se ha seleccionado ninguna línea.";
-            selectedLineSubtitle.textContent = "Seleccione una línea cotizada para comparar proveedores.";
+        if (
+            selectedCandidates.size &&
+            selectedSupplierId &&
+            String(selectedSupplierId) !== newSupplierId &&
+            !window.confirm("Cambiar de proveedor eliminará las líneas seleccionadas. ¿Desea continuar?")
+        ) {
             return;
         }
 
-        const group = findGroup(activeGroupKey);
+        selectedSupplierId = newSupplierId;
+        selectedSupplierLabel = getSupplierName(group);
+        supplierIdInput.value = newSupplierId;
+        selectedCandidates.clear();
+        lockedCurrency = null;
+
+        renderSupplierList();
+        renderHeader();
+        renderLines();
+        renderSummary();
+    }
+
+    function clearSelection() {
+        selectedSupplierId = null;
+        selectedSupplierLabel = null;
+        lockedCurrency = null;
+        supplierIdInput.value = "";
+        selectedCandidates.clear();
+
+        selectedSupplierBadge.classList.add("d-none");
+        lockedCurrencyBadge.classList.add("d-none");
+        selectedSupplierSubtitle.textContent = "Seleccione un proveedor para visualizar sus líneas.";
+        linesWrapper.classList.add("d-none");
+        linesEmpty.classList.remove("d-none");
+        linesBody.innerHTML = "";
+        renderSummary();
+    }
+
+    function renderHeader() {
+        const group = findSelectedGroup();
+
+        if (!group) return;
+
+        const totalLines = getGroupLines(group).length;
+        selectedSupplierBadge.classList.remove("d-none");
+        selectedSupplierName.textContent = selectedSupplierLabel || "-";
+        selectedSupplierSubtitle.textContent =
+            `${totalLines} línea${totalLines === 1 ? "" : "s"} previamente seleccionada${totalLines === 1 ? "" : "s"} en el comparativo.`;
+
+        if (lockedCurrency) {
+            lockedCurrencyBadge.classList.remove("d-none");
+            lockedCurrencyName.textContent = lockedCurrency;
+        } else {
+            lockedCurrencyBadge.classList.add("d-none");
+        }
+    }
+
+    function renderLines() {
+        linesBody.innerHTML = "";
+        const group = findSelectedGroup();
 
         if (!group) {
-            quotationOptionsContainer.classList.add("d-none");
-            quotationOptionsEmpty.classList.remove("d-none");
-            quotationOptionsEmpty.textContent = "La línea seleccionada no existe o ya no está disponible.";
+            linesWrapper.classList.add("d-none");
+            linesEmpty.classList.remove("d-none");
             return;
         }
 
-        selectedLineSubtitle.textContent = `${group.item_code ? group.item_code + " - " : ""}${group.item_name} | Solicitud: ${group.purchase_request_number} | Cantidad: ${group.quantity_requested} ${group.unit_name || ""}`;
+        const lines = getGroupLines(group);
 
-        const availableOptions = (group.options || []).filter(option => {
-            if (selectedLines.has(String(option.quotation_line_id))) return false;
-            if (lockedSupplierId && String(option.supplier_id) !== String(lockedSupplierId)) return false;
-            return true;
-        });
-
-        if (!availableOptions.length) {
-            quotationOptionsContainer.classList.add("d-none");
-            quotationOptionsEmpty.classList.remove("d-none");
-            quotationOptionsEmpty.textContent = lockedSupplierId
-                ? "Esta línea no tiene cotización disponible del proveedor fijo de la OC."
-                : "Esta línea no tiene cotizaciones disponibles.";
+        if (!lines.length) {
+            linesWrapper.classList.add("d-none");
+            linesEmpty.classList.remove("d-none");
             return;
         }
 
-        quotationOptionsEmpty.classList.add("d-none");
-        quotationOptionsContainer.classList.remove("d-none");
+        linesEmpty.classList.add("d-none");
+        linesWrapper.classList.remove("d-none");
 
-        availableOptions.forEach(option => {
-            const quantity = toNumber(group.quantity_requested) || 1;
-            const calc = calculateFromOption(option, quantity);
+        lines.forEach(line => {
+            const candidateId = getCandidateId(line);
+            if (!candidateId) return;
 
-            const paymentText = option.payment_type
-                ? `${option.payment_type}${option.payment_term_months ? " " + option.payment_term_months + " meses" : ""}`
-                : "-";
-
-            const priceType = option.tax_included ? "Con IVA incluido" : "Sin IVA";
-            const row = document.createElement("tr");
-
-            row.innerHTML = `
-                <td>
-                    <div class="fw-semibold">${escapeHtml(option.supplier_name || "-")}</div>
-                    ${option.brand_model ? `<div class="small text-muted">Marca/modelo: ${escapeHtml(option.brand_model)}</div>` : ""}
-                    ${option.quote_date ? `<div class="small text-muted">Fecha: ${escapeHtml(option.quote_date)}</div>` : ""}
-                </td>
-                <td>
-                    <div class="fw-semibold">${escapeHtml(option.currency_code || "CRC")} ${formatMoney(option.unit_price)}</div>
-                    ${option.discount_pct && Number(option.discount_pct) > 0 ? `<div class="small text-muted">Desc: ${escapeHtml(option.discount_pct)}%</div>` : ""}
-                </td>
-                <td>
-                    <span class="badge ${option.tax_included ? "text-bg-info" : "text-bg-secondary"}">
-                        ${priceType}
-                    </span>
-                </td>
-                <td>${escapeHtml(paymentText)}</td>
-                <td>${escapeHtml(option.origin_type || "-")}</td>
-                <td>
-                    <div class="fw-bold">${escapeHtml(option.currency_code || "CRC")} ${formatMoney(calc.total)}</div>
-                    <div class="small text-muted">IVA: ${formatMoney(calc.tax)}</div>
-                </td>
-                <td class="text-end">
-                    <button type="button" class="btn btn-sm btn-dark rounded-3 select-option-btn">
-                        <i class="bi bi-check2 me-1"></i>Elegir
-                    </button>
-                </td>
-            `;
-
-            row.querySelector(".select-option-btn").addEventListener("click", function () {
-                selectQuotationOption(group, option);
-            });
-
-            quotationOptionsBody.appendChild(row);
-        });
-    }
-
-    function selectQuotationOption(group, option) {
-        const optionSupplierId = String(option.supplier_id);
-
-        if (lockedSupplierId && String(lockedSupplierId) !== optionSupplierId) {
-            alert("No puede mezclar proveedores en una misma orden de compra.");
-            return;
-        }
-
-        if (!lockedSupplierId) {
-            lockedSupplierId = optionSupplierId;
-            lockedSupplierLabel = option.supplier_name || "-";
-            lockedCurrency = option.currency_code || "CRC";
-        }
-
-        selectedLines.set(String(option.quotation_line_id), {
-            group_key: String(group.key),
-            quotation_line_id: option.quotation_line_id,
-            purchase_request_number: group.purchase_request_number || "-",
-            item_code: group.item_code || "",
-            item_name: group.item_name || "Sin artículo",
-            unit_name: group.unit_name || "",
-            quantity: toNumber(group.quantity_requested) || 1,
-            supplier_id: option.supplier_id,
-            supplier_name: option.supplier_name || "-",
-            unit_price: option.unit_price || "0",
-            currency_code: option.currency_code || "CRC",
-            tax_included: Boolean(option.tax_included),
-            payment_type: option.payment_type || "",
-            payment_term_months: option.payment_term_months || "",
-            origin_type: option.origin_type || "",
-            brand_model: option.brand_model || "",
-            notes: option.notes || ""
-        });
-
-        activeGroupKey = null;
-
-        renderLockedSupplier();
-        renderGroups();
-        renderQuotationOptions();
-        renderSelectedLines();
-    }
-
-    function renderLockedSupplier() {
-        if (lockedSupplierId) {
-            lockedSupplierBadge.classList.remove("d-none");
-            lockedSupplierName.textContent = lockedSupplierLabel || "-";
-        } else {
-            lockedSupplierBadge.classList.add("d-none");
-            lockedSupplierName.textContent = "";
-        }
-
-        summarySupplier.textContent = lockedSupplierLabel || "-";
-        summaryCurrency.textContent = lockedCurrency || "-";
-    }
-
-    function resetSupplierIfNoLines() {
-        if (selectedLines.size) return;
-
-        lockedSupplierId = null;
-        lockedSupplierLabel = null;
-        lockedCurrency = null;
-        renderLockedSupplier();
-    }
-
-    function renderSelectedLines() {
-        selectedLinesBody.innerHTML = "";
-        hiddenFields.innerHTML = "";
-
-        if (!selectedLines.size) {
-            selectedLinesEmpty.classList.remove("d-none");
-            selectedLinesWrapper.classList.add("d-none");
-            submitBtn.disabled = true;
-
-            summarySubtotal.textContent = "0.00";
-            summaryTax.textContent = "0.00";
-            summaryTotal.textContent = "0.00";
-
-            resetSupplierIfNoLines();
-            renderLockedSupplier();
-            renderGroups();
-            renderQuotationOptions();
-            return;
-        }
-
-        selectedLinesEmpty.classList.add("d-none");
-        selectedLinesWrapper.classList.remove("d-none");
-        submitBtn.disabled = false;
-
-        let subtotalSum = 0;
-        let taxSum = 0;
-        let totalSum = 0;
-
-        selectedLines.forEach((line, key) => {
-            const quantity = toNumber(line.quantity) || 1;
-            const calc = calculateFromOption(line, quantity);
-
-            subtotalSum += calc.subtotal;
-            taxSum += calc.tax;
-            totalSum += calc.total;
-
+            const key = String(candidateId);
+            const currency = getCurrency(line);
+            const incompatible = Boolean(lockedCurrency && currency !== lockedCurrency);
             const row = document.createElement("tr");
 
             row.innerHTML = `
                 <td class="ps-4">
-                    <div class="fw-semibold">${escapeHtml(line.item_code ? line.item_code + " - " + line.item_name : line.item_name)}</div>
-                    <div class="small text-muted">${escapeHtml(line.brand_model || "")}</div>
-                </td>
-                <td>${escapeHtml(line.purchase_request_number || "-")}</td>
-                <td>${escapeHtml(line.supplier_name || "-")}</td>
-                <td style="width: 130px;">
-                    <input type="number"
-                           class="form-control form-control-sm rounded-3 selected-line-qty"
-                           step="0.01"
-                           min="0.01"
-                           value="${quantity}">
-                    <div class="small text-muted">${escapeHtml(line.unit_name || "")}</div>
+                    <input type="checkbox"
+                           class="form-check-input candidate-checkbox"
+                           ${selectedCandidates.has(key) ? "checked" : ""}
+                           ${incompatible ? "disabled" : ""}>
                 </td>
                 <td>
-                    ${escapeHtml(line.currency_code || "CRC")} ${formatMoney(line.unit_price)}
-                    <div class="small text-muted">${line.tax_included ? "Con IVA incluido" : "Sin IVA"}</div>
+                    <div class="fw-semibold">
+                        ${escapeHtml(line.item_code ? `${line.item_code} - ${line.item_name || "Sin artículo"}` : (line.item_name || "Sin artículo"))}
+                    </div>
+                    ${line.notes ? `<div class="small text-muted">${escapeHtml(line.notes)}</div>` : ""}
+                    ${incompatible ? `<div class="small text-danger">No compatible con ${escapeHtml(lockedCurrency)}.</div>` : ""}
                 </td>
-                <td>${formatMoney(calc.tax)}</td>
-                <td class="fw-bold">${formatMoney(calc.total)}</td>
-                <td style="min-width: 180px;">
-                    <input type="text"
-                           class="form-control form-control-sm rounded-3 selected-line-notes"
-                           value="${escapeHtml(line.notes || "")}"
-                           placeholder="Nota de línea">
+                <td>${escapeHtml(line.purchase_request_number || "-")}</td>
+                <td>${escapeHtml(line.quotation_category_label || "-")}</td>
+                <td class="text-end">
+                    ${formatMoney(valueOf(line, "quantity_requested", "quantity"))}
+                    ${line.unit_name ? `<div class="small text-muted">${escapeHtml(line.unit_name)}</div>` : ""}
                 </td>
-                <td class="pe-4 text-end">
-                    <button type="button" class="btn btn-sm btn-outline-danger rounded-3 remove-selected-line">
-                        <i class="bi bi-trash3"></i>
-                    </button>
-                </td>
+                <td><span class="badge text-bg-light border">${escapeHtml(currency)}</span></td>
+                <td class="text-end">${formatMoney(valueOf(line, "unit_price", "unit_cost"))}</td>
+                <td class="text-end">${formatMoney(valueOf(line, "line_subtotal", "subtotal"))}</td>
+                <td class="text-end">${formatMoney(valueOf(line, "tax_amount"))}</td>
+                <td class="text-end pe-4 fw-bold">${formatMoney(valueOf(line, "line_total", "total_amount", "total"))}</td>
             `;
 
-            row.querySelector(".selected-line-qty").addEventListener("input", function () {
-                const newQty = toNumber(this.value);
-                if (newQty > 0) {
-                    line.quantity = newQty;
-                    selectedLines.set(key, line);
-                    renderSelectedLines();
+            row.querySelector(".candidate-checkbox").addEventListener("change", function () {
+                toggleCandidate(line, this.checked);
+            });
+
+            linesBody.appendChild(row);
+        });
+
+        updateSelectAll();
+    }
+
+    function toggleCandidate(line, checked) {
+        const candidateId = getCandidateId(line);
+        if (!candidateId) return;
+
+        const key = String(candidateId);
+        const currency = getCurrency(line);
+
+        if (checked) {
+            if (lockedCurrency && currency !== lockedCurrency) {
+                window.alert(`La OC está fijada en ${lockedCurrency}. No puede agregar una línea en ${currency}.`);
+                renderLines();
+                return;
+            }
+
+            if (!lockedCurrency) lockedCurrency = currency;
+            selectedCandidates.set(key, line);
+        } else {
+            selectedCandidates.delete(key);
+            if (!selectedCandidates.size) lockedCurrency = null;
+        }
+
+        renderHeader();
+        renderLines();
+        renderSummary();
+    }
+
+    function updateSelectAll() {
+        const group = findSelectedGroup();
+        if (!group) return;
+
+        const compatible = getGroupLines(group).filter(line => {
+            const id = getCandidateId(line);
+            return id && (!lockedCurrency || getCurrency(line) === lockedCurrency);
+        });
+
+        const selected = compatible.filter(
+            line => selectedCandidates.has(String(getCandidateId(line)))
+        ).length;
+
+        selectAllLines.checked = compatible.length > 0 && selected === compatible.length;
+        selectAllLines.indeterminate = selected > 0 && selected < compatible.length;
+    }
+
+    selectAllLines.addEventListener("change", function () {
+        const group = findSelectedGroup();
+        if (!group) return;
+
+        const lines = getGroupLines(group);
+
+        if (this.checked) {
+            if (!lockedCurrency) {
+                const first = lines.find(line => getCandidateId(line));
+                if (first) lockedCurrency = getCurrency(first);
+            }
+
+            lines.forEach(line => {
+                const id = getCandidateId(line);
+                if (id && getCurrency(line) === lockedCurrency) {
+                    selectedCandidates.set(String(id), line);
                 }
             });
+        } else {
+            selectedCandidates.clear();
+            lockedCurrency = null;
+        }
 
-            row.querySelector(".selected-line-notes").addEventListener("input", function () {
-                line.notes = this.value || "";
-                selectedLines.set(key, line);
-                rebuildHiddenFieldsOnly();
-            });
+        renderHeader();
+        renderLines();
+        renderSummary();
+    });
 
-            row.querySelector(".remove-selected-line").addEventListener("click", function () {
-                selectedLines.delete(key);
-                resetSupplierIfNoLines();
-                renderLockedSupplier();
-                renderGroups();
-                renderQuotationOptions();
-                renderSelectedLines();
-            });
-
-            selectedLinesBody.appendChild(row);
-        });
-
-        summarySubtotal.textContent = formatMoney(subtotalSum);
-        summaryTax.textContent = formatMoney(taxSum);
-        summaryTotal.textContent = formatMoney(totalSum);
-
-        rebuildHiddenFieldsOnly();
-    }
-
-    function rebuildHiddenFieldsOnly() {
+    function renderSummary() {
         hiddenFields.innerHTML = "";
 
-        selectedLines.forEach(line => {
-            const quantity = toNumber(line.quantity) || 1;
-            const safeNotes = escapeHtml(line.notes || "");
+        let subtotal = 0;
+        let discount = 0;
+        let tax = 0;
+        let total = 0;
 
-            hiddenFields.insertAdjacentHTML("beforeend", `
-                <input type="hidden" name="line_quotation_line_id[]" value="${escapeHtml(line.quotation_line_id)}">
-                <input type="hidden" name="line_quantity_ordered[]" value="${quantity}">
-                <input type="hidden" name="line_notes[]" value="${safeNotes}">
-            `);
+        selectedCandidates.forEach((line, candidateId) => {
+            subtotal += valueOf(line, "line_subtotal", "subtotal");
+            discount += valueOf(line, "discount_amount");
+            tax += valueOf(line, "tax_amount");
+            total += valueOf(line, "line_total", "total_amount", "total");
+
+            const input = document.createElement("input");
+            input.type = "hidden";
+            input.name = "candidate_id[]";
+            input.value = candidateId;
+            hiddenFields.appendChild(input);
         });
+
+        summarySupplier.textContent = selectedSupplierLabel || "-";
+        summaryCurrency.textContent = lockedCurrency || "-";
+        summaryLines.textContent = selectedCandidates.size;
+        selectedLinesCount.textContent = selectedCandidates.size;
+        summarySubtotal.textContent = formatMoney(subtotal);
+        summaryDiscount.textContent = formatMoney(discount);
+        summaryTax.textContent = formatMoney(tax);
+        summaryTotal.textContent = formatMoney(total);
+
+        submitBtn.disabled = !(
+            selectedSupplierId &&
+            selectedCandidates.size &&
+            lockedCurrency
+        );
+
+        updateSelectAll();
     }
 
-    filterButtons.forEach(button => {
-        button.addEventListener("click", function () {
-            activeFilter = this.dataset.filter || "all";
-
-            filterButtons.forEach(btn => {
-                btn.classList.remove("active", "btn-dark");
-                btn.classList.add("btn-outline-secondary");
-            });
-
-            this.classList.add("active", "btn-dark");
-            this.classList.remove("btn-outline-secondary");
-
-            renderGroups();
-        });
+    supplierSearch.addEventListener("input", function () {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(loadGroups, 350);
     });
-
-    if (lineSearch) {
-        lineSearch.addEventListener("input", function () {
-            clearTimeout(searchTimer);
-
-            searchTimer = setTimeout(function () {
-                loadQuotationGroups();
-            }, 350);
-        });
-    }
 
     form.addEventListener("submit", function (event) {
-        if (!selectedLines.size) {
+        if (!selectedSupplierId) {
             event.preventDefault();
-            alert("Debe seleccionar al menos una cotización para crear la orden de compra.");
+            window.alert("Debe seleccionar un proveedor.");
             return;
         }
 
-        if (!lockedSupplierId) {
+        if (!selectedCandidates.size) {
             event.preventDefault();
-            alert("No se pudo determinar el proveedor de la orden.");
+            window.alert("Debe seleccionar al menos una línea pendiente.");
             return;
         }
+
+        const currencies = new Set(
+            [...selectedCandidates.values()].map(getCurrency)
+        );
+
+        if (currencies.size !== 1) {
+            event.preventDefault();
+            window.alert("Todas las líneas deben utilizar la misma moneda.");
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            Creando orden...
+        `;
     });
 
-    renderLockedSupplier();
-    renderQuotationOptions();
-    renderSelectedLines();
-    loadQuotationGroups();
+    renderSummary();
+    loadGroups();
 })();
 </script>
 {% endblock %}
