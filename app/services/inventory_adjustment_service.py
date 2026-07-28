@@ -18,18 +18,53 @@ class InventoryAdjustmentServiceError(Exception):
 
 
 def _to_decimal(value, field_name="cantidad", allow_decimals=False):
+    """
+    Convierte un valor a Decimal sin redondearlo.
+
+    - No permite valores vacíos.
+    - No permite valores negativos.
+    - Cuando allow_decimals=False, exige una cantidad entera.
+    - Cuando allow_decimals=True, conserva exactamente la precisión recibida.
+    """
+    if value is None or str(value).strip() == "":
+        raise InventoryAdjustmentServiceError(
+            f"Debe ingresar la {field_name}."
+        )
+
+    raw_value = str(value).strip()
+
+    # Permite que accidentalmente llegue una coma decimal.
+    # Ejemplo: "10,5" se interpreta como "10.5".
+    if "," in raw_value and "." not in raw_value:
+        raw_value = raw_value.replace(",", ".")
+
     try:
-        decimal_value = Decimal(str(value))
+        decimal_value = Decimal(raw_value)
     except (InvalidOperation, TypeError, ValueError):
-        raise InventoryAdjustmentServiceError(f"La {field_name} no es válida.")
+        raise InventoryAdjustmentServiceError(
+            f"La {field_name} no es válida."
+        )
+
+    if not decimal_value.is_finite():
+        raise InventoryAdjustmentServiceError(
+            f"La {field_name} no es válida."
+        )
 
     if decimal_value < 0:
-        raise InventoryAdjustmentServiceError(f"La {field_name} no puede ser negativa.")
+        raise InventoryAdjustmentServiceError(
+            f"La {field_name} no puede ser negativa."
+        )
 
-    if not allow_decimals and decimal_value != decimal_value.to_integral_value():
-        raise InventoryAdjustmentServiceError(f"La {field_name} debe ser un número entero.")
+    if (
+        not allow_decimals
+        and decimal_value != decimal_value.to_integral_value()
+    ):
+        raise InventoryAdjustmentServiceError(
+            f"La {field_name} debe ser un número entero."
+        )
 
-    return decimal_value.quantize(Decimal("0.00"))
+    # No usar quantize: devuelve exactamente el Decimal recibido.
+    return decimal_value
 
 
 def _generate_adjustment_number():
@@ -60,11 +95,18 @@ def get_adjustable_warehouses_for_site(site_id):
 
 def find_article_for_adjustment(warehouse_id, code_or_barcode):
     """
-    Busca artículo por código o barcode y devuelve stock actual en esa bodega.
-    Sirve para scanner o digitación manual.
+    Busca un artículo por código o código de barras y devuelve
+    la existencia actual exacta en la bodega seleccionada.
     """
+    if not warehouse_id:
+        raise InventoryAdjustmentServiceError(
+            "Debe seleccionar una bodega."
+        )
+
     if not code_or_barcode:
-        raise InventoryAdjustmentServiceError("Debe ingresar un código o código de barras.")
+        raise InventoryAdjustmentServiceError(
+            "Debe ingresar un código o código de barras."
+        )
 
     cleaned = str(code_or_barcode).strip()
 
@@ -80,7 +122,9 @@ def find_article_for_adjustment(warehouse_id, code_or_barcode):
     )
 
     if not article:
-        raise InventoryAdjustmentServiceError("No se encontró ningún artículo con ese código.")
+        raise InventoryAdjustmentServiceError(
+            "No se encontró ningún artículo con ese código."
+        )
 
     stock = (
         WarehouseStock.query
@@ -91,24 +135,30 @@ def find_article_for_adjustment(warehouse_id, code_or_barcode):
         .first()
     )
 
-    current_quantity = Decimal("0.00")
-    if stock:
-        current_quantity = Decimal(str(stock.quantity_on_hand or 0)).quantize(Decimal("0.00"))
+    # Conservar la cantidad exacta almacenada.
+    current_quantity = Decimal("0")
+
+    if stock and stock.quantity_on_hand is not None:
+        current_quantity = Decimal(
+            str(stock.quantity_on_hand)
+        )
 
     unit_code = None
 
     if article.unit_id:
         unit = db.session.execute(
-            db.text("""
+            db.text(
+                """
                 SELECT code
                 FROM atm.units
                 WHERE id = :id
-            """),
+                """
+            ),
             {"id": article.unit_id},
         ).first()
 
         if unit:
-            unit_code = unit.code
+            unit_code = str(unit.code or "").strip().upper()
 
     return {
         "article_id": article.id,
@@ -129,21 +179,31 @@ def create_inventory_adjustment(
     notes=None,
 ):
     if not site_id:
-        raise InventoryAdjustmentServiceError("No se recibió el predio del ajuste.")
+        raise InventoryAdjustmentServiceError(
+            "No se recibió el predio del ajuste."
+        )
 
     if not warehouse_id:
-        raise InventoryAdjustmentServiceError("Debe seleccionar una bodega.")
+        raise InventoryAdjustmentServiceError(
+            "Debe seleccionar una bodega."
+        )
 
     if not created_by_user_id:
-        raise InventoryAdjustmentServiceError("No se recibió el usuario que realiza el ajuste.")
+        raise InventoryAdjustmentServiceError(
+            "No se recibió el usuario que realiza el ajuste."
+        )
 
     if not lines:
-        raise InventoryAdjustmentServiceError("Debe agregar al menos una línea al ajuste.")
+        raise InventoryAdjustmentServiceError(
+            "Debe agregar al menos una línea al ajuste."
+        )
 
     warehouse = Warehouse.query.get(warehouse_id)
 
     if not warehouse:
-        raise InventoryAdjustmentServiceError("La bodega seleccionada no existe.")
+        raise InventoryAdjustmentServiceError(
+            "La bodega seleccionada no existe."
+        )
 
     if warehouse.site_id != site_id:
         raise InventoryAdjustmentServiceError(
@@ -153,14 +213,28 @@ def create_inventory_adjustment(
     seen_articles = set()
     clean_lines = []
 
+    decimal_unit_codes = {
+        "METRO",
+        "LITRO",
+        "GALON",
+        "KG",
+    }
+
     for raw_line in lines:
         article_id = raw_line.get("article_id")
         quantity_after = raw_line.get("quantity_after")
 
         if not article_id:
-            raise InventoryAdjustmentServiceError("Hay una línea sin artículo.")
+            raise InventoryAdjustmentServiceError(
+                "Hay una línea sin artículo."
+            )
 
-        article_id = int(article_id)
+        try:
+            article_id = int(article_id)
+        except (TypeError, ValueError):
+            raise InventoryAdjustmentServiceError(
+                "Hay una línea con un artículo inválido."
+            )
 
         if article_id in seen_articles:
             raise InventoryAdjustmentServiceError(
@@ -180,22 +254,22 @@ def create_inventory_adjustment(
 
         if article.unit_id:
             unit_row = db.session.execute(
-                db.text("""
+                db.text(
+                    """
                     SELECT code
                     FROM atm.units
                     WHERE id = :unit_id
-                """),
+                    """
+                ),
                 {"unit_id": article.unit_id},
             ).first()
 
             if unit_row:
-                unit_code = str(unit_row.code or "").strip().upper()
+                unit_code = str(
+                    unit_row.code or ""
+                ).strip().upper()
 
-        allow_decimals = unit_code in {
-            "METRO",
-            "LITRO",
-            "GALON",
-        }
+        allow_decimals = unit_code in decimal_unit_codes
 
         quantity_after_decimal = _to_decimal(
             quantity_after,
@@ -203,10 +277,13 @@ def create_inventory_adjustment(
             allow_decimals=allow_decimals,
         )
 
-        clean_lines.append({
-            "article": article,
-            "quantity_after": quantity_after_decimal,
-        })
+        clean_lines.append(
+            {
+                "article": article,
+                "unit_code": unit_code,
+                "quantity_after": quantity_after_decimal,
+            }
+        )
 
     try:
         adjustment = InventoryAdjustment(
@@ -243,21 +320,23 @@ def create_inventory_adjustment(
                 stock = WarehouseStock(
                     warehouse_id=warehouse_id,
                     article_id=article.id,
-                    quantity_on_hand=Decimal("0.00"),
-                    reserved_quantity=Decimal("0.00"),
-                    last_unit_cost=Decimal("0.00"),
-                    avg_unit_cost=Decimal("0.00"),
+                    quantity_on_hand=Decimal("0"),
+                    reserved_quantity=Decimal("0"),
+                    last_unit_cost=Decimal("0"),
+                    avg_unit_cost=Decimal("0"),
                     created_at=datetime.now(UTC),
                     updated_at=datetime.now(UTC),
                 )
+
                 db.session.add(stock)
                 db.session.flush()
 
-            quantity_before = Decimal(str(stock.quantity_on_hand or 0)).quantize(
-                Decimal("0.00")
+            quantity_before = Decimal(
+                str(stock.quantity_on_hand or 0)
             )
 
-            difference = (quantity_after - quantity_before).quantize(Decimal("0.00"))
+            # No aplicar quantize ni round.
+            difference = quantity_after - quantity_before
 
             adjustment_line = InventoryAdjustmentLine(
                 adjustment_id=adjustment.id,
@@ -270,17 +349,21 @@ def create_inventory_adjustment(
 
             db.session.add(adjustment_line)
 
+            # Guardar exactamente el valor digitado.
             stock.quantity_on_hand = quantity_after
 
             if hasattr(stock, "updated_at"):
                 stock.updated_at = datetime.now(UTC)
 
-            if difference == Decimal("0.00"):
+            if difference == Decimal("0"):
                 skipped_count += 1
+
                 skipped_lines.append(
                     f"{article.code}: sin diferencia. "
-                    f"Cantidad anterior {quantity_before}, cantidad nueva {quantity_after}."
+                    f"Cantidad anterior {quantity_before}, "
+                    f"cantidad nueva {quantity_after}."
                 )
+
                 continue
 
             ledger = InventoryLedger(
@@ -290,7 +373,11 @@ def create_inventory_adjustment(
                 warehouse_location_id=None,
                 article_id=article.id,
                 quantity_change=difference,
-                unit_cost=getattr(stock, "last_unit_cost", None),
+                unit_cost=getattr(
+                    stock,
+                    "last_unit_cost",
+                    None,
+                ),
                 total_cost=None,
                 reference_type="INVENTORY_ADJUSTMENT",
                 reference_id=adjustment.id,
@@ -318,13 +405,22 @@ def create_inventory_adjustment(
 
     except IntegrityError as exc:
         db.session.rollback()
+
         raise InventoryAdjustmentServiceError(
-            "No se pudo guardar el ajuste por un conflicto de integridad en la base de datos."
+            "No se pudo guardar el ajuste por un conflicto "
+            "de integridad en la base de datos."
         ) from exc
 
-    except Exception:
+    except InventoryAdjustmentServiceError:
         db.session.rollback()
         raise
+
+    except Exception as exc:
+        db.session.rollback()
+
+        raise InventoryAdjustmentServiceError(
+            f"No se pudo guardar el ajuste de inventario: {exc}"
+        ) from exc
 
 
 def get_adjustment_by_id(adjustment_id):
