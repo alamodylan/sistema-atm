@@ -25,6 +25,10 @@ from app.models.purchase_order import PurchaseOrder
 from app.models.purchase_order_line import PurchaseOrderLine
 from app.models.quotation_category import QuotationCategory
 from app.models.article_quotation_category import ArticleQuotationCategory
+from app.utils.quotation_category_excel import (
+    build_category_comparison_excel,
+    category_comparison_filename,
+)
 
 from flask import (
     Blueprint,
@@ -1235,16 +1239,64 @@ def export_category_comparison_excel(
     category_id: int,
 ):
     """
-    Temporalmente reutiliza el exportador actual.
+    Exporta el comparativo horizontal de una categoría específica.
 
-    Posteriormente será reemplazado por el Excel
-    tipo matriz editable.
+    El valor 0 representa las líneas sin categoría.
     """
+    purchase_request = PurchaseRequest.query.get_or_404(
+        request_id
+    )
+
+    try:
+        comparison_matrix = get_category_comparison_matrix(
+            purchase_request_id=request_id,
+            quotation_category_id=(
+                None
+                if category_id == 0
+                else category_id
+            ),
+        )
+
+        output = build_category_comparison_excel(
+            comparison_matrix=comparison_matrix,
+        )
+
+        download_name = category_comparison_filename(
+            purchase_request_number=purchase_request.number,
+            category_label=comparison_matrix.get(
+                "category_label"
+            ),
+        )
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=download_name,
+            mimetype=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+
+    except QuotationServiceError as exc:
+        flash(str(exc), "danger")
+
+    except Exception as exc:
+        db.session.rollback()
+        print(
+            "[EXPORT CATEGORY COMPARISON EXCEL ERROR] "
+            f"{exc}"
+        )
+        flash(
+            "No fue posible exportar el comparativo a Excel.",
+            "danger",
+        )
 
     return redirect(
         url_for(
-            "purchases.export_quotation_request_excel",
+            "purchases.quotation_category_comparison",
             request_id=request_id,
+            category_id=category_id,
         )
     )
 
@@ -1264,7 +1316,7 @@ def print_category_comparison(
 
     comparison_matrix = get_category_comparison_matrix(
         purchase_request_id=request_id,
-        category_id=category_id,
+        quotation_category_id=category_id,
     )
 
     return render_template(
