@@ -847,7 +847,51 @@ def import_equipment(rows: list[dict]) -> dict:
     updated = 0
     skipped = 0
 
-    valid_types = {"CHASIS", "CABEZAL", "OTRO", "MULA"}
+    # =====================================================
+    # CARGAR TIPOS DE EQUIPO ACTIVOS DESDE LA BASE DE DATOS
+    # =====================================================
+    equipment_type_rows = (
+        db.session.execute(
+            db.text(
+                """
+                SELECT
+                    id,
+                    code,
+                    name
+                FROM atm.equipment_types
+                WHERE is_active = TRUE
+                ORDER BY id
+                """
+            )
+        )
+        .mappings()
+        .all()
+    )
+
+    if not equipment_type_rows:
+        raise BulkImportError(
+            "No existen tipos de equipo activos en atm.equipment_types."
+        )
+
+    # Permite localizar el tipo tanto por código como por nombre.
+    #
+    # Ejemplos:
+    # PCK     -> PCK
+    # PICKUP  -> PCK
+    # SIDEPICK -> SIDEPICK
+    type_lookup = {}
+
+    for equipment_type_row in equipment_type_rows:
+        canonical_code = _clean(equipment_type_row["code"]).upper()
+        type_name = _clean(equipment_type_row["name"]).upper()
+
+        if not canonical_code:
+            continue
+
+        type_lookup[canonical_code] = canonical_code
+
+        if type_name:
+            type_lookup[type_name] = canonical_code
 
     normalized_rows = []
 
@@ -857,17 +901,25 @@ def import_equipment(rows: list[dict]) -> dict:
     for row in rows:
         try:
             code = _clean(row.get("codigo"))
-            equipment_type = _clean(row.get("tipo")).upper()
+            supplied_type = _clean(row.get("tipo")).upper()
             description = _clean(row.get("descripcion")) or None
             axle_count_raw = _clean(row.get("cantidad_ejes"))
             size_label = _clean(row.get("tamano")) or None
             is_active = _parse_bool(row.get("activo"))
 
-            if not code or not equipment_type:
+            # Código y tipo son obligatorios.
+            if not code or not supplied_type:
                 skipped += 1
                 continue
 
-            if equipment_type not in valid_types:
+            # Convierte el valor suministrado al código oficial.
+            #
+            # Por ejemplo:
+            # PICKUP -> PCK
+            # TOPLOADER -> TOPLOADER
+            equipment_type = type_lookup.get(supplied_type)
+
+            if not equipment_type:
                 skipped += 1
                 continue
 
@@ -876,7 +928,11 @@ def import_equipment(rows: list[dict]) -> dict:
             if axle_count_raw:
                 try:
                     axle_count = int(float(axle_count_raw))
-                except Exception:
+                except (TypeError, ValueError):
+                    skipped += 1
+                    continue
+
+                if axle_count < 0:
                     skipped += 1
                     continue
 
@@ -903,20 +959,31 @@ def import_equipment(rows: list[dict]) -> dict:
         }
 
     # =====================================================
-    # EVITAR CÓDIGOS DUPLICADOS DENTRO DEL EXCEL
-    # Si viene repetido, se queda con la última fila.
+    # CONTROLAR CÓDIGOS DUPLICADOS DENTRO DEL EXCEL
     # =====================================================
+    # Un código identifica un único equipo.
+    #
+    # Cuando el mismo código aparece varias veces, se conserva
+    # la última fila y las anteriores se contabilizan como omitidas.
     rows_by_code = {}
 
     for row in normalized_rows:
-        rows_by_code[row["code"]] = row
+        normalized_code = row["code"].upper()
+
+        if normalized_code in rows_by_code:
+            skipped += 1
+
+        rows_by_code[normalized_code] = row
 
     normalized_rows = list(rows_by_code.values())
 
     # =====================================================
     # CARGAR EQUIPOS EXISTENTES EN UNA SOLA CONSULTA
     # =====================================================
-    equipment_codes = {row["code"] for row in normalized_rows}
+    equipment_codes = {
+        row["code"]
+        for row in normalized_rows
+    }
 
     existing_equipment = (
         Equipment.query
@@ -929,44 +996,61 @@ def import_equipment(rows: list[dict]) -> dict:
         for equipment in existing_equipment
     }
 
+    # Comparación adicional sin distinguir mayúsculas/minúsculas.
+    equipment_map_upper = {
+        _clean(equipment.code).upper(): equipment
+        for equipment in existing_equipment
+    }
+
     # =====================================================
-    # CREAR / ACTUALIZAR SIN CONSULTAS POR FILA
+    # CREAR O ACTUALIZAR EQUIPOS
     # =====================================================
     to_create = []
 
-    for row in normalized_rows:
-        equipment = equipment_map.get(row["code"])
+    try:
+        for row in normalized_rows:
+            code = row["code"]
 
-        if equipment:
-            equipment.equipment_type = row["equipment_type"]
-            equipment.description = row["description"]
-            equipment.axle_count = row["axle_count"]
-            equipment.size_label = row["size_label"]
-            equipment.is_active = row["is_active"]
+            equipment = equipment_map.get(code)
 
-            updated += 1
+            if not equipment:
+                equipment = equipment_map_upper.get(code.upper())
 
-        else:
-            to_create.append(
-                Equipment(
-                    code=row["code"],
+            if equipment:
+                equipment.equipment_type = row["equipment_type"]
+                equipment.description = row["description"]
+                equipment.axle_count = row["axle_count"]
+                equipment.size_label = row["size_label"]
+                equipment.is_active = row["is_active"]
+
+                updated += 1
+
+            else:
+                new_equipment = Equipment(
+                    code=code,
                     equipment_type=row["equipment_type"],
                     description=row["description"],
                     axle_count=row["axle_count"],
                     size_label=row["size_label"],
                     is_active=row["is_active"],
                 )
-            )
 
-            created += 1
+                to_create.append(new_equipment)
+                created += 1
 
-    # =====================================================
-    # INSERTAR NUEVOS EN BLOQUE
-    # =====================================================
-    if to_create:
-        db.session.add_all(to_create)
+        # =================================================
+        # INSERTAR NUEVOS EQUIPOS EN BLOQUE
+        # =================================================
+        if to_create:
+            db.session.add_all(to_create)
 
-    db.session.commit()
+        db.session.commit()
+
+    except Exception as exc:
+        db.session.rollback()
+        raise BulkImportError(
+            f"Error al guardar la carga masiva de equipos: {exc}"
+        ) from exc
 
     return {
         "created": created,
