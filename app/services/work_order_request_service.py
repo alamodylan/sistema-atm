@@ -201,6 +201,147 @@ def cancel_request_line(
     return line
 
 
+def void_request_line(
+    *,
+    request_line_id: int,
+    reason: str,
+    performed_by_user_id: int,
+    commit: bool = True,
+) -> WorkOrderRequestLine:
+    """
+    Anula una línea de solicitud de material mientras todavía no haya sido
+    recibida por el mecánico ni haya generado afectación de inventario.
+
+    La línea no se elimina físicamente. Se conserva como CANCELADA junto con:
+    - motivo de anulación;
+    - usuario que anuló;
+    - fecha y hora de anulación.
+    """
+
+    line = WorkOrderRequestLine.query.get(request_line_id)
+
+    if not line:
+        raise WorkOrderRequestServiceError(
+            "La línea de solicitud no existe."
+        )
+
+    reason = (reason or "").strip()
+
+    if not reason:
+        raise WorkOrderRequestServiceError(
+            "Debe indicar el motivo de la anulación."
+        )
+
+    if len(reason) < 5:
+        raise WorkOrderRequestServiceError(
+            "El motivo de la anulación debe contener al menos 5 caracteres."
+        )
+
+    if line.line_status == "CANCELADA":
+        raise WorkOrderRequestServiceError(
+            "La línea ya se encuentra anulada."
+        )
+
+    if line.line_status == "PRESTADA":
+        raise WorkOrderRequestServiceError(
+            "La línea corresponde a una herramienta prestada y no puede anularse."
+        )
+
+    request_obj = line.work_order_request
+
+    if not request_obj:
+        raise WorkOrderRequestServiceError(
+            "La línea no tiene una solicitud asociada."
+        )
+
+    work_order = request_obj.work_order
+
+    if not work_order:
+        raise WorkOrderRequestServiceError(
+            "La solicitud no tiene una orden de trabajo asociada."
+        )
+
+    # Una WorkOrderLine significa que el mecánico ya escaneó y recibió
+    # el material. En ese momento ya se aplicó el rebajo de inventario.
+    existing_work_order_line = (
+        WorkOrderLine.query
+        .filter(
+            WorkOrderLine.request_line_id == line.id
+        )
+        .first()
+    )
+
+    if existing_work_order_line:
+        raise WorkOrderRequestServiceError(
+            "No se puede anular la línea porque el material ya fue "
+            "recibido por el mecánico y afectó el inventario."
+        )
+
+    # Las herramientas afectan inventario al registrarse el préstamo,
+    # antes del flujo normal de recepción de artículos.
+    existing_tool_loan = (
+        ToolLoan.query
+        .filter(
+            ToolLoan.request_line_id == line.id
+        )
+        .first()
+    )
+
+    if existing_tool_loan:
+        raise WorkOrderRequestServiceError(
+            "No se puede anular la línea porque ya generó un préstamo "
+            "de herramienta y afectó el inventario."
+        )
+
+    previous_status = line.line_status
+    previous_quantity_attended = Decimal(
+        str(line.quantity_attended or 0)
+    )
+
+    line.line_status = "CANCELADA"
+    line.cancel_reason = reason
+    line.cancelled_by_user_id = performed_by_user_id
+    line.cancelled_at = db.func.now()
+
+    _sync_request_status(request_obj)
+
+    db.session.flush()
+
+    log_action(
+        user_id=performed_by_user_id,
+        action="VOID_WORK_ORDER_REQUEST_LINE",
+        table_name="work_order_request_lines",
+        record_id=str(line.id),
+        details={
+            "work_order_id": work_order.id,
+            "work_order_number": work_order.number,
+            "request_id": request_obj.id,
+            "request_line_id": line.id,
+            "article_id": line.article_id,
+            "article_code": (
+                line.article.code
+                if line.article
+                else None
+            ),
+            "previous_status": previous_status,
+            "new_status": line.line_status,
+            "quantity_requested": str(
+                line.quantity_requested or 0
+            ),
+            "quantity_attended": str(
+                previous_quantity_attended
+            ),
+            "cancel_reason": reason,
+            "cancelled_by_user_id": performed_by_user_id,
+        },
+        commit=False,
+    )
+
+    if commit:
+        db.session.commit()
+
+    return line
+
 def reject_request_line_by_management(
     *,
     request_line_id: int,

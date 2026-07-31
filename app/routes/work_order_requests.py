@@ -27,6 +27,7 @@ from app.services.work_order_request_service import (
     send_request_to_warehouse,
     undo_manager_decision,
     update_request_line_requested_quantity,
+    void_request_line,
 )
 
 work_order_request_bp = Blueprint("work_order_requests", __name__)
@@ -143,6 +144,29 @@ def cancel_request_line_action(line_id: int):
 
     return redirect(request.referrer or "/")
 
+# =========================
+# ANULAR LÍNEA (OT)
+# =========================
+@work_order_request_bp.route("/request-lines/<int:line_id>/void", methods=["POST"])
+@login_required
+def void_request_line_action(line_id: int):
+    try:
+
+        reason = request.form.get("reason", "").strip()
+
+        void_request_line(
+            request_line_id=line_id,
+            reason=reason,
+            performed_by_user_id=current_user.id,
+            commit=True,
+        )
+
+        flash("Solicitud anulada correctamente.", "success")
+
+    except WorkOrderRequestServiceError as exc:
+        flash(str(exc), "danger")
+
+    return redirect(request.referrer or "/")
 
 # =========================
 # JEFATURA → APROBAR / AJUSTAR

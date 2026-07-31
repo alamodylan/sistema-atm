@@ -21,8 +21,16 @@ class WorkOrderRequestLine(db.Model):
         index=True,
     )
 
-    quantity_requested = db.Column(db.Numeric(14, 2), nullable=False)
-    quantity_attended = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+    quantity_requested = db.Column(
+        db.Numeric(14, 2),
+        nullable=False,
+    )
+
+    quantity_attended = db.Column(
+        db.Numeric(14, 2),
+        nullable=False,
+        default=0,
+    )
 
     line_status = db.Column(
         db.String(30),
@@ -31,7 +39,12 @@ class WorkOrderRequestLine(db.Model):
         index=True,
     )
     # Valores oficiales:
-    # SOLICITADA, ATENDIDA_PARCIAL, ENTREGADA, NO_ENTREGADA, CANCELADA, PRESTADA
+    # SOLICITADA
+    # ATENDIDA_PARCIAL
+    # ENTREGADA
+    # NO_ENTREGADA
+    # CANCELADA
+    # PRESTADA
 
     manager_review_status = db.Column(
         db.String(20),
@@ -39,8 +52,10 @@ class WorkOrderRequestLine(db.Model):
         default="PENDIENTE",
         index=True,
     )
-    # Valores propuestos:
-    # PENDIENTE, APROBADA, RECHAZADA
+    # Valores oficiales:
+    # PENDIENTE
+    # APROBADA
+    # RECHAZADA
 
     manager_reviewed_by_user_id = db.Column(
         db.BigInteger,
@@ -54,14 +69,49 @@ class WorkOrderRequestLine(db.Model):
         nullable=True,
     )
 
-    not_delivered_reason = db.Column(db.Text, nullable=True)
-    notes = db.Column(db.Text, nullable=True)
+    not_delivered_reason = db.Column(
+        db.Text,
+        nullable=True,
+    )
+
+    notes = db.Column(
+        db.Text,
+        nullable=True,
+    )
+
+    # =====================================================
+    # ANULACIÓN DE LÍNEA
+    # =====================================================
+
+    cancel_reason = db.Column(
+        db.Text,
+        nullable=True,
+    )
+
+    cancelled_by_user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "atm.users.id",
+            name="fk_work_order_request_lines_cancelled_by",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    cancelled_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
 
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
         server_default=db.func.now(),
     )
+
+    # =====================================================
+    # RELACIONES
+    # =====================================================
 
     work_order_request = db.relationship(
         "WorkOrderRequest",
@@ -78,6 +128,11 @@ class WorkOrderRequestLine(db.Model):
         foreign_keys=[manager_reviewed_by_user_id],
     )
 
+    cancelled_by_user = db.relationship(
+        "User",
+        foreign_keys=[cancelled_by_user_id],
+    )
+
     delivered_lines = db.relationship(
         "WorkOrderLine",
         back_populates="request_line",
@@ -87,5 +142,7 @@ class WorkOrderRequestLine(db.Model):
     def __repr__(self) -> str:
         return (
             f"<WorkOrderRequestLine id={self.id} "
-            f"article={self.article_id} requested={self.quantity_requested}>"
+            f"article={self.article_id} "
+            f"requested={self.quantity_requested} "
+            f"status={self.line_status}>"
         )
