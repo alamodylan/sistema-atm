@@ -30,12 +30,17 @@ def index():
 
     warehouse_id = request.args.get("warehouse_id", type=int)
 
+    # Paginación
+    page = request.args.get("page", default=1, type=int)
+    per_page = 100
+
     warehouses = get_adjustable_warehouses_for_site(site_id)
 
     adjustments = list_adjustments(
         site_id=site_id,
         warehouse_id=warehouse_id,
-        limit=100,
+        page=page,
+        per_page=per_page,
     )
 
     return render_template(
@@ -43,6 +48,8 @@ def index():
         warehouses=warehouses,
         adjustments=adjustments,
         selected_warehouse_id=warehouse_id,
+        page=page,
+        per_page=per_page,
     )
 
 

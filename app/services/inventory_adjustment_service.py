@@ -432,18 +432,42 @@ def get_adjustment_by_id(adjustment_id):
     return adjustment
 
 
-def list_adjustments(site_id=None, warehouse_id=None, limit=100):
+def list_adjustments(
+    site_id=None,
+    warehouse_id=None,
+    search=None,
+    page=1,
+    per_page=100,
+):
     query = InventoryAdjustment.query
 
     if site_id:
-        query = query.filter(InventoryAdjustment.site_id == site_id)
+        query = query.filter(
+            InventoryAdjustment.site_id == site_id
+        )
 
     if warehouse_id:
-        query = query.filter(InventoryAdjustment.warehouse_id == warehouse_id)
+        query = query.filter(
+            InventoryAdjustment.warehouse_id == warehouse_id
+        )
+
+    if search:
+        search = str(search).strip()
+
+        if search:
+            query = query.filter(
+                InventoryAdjustment.notes.ilike(f"%{search}%")
+            )
 
     return (
         query
-        .order_by(InventoryAdjustment.created_at.desc())
-        .limit(limit)
-        .all()
+        .order_by(
+            InventoryAdjustment.created_at.desc(),
+            InventoryAdjustment.id.desc(),
+        )
+        .paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False,
+        )
     )

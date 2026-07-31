@@ -5,45 +5,146 @@
 <div class="container-fluid py-4">
 
     <!-- HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
         <div>
             <h4 class="fw-bold mb-1">Ajustes de Inventario</h4>
-            <p class="text-muted mb-0">Historial de ajustes manuales por bodega</p>
+            <p class="text-muted mb-0">
+                Historial completo de ajustes manuales por bodega
+            </p>
         </div>
 
-        <a href="{{ url_for('inventory_adjustments.new') }}" class="btn btn-primary">
+        <a
+            href="{{ url_for('inventory_adjustments.new') }}"
+            class="btn btn-primary"
+        >
             + Nuevo Ajuste
         </a>
     </div>
 
-    <!-- FILTRO -->
+    <!-- FILTROS -->
     <div class="card shadow-sm mb-4">
         <div class="card-body">
-            <form method="GET">
-                <div class="row align-items-end">
 
-                    <div class="col-md-4">
+            <form method="GET">
+                <div class="row g-3 align-items-end">
+
+                    <div class="col-12 col-md-3">
                         <label class="form-label">Bodega</label>
-                        <select name="warehouse_id" class="form-select">
+
+                        <select
+                            name="warehouse_id"
+                            class="form-select"
+                        >
                             <option value="">Todas</option>
+
                             {% for w in warehouses %}
-                                <option value="{{ w.id }}"
-                                    {% if selected_warehouse_id == w.id %}selected{% endif %}>
+                                <option
+                                    value="{{ w.id }}"
+                                    {% if selected_warehouse_id == w.id %}
+                                        selected
+                                    {% endif %}
+                                >
                                     {{ w.name }}
                                 </option>
                             {% endfor %}
                         </select>
                     </div>
 
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-outline-primary w-100">
-                            Filtrar
+                    <div class="col-12 col-md-5">
+                        <label class="form-label">Buscar en notas</label>
+
+                        <input
+                            type="text"
+                            name="search"
+                            class="form-control"
+                            value="{{ search or '' }}"
+                            placeholder="Ej. conteo, daño, SAP, diferencia..."
+                            autocomplete="off"
+                        >
+                    </div>
+
+                    <div class="col-12 col-md-2">
+                        <button
+                            type="submit"
+                            class="btn btn-outline-primary w-100"
+                        >
+                            Buscar
                         </button>
+                    </div>
+
+                    <div class="col-12 col-md-2">
+                        <a
+                            href="{{ url_for('inventory_adjustments.index') }}"
+                            class="btn btn-outline-secondary w-100"
+                        >
+                            Limpiar
+                        </a>
                     </div>
 
                 </div>
             </form>
+
         </div>
+    </div>
+
+    <!-- FILTROS ACTIVOS -->
+    {% if selected_warehouse_id or search %}
+        <div class="d-flex flex-wrap gap-2 mb-3">
+
+            {% if selected_warehouse_id %}
+                {% for w in warehouses %}
+                    {% if w.id == selected_warehouse_id %}
+                        <span class="badge text-bg-light border">
+                            Bodega: {{ w.name }}
+                        </span>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+
+            {% if search %}
+                <span class="badge text-bg-light border">
+                    Nota contiene: "{{ search }}"
+                </span>
+            {% endif %}
+
+        </div>
+    {% endif %}
+
+    <!-- RESUMEN -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+
+        <div class="text-muted small">
+            {% if adjustments.total %}
+                Mostrando
+                <strong>
+                    {{ ((adjustments.page - 1) * adjustments.per_page) + 1 }}
+                </strong>
+                a
+                <strong>
+                    {{
+                        [
+                            adjustments.page * adjustments.per_page,
+                            adjustments.total
+                        ] | min
+                    }}
+                </strong>
+                de
+                <strong>{{ adjustments.total }}</strong>
+                ajustes
+            {% else %}
+                No se encontraron ajustes
+            {% endif %}
+        </div>
+
+        {% if adjustments.pages > 1 %}
+            <div class="text-muted small">
+                Página
+                <strong>{{ adjustments.page }}</strong>
+                de
+                <strong>{{ adjustments.pages }}</strong>
+            </div>
+        {% endif %}
+
     </div>
 
     <!-- TABLA -->
@@ -66,11 +167,12 @@
 
                     <tbody>
 
-                        {% if adjustments %}
-                            {% for adj in adjustments %}
+                        {% if adjustments.items %}
+
+                            {% for adj in adjustments.items %}
                                 <tr>
 
-                                    <td class="fw-semibold">
+                                    <td class="fw-semibold text-nowrap">
                                         {{ adj.number }}
                                     </td>
 
@@ -82,29 +184,50 @@
                                         {{ adj.created_by_user.name if adj.created_by_user else '-' }}
                                     </td>
 
-                                    <td>
+                                    <td class="text-nowrap">
                                         {{ adj.created_at|cr_datetime }}
                                     </td>
 
-                                    <td>
-                                        {{ adj.notes or '-' }}
+                                    <td style="min-width: 260px;">
+                                        {% if adj.notes %}
+                                            <div style="white-space: normal;">
+                                                {{ adj.notes }}
+                                            </div>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
                                     </td>
 
                                     <td class="text-end">
-                                        <a href="{{ url_for('inventory_adjustments.show', adjustment_id=adj.id) }}"
-                                           class="btn btn-sm btn-outline-primary">
+                                        <a
+                                            href="{{ url_for(
+                                                'inventory_adjustments.show',
+                                                adjustment_id=adj.id
+                                            ) }}"
+                                            class="btn btn-sm btn-outline-primary"
+                                        >
                                             Ver
                                         </a>
                                     </td>
 
                                 </tr>
                             {% endfor %}
+
                         {% else %}
+
                             <tr>
-                                <td colspan="6" class="text-center py-4 text-muted">
-                                    No hay ajustes registrados
+                                <td
+                                    colspan="6"
+                                    class="text-center py-5 text-muted"
+                                >
+                                    {% if search or selected_warehouse_id %}
+                                        No se encontraron ajustes con los filtros aplicados
+                                    {% else %}
+                                        No hay ajustes registrados
+                                    {% endif %}
                                 </td>
                             </tr>
+
                         {% endif %}
 
                     </tbody>
@@ -114,6 +237,132 @@
 
         </div>
     </div>
+
+    <!-- PAGINACIÓN -->
+    {% if adjustments.pages > 1 %}
+
+        <nav
+            class="mt-4"
+            aria-label="Paginación de ajustes de inventario"
+        >
+            <ul class="pagination justify-content-center flex-wrap">
+
+                <!-- PRIMERA PÁGINA -->
+                <li class="page-item {% if not adjustments.has_prev %}disabled{% endif %}">
+                    {% if adjustments.has_prev %}
+                        <a
+                            class="page-link"
+                            href="{{ url_for(
+                                'inventory_adjustments.index',
+                                page=1,
+                                warehouse_id=selected_warehouse_id,
+                                search=search
+                            ) }}"
+                            aria-label="Primera página"
+                        >
+                            «
+                        </a>
+                    {% else %}
+                        <span class="page-link">«</span>
+                    {% endif %}
+                </li>
+
+                <!-- ANTERIOR -->
+                <li class="page-item {% if not adjustments.has_prev %}disabled{% endif %}">
+                    {% if adjustments.has_prev %}
+                        <a
+                            class="page-link"
+                            href="{{ url_for(
+                                'inventory_adjustments.index',
+                                page=adjustments.prev_num,
+                                warehouse_id=selected_warehouse_id,
+                                search=search
+                            ) }}"
+                        >
+                            Anterior
+                        </a>
+                    {% else %}
+                        <span class="page-link">Anterior</span>
+                    {% endif %}
+                </li>
+
+                <!-- NÚMEROS DE PÁGINA -->
+                {% for page_number in adjustments.iter_pages(
+                    left_edge=1,
+                    right_edge=1,
+                    left_current=2,
+                    right_current=2
+                ) %}
+
+                    {% if page_number %}
+
+                        <li class="page-item {% if page_number == adjustments.page %}active{% endif %}">
+                            <a
+                                class="page-link"
+                                href="{{ url_for(
+                                    'inventory_adjustments.index',
+                                    page=page_number,
+                                    warehouse_id=selected_warehouse_id,
+                                    search=search
+                                ) }}"
+                            >
+                                {{ page_number }}
+                            </a>
+                        </li>
+
+                    {% else %}
+
+                        <li class="page-item disabled">
+                            <span class="page-link">…</span>
+                        </li>
+
+                    {% endif %}
+
+                {% endfor %}
+
+                <!-- SIGUIENTE -->
+                <li class="page-item {% if not adjustments.has_next %}disabled{% endif %}">
+                    {% if adjustments.has_next %}
+                        <a
+                            class="page-link"
+                            href="{{ url_for(
+                                'inventory_adjustments.index',
+                                page=adjustments.next_num,
+                                warehouse_id=selected_warehouse_id,
+                                search=search
+                            ) }}"
+                        >
+                            Siguiente
+                        </a>
+                    {% else %}
+                        <span class="page-link">Siguiente</span>
+                    {% endif %}
+                </li>
+
+                <!-- ÚLTIMA PÁGINA -->
+                <li class="page-item {% if not adjustments.has_next %}disabled{% endif %}">
+                    {% if adjustments.has_next %}
+                        <a
+                            class="page-link"
+                            href="{{ url_for(
+                                'inventory_adjustments.index',
+                                page=adjustments.pages,
+                                warehouse_id=selected_warehouse_id,
+                                search=search
+                            ) }}"
+                            aria-label="Última página"
+                        >
+                            »
+                        </a>
+                    {% else %}
+                        <span class="page-link">»</span>
+                    {% endif %}
+                </li>
+
+            </ul>
+        </nav>
+
+    {% endif %}
 
 </div>
 
