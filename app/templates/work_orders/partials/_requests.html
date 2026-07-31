@@ -503,9 +503,14 @@
                                     {% endif %}
 
                                     <!-- ===================== ANULAR LÍNEA ===================== -->
+                                    {% set current_role_code = (current_user.role_code or '')|upper %}
+
                                     {% set can_void_request_line = (
-                                        current_user.has_permission("taller")
-                                        or current_user.has_permission("admin")
+                                        current_role_code in [
+                                            'ADMIN',
+                                            'TALLER',
+                                            'SUPER_USUARIO'
+                                        ]
                                     ) %}
 
                                     {% if
@@ -586,9 +591,14 @@
                 and modal_article_code_number <= 19999
             ) %}
 
+            {% set current_role_code = (current_user.role_code or '')|upper %}
+
             {% set can_void_request_line = (
-                current_user.has_permission("taller")
-                or current_user.has_permission("admin")
+                current_role_code in [
+                    'ADMIN',
+                    'TALLER',
+                    'SUPER_USUARIO'
+                ]
             ) %}
 
             {% if

@@ -145,14 +145,36 @@ def cancel_request_line_action(line_id: int):
     return redirect(request.referrer or "/")
 
 # =========================
-# ANULAR LÍNEA (OT)
+# ANULAR LÍNEA DE SOLICITUD
 # =========================
-@work_order_request_bp.route("/request-lines/<int:line_id>/void", methods=["POST"])
+@work_order_request_bp.route(
+    "/request-lines/<int:line_id>/void",
+    methods=["POST"],
+)
 @login_required
 def void_request_line_action(line_id: int):
     try:
+        allowed_role_codes = {
+            "ADMIN",
+            "TALLER",
+            "SUPER_USUARIO",
+        }
 
-        reason = request.form.get("reason", "").strip()
+        current_role_code = str(
+            current_user.role_code or ""
+        ).strip().upper()
+
+        if current_role_code not in allowed_role_codes:
+            flash(
+                "Solo los usuarios Administrador y Taller "
+                "pueden anular líneas de solicitudes.",
+                "danger",
+            )
+            return redirect(request.referrer or "/")
+
+        reason = (
+            request.form.get("reason") or ""
+        ).strip()
 
         void_request_line(
             request_line_id=line_id,
@@ -161,13 +183,29 @@ def void_request_line_action(line_id: int):
             commit=True,
         )
 
-        flash("Solicitud anulada correctamente.", "success")
+        flash(
+            "Línea de solicitud anulada correctamente.",
+            "success",
+        )
 
     except WorkOrderRequestServiceError as exc:
         flash(str(exc), "danger")
 
-    return redirect(request.referrer or "/")
+    except Exception as exc:
+        db.session.rollback()
 
+        print(
+            "[VOID REQUEST LINE ERROR] "
+            f"line_id={line_id} "
+            f"error={exc}"
+        )
+
+        flash(
+            "No fue posible anular la línea de solicitud.",
+            "danger",
+        )
+
+    return redirect(request.referrer or "/")
 # =========================
 # JEFATURA → APROBAR / AJUSTAR
 # =========================
