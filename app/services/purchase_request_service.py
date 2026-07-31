@@ -201,6 +201,66 @@ def create_purchase_request(
     return purchase_request
 
 
+def add_purchase_request_lines(
+    *,
+    request_id: int,
+    requested_by_user_id: int,
+    lines: list[PurchaseRequestLinePayload],
+) -> PurchaseRequest:
+
+    purchase_request = PurchaseRequest.query.get(request_id)
+
+    if not purchase_request:
+        raise PurchaseRequestServiceError(
+            "La solicitud indicada no existe."
+        )
+
+    if purchase_request.status != "BORRADOR":
+        raise PurchaseRequestServiceError(
+            "Solo es posible agregar líneas a solicitudes en BORRADOR."
+        )
+
+    if not lines:
+        raise PurchaseRequestServiceError(
+            "Debe indicar al menos una línea."
+        )
+
+    for line in lines:
+
+        _validate_line_payload(line)
+
+        quantity = _normalize_decimal(
+            line.quantity_requested
+        )
+
+        if line.pending_article_id:
+
+            _ensure_pending_article_has_real_article(
+                pending_article_id=line.pending_article_id,
+                requested_by_user_id=requested_by_user_id,
+                fallback_unit_id=line.unit_id,
+            )
+
+        purchase_request_line = PurchaseRequestLine(
+            purchase_request_id=purchase_request.id,
+            article_id=line.article_id,
+            pending_article_id=line.pending_article_id,
+            quantity_requested=quantity,
+            unit_id=line.unit_id,
+            line_notes=(line.line_notes or "").strip() or None,
+            is_urgent=bool(line.is_urgent),
+            line_status="ACTIVA",
+        )
+
+        db.session.add(
+            purchase_request_line
+        )
+
+    db.session.commit()
+
+    return purchase_request
+
+
 def get_purchase_request_or_404(request_id: int) -> PurchaseRequest:
 
     purchase_request = (

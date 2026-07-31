@@ -25,6 +25,7 @@ from app.models.purchase_order import PurchaseOrder
 from app.models.purchase_order_line import PurchaseOrderLine
 from app.models.quotation_category import QuotationCategory
 from app.models.article_quotation_category import ArticleQuotationCategory
+from decimal import Decimal
 from app.utils.quotation_category_excel import (
     build_category_comparison_excel,
     category_comparison_filename,
@@ -85,6 +86,7 @@ from app.services.purchase_request_service import (
     list_purchase_requests_for_manager_review,
     update_purchase_request_line_by_manager,
     approve_purchase_request_for_quotation,
+    add_purchase_request_lines,
 )
 from app.services.quotation_service import (
     QuotationLinePayload,
@@ -338,6 +340,172 @@ def create_request():
         search=search,
     )
 
+@purchases_bp.route(
+    "/requests/<int:request_id>/add-lines",
+    methods=["POST"],
+)
+@login_required
+def add_request_lines(request_id: int):
+    try:
+        article_ids = request.form.getlist(
+            "line_article_id[]"
+        )
+
+        pending_article_ids = request.form.getlist(
+            "line_pending_article_id[]"
+        )
+
+        quantities = request.form.getlist(
+            "line_quantity[]"
+        )
+
+        unit_ids = request.form.getlist(
+            "line_unit_id[]"
+        )
+
+        line_notes_list = request.form.getlist(
+            "line_notes[]"
+        )
+
+        urgent_flags = set(
+            request.form.getlist(
+                "line_is_urgent[]"
+            )
+        )
+
+        total_lines = max(
+            [
+                len(article_ids),
+                len(pending_article_ids),
+                len(quantities),
+                len(unit_ids),
+                len(line_notes_list),
+            ],
+            default=0,
+        )
+
+        lines: list[PurchaseRequestLinePayload] = []
+
+        for index in range(total_lines):
+            article_id_raw = (
+                article_ids[index].strip()
+                if index < len(article_ids)
+                else ""
+            )
+
+            pending_article_id_raw = (
+                pending_article_ids[index].strip()
+                if index < len(pending_article_ids)
+                else ""
+            )
+
+            quantity_raw = (
+                quantities[index].strip()
+                if index < len(quantities)
+                else ""
+            )
+
+            unit_id_raw = (
+                unit_ids[index].strip()
+                if index < len(unit_ids)
+                else ""
+            )
+
+            line_notes = (
+                line_notes_list[index].strip()
+                if index < len(line_notes_list)
+                else ""
+            )
+
+            if not any(
+                [
+                    article_id_raw,
+                    pending_article_id_raw,
+                    quantity_raw,
+                    unit_id_raw,
+                    line_notes,
+                ]
+            ):
+                continue
+
+            if not article_id_raw and not pending_article_id_raw:
+                raise PurchaseRequestServiceError(
+                    f"Debe seleccionar un artículo en la línea {index + 1}."
+                )
+
+            if not quantity_raw:
+                raise PurchaseRequestServiceError(
+                    f"Debe indicar la cantidad en la línea {index + 1}."
+                )
+
+            if not unit_id_raw:
+                raise PurchaseRequestServiceError(
+                    f"Debe seleccionar la unidad en la línea {index + 1}."
+                )
+
+            try:
+                quantity = Decimal(quantity_raw)
+
+            except (InvalidOperation, TypeError, ValueError) as exc:
+                raise PurchaseRequestServiceError(
+                    f"La cantidad de la línea {index + 1} no es válida."
+                ) from exc
+
+            lines.append(
+                PurchaseRequestLinePayload(
+                    article_id=(
+                        int(article_id_raw)
+                        if article_id_raw
+                        else None
+                    ),
+                    pending_article_id=(
+                        int(pending_article_id_raw)
+                        if pending_article_id_raw
+                        else None
+                    ),
+                    quantity_requested=quantity,
+                    unit_id=int(unit_id_raw),
+                    line_notes=line_notes or None,
+                    is_urgent=str(index) in urgent_flags,
+                )
+            )
+
+        add_purchase_request_lines(
+            request_id=request_id,
+            requested_by_user_id=current_user.id,
+            lines=lines,
+        )
+
+        flash(
+            "Artículo agregado correctamente a la solicitud.",
+            "success",
+        )
+
+    except PurchaseRequestServiceError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[ADD PURCHASE REQUEST LINES ERROR] "
+            f"request_id={request_id} "
+            f"error={exc}"
+        )
+
+        flash(
+            "Ocurrió un error al agregar el artículo a la solicitud.",
+            "danger",
+        )
+
+    return redirect(
+        url_for(
+            "purchases.request_detail",
+            request_id=request_id,
+        )
+    )
+
 @purchases_bp.route("/requests/articles/search")
 @login_required
 def search_request_articles():
@@ -405,14 +573,28 @@ def search_request_articles():
         db.session.rollback()
         return {"items": []}, 500
 
-@purchases_bp.route("/requests/<int:request_id>")
+@purchases_bp.route(
+    "/requests/<int:request_id>",
+    methods=["GET"],
+)
 @login_required
 def request_detail(request_id: int):
-    purchase_request = get_purchase_request_or_404(request_id)
+    purchase_request = get_purchase_request_or_404(
+        request_id
+    )
+
+    units = (
+        Unit.query
+        .order_by(
+            Unit.id.asc()
+        )
+        .all()
+    )
 
     return render_template(
         "purchases/requests/detail.html",
         purchase_request=purchase_request,
+        units=units,
     )
 @purchases_bp.route("/requests/<int:request_id>/send", methods=["POST"])
 @login_required
