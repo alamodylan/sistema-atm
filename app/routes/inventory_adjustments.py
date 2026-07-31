@@ -28,10 +28,27 @@ def index():
         flash("Debe seleccionar un predio activo.", "warning")
         return redirect(url_for("dashboard.index"))
 
-    warehouse_id = request.args.get("warehouse_id", type=int)
+    warehouse_id = request.args.get(
+        "warehouse_id",
+        default=None,
+        type=int,
+    )
 
-    # Paginación
-    page = request.args.get("page", default=1, type=int)
+    search = request.args.get(
+        "search",
+        default="",
+        type=str,
+    ).strip()
+
+    page = request.args.get(
+        "page",
+        default=1,
+        type=int,
+    )
+
+    if not page or page < 1:
+        page = 1
+
     per_page = 100
 
     warehouses = get_adjustable_warehouses_for_site(site_id)
@@ -39,6 +56,7 @@ def index():
     adjustments = list_adjustments(
         site_id=site_id,
         warehouse_id=warehouse_id,
+        search=search,
         page=page,
         per_page=per_page,
     )
@@ -48,6 +66,7 @@ def index():
         warehouses=warehouses,
         adjustments=adjustments,
         selected_warehouse_id=warehouse_id,
+        search=search,
         page=page,
         per_page=per_page,
     )

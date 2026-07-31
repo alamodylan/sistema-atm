@@ -451,13 +451,14 @@ def list_adjustments(
             InventoryAdjustment.warehouse_id == warehouse_id
         )
 
-    if search:
-        search = str(search).strip()
+    search = str(search or "").strip()
 
-        if search:
-            query = query.filter(
-                InventoryAdjustment.notes.ilike(f"%{search}%")
+    if search:
+        query = query.filter(
+            InventoryAdjustment.notes.ilike(
+                f"%{search}%"
             )
+        )
 
     return (
         query
