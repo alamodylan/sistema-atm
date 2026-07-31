@@ -13,9 +13,27 @@
                     </form>
                 {% endif %}
 
-                {% if work_order.status == "FINALIZADA" %}
-                    <form method="POST" action="{{ url_for('work_orders.close_work_order_action', work_order_id=work_order.id) }}">
-                        <button type="submit" class="btn btn-outline-dark">
+                {% set current_role_code = (current_user.role_code or '')|upper %}
+
+                {% if
+                    work_order.status == "FINALIZADA"
+                    and current_role_code in [
+                        "TALLER",
+                        "ADMIN",
+                        "SUPER_USUARIO"
+                    ]
+                %}
+                    <form
+                        method="POST"
+                        action="{{ url_for(
+                            'work_orders.close_work_order_action',
+                            work_order_id=work_order.id
+                        ) }}"
+                    >
+                        <button
+                            type="submit"
+                            class="btn btn-outline-dark"
+                        >
                             Cerrar OT
                         </button>
                     </form>

@@ -199,145 +199,702 @@ def list_requests_partial():
         ), 500
 
 
-@purchases_bp.route("/requests/create", methods=["GET", "POST"])
+@purchases_bp.route(
+    "/requests/create",
+    methods=["GET", "POST"],
+)
 @login_required
 def create_request():
-    search = (request.args.get("search") or "").strip()
+    search = (
+        request.args.get("search")
+        or ""
+    ).strip()
 
-    # IMPORTANTE:
-    # Ya no cargamos artículos al abrir la pantalla.
-    # Los artículos se buscan por AJAX en:
-    # /requests/articles/search
     articles = []
 
-    units = Unit.query.order_by(Unit.id.asc()).all()
-    sites = Site.query.filter_by(is_active=True).order_by(Site.name.asc()).all()
-    warehouses = Warehouse.query.filter_by(is_active=True).order_by(Warehouse.name.asc()).all()
+    units = (
+        Unit.query
+        .order_by(Unit.id.asc())
+        .all()
+    )
 
-    if request.method == "POST":
-        priority = (request.form.get("priority") or "NORMAL").strip()
-        notes = request.form.get("notes")
+    sites = (
+        Site.query
+        .filter_by(is_active=True)
+        .order_by(Site.name.asc())
+        .all()
+    )
 
-        site_id = _to_int(request.form.get("site_id"))
-        warehouse_id = _to_int(request.form.get("warehouse_id"))
+    warehouses = (
+        Warehouse.query
+        .filter_by(is_active=True)
+        .order_by(Warehouse.name.asc())
+        .all()
+    )
 
-        article_ids = request.form.getlist("line_article_id[]")
-        pending_article_ids = request.form.getlist("line_pending_article_id[]")
-        manual_names = request.form.getlist("line_manual_name[]")
-        quantities = request.form.getlist("line_quantity[]")
-        unit_ids = request.form.getlist("line_unit_id[]")
-        line_notes_list = request.form.getlist("line_notes[]")
-        urgent_flags = request.form.getlist("line_is_urgent[]")
+    # Valores usados para reconstruir el formulario.
+    submitted_lines = [
+        {
+            "article_id": "",
+            "article_search": "",
+            "pending_article_id": "",
+            "manual_name": "",
+            "quantity": "",
+            "unit_id": "",
+            "notes": "",
+            "is_urgent": False,
+        }
+    ]
 
-        max_len = max(
-            [
-                len(article_ids),
-                len(pending_article_ids),
-                len(manual_names),
-                len(quantities),
-                len(unit_ids),
-                len(line_notes_list),
-            ],
-            default=0,
+    line_errors: dict[int, list[str]] = {}
+
+    submitted_header = {
+        "priority": "NORMAL",
+        "site_id": "",
+        "warehouse_id": "",
+        "notes": "",
+    }
+
+    if request.method == "GET":
+        return render_template(
+            "purchases/requests/create.html",
+            articles=articles,
+            units=units,
+            sites=sites,
+            warehouses=warehouses,
+            search=search,
+            submitted_lines=submitted_lines,
+            line_errors=line_errors,
+            submitted_header=submitted_header,
         )
 
-        lines: list[PurchaseRequestLinePayload] = []
+    # =====================================================
+    # 1. RECIBIR ENCABEZADO
+    # =====================================================
 
-        for index in range(max_len):
-            article_id_raw = article_ids[index].strip() if index < len(article_ids) else ""
-            pending_article_id_raw = pending_article_ids[index].strip() if index < len(pending_article_ids) else ""
-            manual_name_raw = manual_names[index].strip() if index < len(manual_names) else ""
-            quantity_raw = quantities[index].strip() if index < len(quantities) else ""
-            unit_id_raw = unit_ids[index].strip() if index < len(unit_ids) else ""
-            line_notes = line_notes_list[index].strip() if index < len(line_notes_list) else None
+    priority = (
+        request.form.get("priority")
+        or "NORMAL"
+    ).strip().upper()
 
-            if not any([article_id_raw, pending_article_id_raw, manual_name_raw, quantity_raw, unit_id_raw, line_notes]):
-                continue
+    notes = (
+        request.form.get("notes")
+        or ""
+    ).strip()
 
+    site_id_raw = (
+        request.form.get("site_id")
+        or ""
+    ).strip()
+
+    warehouse_id_raw = (
+        request.form.get("warehouse_id")
+        or ""
+    ).strip()
+
+    submitted_header = {
+        "priority": priority,
+        "site_id": site_id_raw,
+        "warehouse_id": warehouse_id_raw,
+        "notes": notes,
+    }
+
+    # =====================================================
+    # 2. RECIBIR LÍNEAS SIN GUARDAR NADA TODAVÍA
+    # =====================================================
+
+    article_ids = request.form.getlist(
+        "line_article_id[]"
+    )
+
+    article_searches = request.form.getlist(
+        "line_article_search[]"
+    )
+
+    pending_article_ids = request.form.getlist(
+        "line_pending_article_id[]"
+    )
+
+    manual_names = request.form.getlist(
+        "line_manual_name[]"
+    )
+
+    quantities = request.form.getlist(
+        "line_quantity[]"
+    )
+
+    unit_ids = request.form.getlist(
+        "line_unit_id[]"
+    )
+
+    line_notes_list = request.form.getlist(
+        "line_notes[]"
+    )
+
+    urgent_flags = set(
+        request.form.getlist(
+            "line_is_urgent[]"
+        )
+    )
+
+    max_len = max(
+        [
+            len(article_ids),
+            len(article_searches),
+            len(pending_article_ids),
+            len(manual_names),
+            len(quantities),
+            len(unit_ids),
+            len(line_notes_list),
+        ],
+        default=0,
+    )
+
+    submitted_lines = []
+
+    for index in range(max_len):
+        article_id_raw = (
+            article_ids[index].strip()
+            if index < len(article_ids)
+            else ""
+        )
+
+        article_search_raw = (
+            article_searches[index].strip()
+            if index < len(article_searches)
+            else ""
+        )
+
+        pending_article_id_raw = (
+            pending_article_ids[index].strip()
+            if index < len(pending_article_ids)
+            else ""
+        )
+
+        manual_name_raw = (
+            manual_names[index].strip()
+            if index < len(manual_names)
+            else ""
+        )
+
+        quantity_raw = (
+            quantities[index].strip()
+            if index < len(quantities)
+            else ""
+        )
+
+        unit_id_raw = (
+            unit_ids[index].strip()
+            if index < len(unit_ids)
+            else ""
+        )
+
+        line_notes = (
+            line_notes_list[index].strip()
+            if index < len(line_notes_list)
+            else ""
+        )
+
+        row = {
+            "article_id": article_id_raw,
+            "article_search": article_search_raw,
+            "pending_article_id": pending_article_id_raw,
+            "manual_name": manual_name_raw,
+            "quantity": quantity_raw,
+            "unit_id": unit_id_raw,
+            "notes": line_notes,
+            "is_urgent": str(index) in urgent_flags,
+        }
+
+        # Ignorar solamente filas completamente vacías.
+        if not any(
+            [
+                article_id_raw,
+                article_search_raw,
+                pending_article_id_raw,
+                manual_name_raw,
+                quantity_raw,
+                unit_id_raw,
+                line_notes,
+            ]
+        ):
+            continue
+
+        submitted_lines.append(row)
+
+    if not submitted_lines:
+        submitted_lines = [
+            {
+                "article_id": "",
+                "article_search": "",
+                "pending_article_id": "",
+                "manual_name": "",
+                "quantity": "",
+                "unit_id": "",
+                "notes": "",
+                "is_urgent": False,
+            }
+        ]
+
+        line_errors[0] = [
+            "Debe agregar al menos una línea."
+        ]
+
+    # =====================================================
+    # 3. VALIDAR ENCABEZADO
+    # =====================================================
+
+    valid_priorities = {
+        "NORMAL",
+        "URGENTE",
+        "CRITICA",
+    }
+
+    header_errors = []
+
+    if priority not in valid_priorities:
+        header_errors.append(
+            "La prioridad seleccionada no es válida."
+        )
+
+    try:
+        site_id = (
+            int(site_id_raw)
+            if site_id_raw
+            else None
+        )
+    except ValueError:
+        site_id = None
+        header_errors.append(
+            "El predio seleccionado no es válido."
+        )
+
+    try:
+        warehouse_id = (
+            int(warehouse_id_raw)
+            if warehouse_id_raw
+            else None
+        )
+    except ValueError:
+        warehouse_id = None
+        header_errors.append(
+            "La bodega seleccionada no es válida."
+        )
+
+    # =====================================================
+    # 4. VALIDAR TODAS LAS LÍNEAS EN MEMORIA
+    # =====================================================
+
+    requested_article_ids: set[int] = set()
+    requested_pending_ids: set[int] = set()
+    requested_unit_ids: set[int] = set()
+
+    for index, row in enumerate(submitted_lines):
+        errors = []
+
+        article_id_raw = row["article_id"]
+        pending_article_id_raw = row[
+            "pending_article_id"
+        ]
+        manual_name_raw = row["manual_name"]
+        quantity_raw = row["quantity"]
+        unit_id_raw = row["unit_id"]
+
+        selected_sources = sum(
+            [
+                bool(article_id_raw),
+                bool(pending_article_id_raw),
+                bool(manual_name_raw),
+            ]
+        )
+
+        if selected_sources == 0:
+            errors.append(
+                "Debe seleccionar un artículo existente "
+                "o escribir un artículo manual."
+            )
+
+        if selected_sources > 1:
+            errors.append(
+                "No puede seleccionar un artículo existente "
+                "y escribir uno manual al mismo tiempo."
+            )
+
+        if article_id_raw:
             try:
-                quantity_value = Decimal(quantity_raw)
-            except (InvalidOperation, TypeError):
-                flash(f"La cantidad de la línea {index + 1} no es válida.", "danger")
-                return render_template(
-                    "purchases/requests/create.html",
-                    articles=articles,
-                    units=units,
-                    sites=sites,
-                    warehouses=warehouses,
-                    search=search,
+                article_id = int(article_id_raw)
+                requested_article_ids.add(article_id)
+            except ValueError:
+                errors.append(
+                    "El artículo seleccionado no es válido."
                 )
 
-            article_id: int | None = None
-            pending_article_id: int | None = None
+        if pending_article_id_raw:
+            try:
+                pending_id = int(
+                    pending_article_id_raw
+                )
+                requested_pending_ids.add(
+                    pending_id
+                )
+            except ValueError:
+                errors.append(
+                    "El artículo pendiente seleccionado no es válido."
+                )
 
-            if manual_name_raw:
-                try:
-                    pending = create_pending_article(
-                        provisional_name=manual_name_raw,
-                        description=line_notes,
-                        category_id=None,
-                        unit_id=int(unit_id_raw) if unit_id_raw else None,
-                        requested_by_user_id=current_user.id,
+        if not quantity_raw:
+            errors.append(
+                "Debe indicar una cantidad."
+            )
+        else:
+            try:
+                quantity = Decimal(quantity_raw)
+
+                if quantity <= 0:
+                    errors.append(
+                        "La cantidad debe ser mayor que cero."
                     )
-                    pending_article_id = pending.id
-                except PendingArticleServiceError as exc:
-                    flash(f"Error en la línea {index + 1}: {str(exc)}", "danger")
-                    return render_template(
-                        "purchases/requests/create.html",
-                        articles=articles,
-                        units=units,
-                        sites=sites,
-                        warehouses=warehouses,
-                        search=search,
+
+            except (
+                InvalidOperation,
+                TypeError,
+                ValueError,
+            ):
+                errors.append(
+                    "La cantidad indicada no es válida."
+                )
+
+        if not unit_id_raw:
+            errors.append(
+                "Debe seleccionar una unidad."
+            )
+        else:
+            try:
+                unit_id = int(unit_id_raw)
+                requested_unit_ids.add(unit_id)
+
+            except ValueError:
+                errors.append(
+                    "La unidad seleccionada no es válida."
+                )
+
+        if errors:
+            line_errors[index] = errors
+
+    # =====================================================
+    # 5. VALIDAR IDs EN CONSULTAS AGRUPADAS
+    # =====================================================
+
+    existing_article_ids = set()
+
+    if requested_article_ids:
+        existing_article_ids = {
+            article_id
+            for (article_id,) in (
+                db.session.query(Article.id)
+                .filter(
+                    Article.id.in_(
+                        requested_article_ids
+                    ),
+                    Article.is_active.is_(True),
+                )
+                .all()
+            )
+        }
+
+    existing_pending_ids = set()
+
+    if requested_pending_ids:
+        existing_pending_ids = {
+            pending_id
+            for (pending_id,) in (
+                db.session.query(
+                    PendingArticle.id
+                )
+                .filter(
+                    PendingArticle.id.in_(
+                        requested_pending_ids
+                    )
+                )
+                .all()
+            )
+        }
+
+    existing_unit_ids = set()
+
+    if requested_unit_ids:
+        existing_unit_ids = {
+            unit_id
+            for (unit_id,) in (
+                db.session.query(Unit.id)
+                .filter(
+                    Unit.id.in_(
+                        requested_unit_ids
+                    )
+                )
+                .all()
+            )
+        }
+
+    for index, row in enumerate(submitted_lines):
+        errors = line_errors.setdefault(
+            index,
+            [],
+        )
+
+        if row["article_id"]:
+            try:
+                article_id = int(
+                    row["article_id"]
+                )
+
+                if (
+                    article_id
+                    not in existing_article_ids
+                ):
+                    errors.append(
+                        "El artículo seleccionado no existe "
+                        "o está inactivo."
                     )
 
-            elif article_id_raw:
-                article_id = int(article_id_raw)
+            except ValueError:
+                pass
 
-            elif pending_article_id_raw:
-                pending_article_id = int(pending_article_id_raw)
+        if row["pending_article_id"]:
+            try:
+                pending_id = int(
+                    row["pending_article_id"]
+                )
+
+                if (
+                    pending_id
+                    not in existing_pending_ids
+                ):
+                    errors.append(
+                        "El artículo pendiente seleccionado "
+                        "no existe."
+                    )
+
+            except ValueError:
+                pass
+
+        if row["unit_id"]:
+            try:
+                unit_id = int(
+                    row["unit_id"]
+                )
+
+                if unit_id not in existing_unit_ids:
+                    errors.append(
+                        "La unidad seleccionada no existe."
+                    )
+
+            except ValueError:
+                pass
+
+        if not errors:
+            line_errors.pop(
+                index,
+                None,
+            )
+
+    # =====================================================
+    # 6. SI HAY ERRORES, NO GUARDAR NADA
+    # =====================================================
+
+    if header_errors or line_errors:
+        for message in header_errors:
+            flash(
+                message,
+                "danger",
+            )
+
+        flash(
+            "La solicitud no fue guardada. "
+            "Revise únicamente las líneas marcadas en rojo; "
+            "los demás datos se conservaron.",
+            "warning",
+        )
+
+        return render_template(
+            "purchases/requests/create.html",
+            articles=articles,
+            units=units,
+            sites=sites,
+            warehouses=warehouses,
+            search=search,
+            submitted_lines=submitted_lines,
+            line_errors=line_errors,
+            submitted_header=submitted_header,
+        )
+
+    # =====================================================
+    # 7. CONSTRUIR PAYLOADS
+    #    TODAVÍA SIN COMMIT
+    # =====================================================
+
+    lines: list[
+        PurchaseRequestLinePayload
+    ] = []
+
+    try:
+        for index, row in enumerate(
+            submitted_lines
+        ):
+            article_id = (
+                int(row["article_id"])
+                if row["article_id"]
+                else None
+            )
+
+            pending_article_id = (
+                int(row["pending_article_id"])
+                if row["pending_article_id"]
+                else None
+            )
+
+            if row["manual_name"]:
+                pending = create_pending_article(
+                    provisional_name=(
+                        row["manual_name"]
+                    ),
+                    description=row["notes"],
+                    category_id=None,
+                    unit_id=int(
+                        row["unit_id"]
+                    ),
+                    requested_by_user_id=(
+                        current_user.id
+                    ),
+                    commit=False,
+                )
+
+                pending_article_id = pending.id
+                article_id = None
 
             lines.append(
                 PurchaseRequestLinePayload(
                     article_id=article_id,
-                    pending_article_id=pending_article_id,
-                    quantity_requested=quantity_value,
-                    unit_id=int(unit_id_raw) if unit_id_raw else None,
-                    line_notes=line_notes,
-                    is_urgent=str(index) in urgent_flags,
+                    pending_article_id=(
+                        pending_article_id
+                    ),
+                    quantity_requested=Decimal(
+                        row["quantity"]
+                    ),
+                    unit_id=int(
+                        row["unit_id"]
+                    ),
+                    line_notes=(
+                        row["notes"]
+                        or None
+                    ),
+                    is_urgent=bool(
+                        row["is_urgent"]
+                    ),
                 )
             )
 
-        try:
-            purchase_request = create_purchase_request(
-                requested_by_user_id=current_user.id,
+        purchase_request = (
+            create_purchase_request(
+                requested_by_user_id=(
+                    current_user.id
+                ),
                 priority=priority,
                 notes=notes,
                 site_id=site_id,
                 warehouse_id=warehouse_id,
                 lines=lines,
             )
-        except PurchaseRequestServiceError as exc:
-            flash(str(exc), "danger")
-            return render_template(
-                "purchases/requests/create.html",
-                articles=articles,
-                units=units,
-                sites=sites,
-                warehouses=warehouses,
-                search=search,
-            )
+        )
 
-        flash("Solicitud de compra creada correctamente.", "success")
-        return redirect(url_for("purchases.request_detail", request_id=purchase_request.id))
+    except PendingArticleServiceError as exc:
+        db.session.rollback()
 
-    return render_template(
-        "purchases/requests/create.html",
-        articles=articles,
-        units=units,
-        sites=sites,
-        warehouses=warehouses,
-        search=search,
+        flash(
+            str(exc),
+            "danger",
+        )
+
+        flash(
+            "La solicitud no fue guardada. "
+            "Los datos ingresados se conservaron.",
+            "warning",
+        )
+
+        return render_template(
+            "purchases/requests/create.html",
+            articles=articles,
+            units=units,
+            sites=sites,
+            warehouses=warehouses,
+            search=search,
+            submitted_lines=submitted_lines,
+            line_errors=line_errors,
+            submitted_header=submitted_header,
+        )
+
+    except PurchaseRequestServiceError as exc:
+        db.session.rollback()
+
+        flash(
+            str(exc),
+            "danger",
+        )
+
+        flash(
+            "La solicitud no fue guardada. "
+            "Los datos ingresados se conservaron.",
+            "warning",
+        )
+
+        return render_template(
+            "purchases/requests/create.html",
+            articles=articles,
+            units=units,
+            sites=sites,
+            warehouses=warehouses,
+            search=search,
+            submitted_lines=submitted_lines,
+            line_errors=line_errors,
+            submitted_header=submitted_header,
+        )
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[CREATE PURCHASE REQUEST ERROR] "
+            f"error={exc}"
+        )
+
+        flash(
+            "Ocurrió un error inesperado al guardar "
+            "la solicitud. Los datos se conservaron.",
+            "danger",
+        )
+
+        return render_template(
+            "purchases/requests/create.html",
+            articles=articles,
+            units=units,
+            sites=sites,
+            warehouses=warehouses,
+            search=search,
+            submitted_lines=submitted_lines,
+            line_errors=line_errors,
+            submitted_header=submitted_header,
+        )
+
+    flash(
+        "Solicitud de compra creada correctamente.",
+        "success",
+    )
+
+    return redirect(
+        url_for(
+            "purchases.request_detail",
+            request_id=purchase_request.id,
+        )
     )
 
 @purchases_bp.route(

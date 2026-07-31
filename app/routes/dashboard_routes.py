@@ -16,6 +16,7 @@ from app.models.work_order_task_line import WorkOrderTaskLine
 from app.models.work_order_task_line_finish_request import WorkOrderTaskLineFinishRequest
 from app.services.transfer_service import get_request_line_stock_context
 from app.services.transfer_service import get_request_lines_stock_context_bulk
+from app.models.purchase_request_line import PurchaseRequestLine
 
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -426,15 +427,46 @@ def manager_dashboard():
         purchase_requests = (
             PurchaseRequest.query
             .options(
-                selectinload(PurchaseRequest.lines),
+                joinedload(
+                    PurchaseRequest.requested_by_user
+                ),
+                joinedload(
+                    PurchaseRequest.site
+                ),
+                joinedload(
+                    PurchaseRequest.warehouse
+                ),
+
+                selectinload(
+                    PurchaseRequest.lines
+                ).joinedload(
+                    PurchaseRequestLine.article
+                ),
+
+                selectinload(
+                    PurchaseRequest.lines
+                ).joinedload(
+                    PurchaseRequestLine.pending_article
+                ),
+
+                selectinload(
+                    PurchaseRequest.lines
+                ).joinedload(
+                    PurchaseRequestLine.unit
+                ),
             )
             .filter(
                 db.or_(
-                    PurchaseRequest.review_site_id == active_site_id,
+                    PurchaseRequest.review_site_id
+                    == active_site_id,
+
                     db.and_(
                         PurchaseRequest.review_site_id.is_(None),
-                        PurchaseRequest.site_id == active_site_id,
-                        PurchaseRequest.sent_direct_to_procurement.is_(False),
+                        PurchaseRequest.site_id
+                        == active_site_id,
+                        PurchaseRequest.sent_direct_to_procurement.is_(
+                            False
+                        ),
                     ),
                 ),
                 PurchaseRequest.status == "ENVIADA",

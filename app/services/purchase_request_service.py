@@ -155,9 +155,16 @@ def create_purchase_request(
             "La solicitud debe incluir al menos una línea."
         )
 
-    valid_priorities = {"NORMAL", "URGENTE", "CRITICA"}
+    valid_priorities = {
+        "NORMAL",
+        "URGENTE",
+        "CRITICA",
+    }
+
     if priority not in valid_priorities:
-        raise PurchaseRequestServiceError("Prioridad inválida.")
+        raise PurchaseRequestServiceError(
+            "Prioridad inválida."
+        )
 
     for line in lines:
         _validate_line_payload(line)
@@ -175,29 +182,55 @@ def create_purchase_request(
     db.session.add(purchase_request)
     db.session.flush()
 
+    request_line_models = []
+
     for line in lines:
-        normalized_quantity = _normalize_decimal(line.quantity_requested)
+        normalized_quantity = (
+            _normalize_decimal(
+                line.quantity_requested
+            )
+        )
 
         if line.pending_article_id:
             _ensure_pending_article_has_real_article(
-                pending_article_id=line.pending_article_id,
-                requested_by_user_id=requested_by_user_id,
+                pending_article_id=(
+                    line.pending_article_id
+                ),
+                requested_by_user_id=(
+                    requested_by_user_id
+                ),
                 fallback_unit_id=line.unit_id,
             )
 
-        purchase_request_line = PurchaseRequestLine(
-            purchase_request_id=purchase_request.id,
-            article_id=line.article_id,
-            pending_article_id=line.pending_article_id,
-            quantity_requested=normalized_quantity,
-            unit_id=line.unit_id,
-            line_notes=(line.line_notes or "").strip() or None,
-            is_urgent=bool(line.is_urgent),
-            line_status="ACTIVA",
+        request_line_models.append(
+            PurchaseRequestLine(
+                purchase_request_id=(
+                    purchase_request.id
+                ),
+                article_id=line.article_id,
+                pending_article_id=(
+                    line.pending_article_id
+                ),
+                quantity_requested=(
+                    normalized_quantity
+                ),
+                unit_id=line.unit_id,
+                line_notes=(
+                    line.line_notes or ""
+                ).strip() or None,
+                is_urgent=bool(
+                    line.is_urgent
+                ),
+                line_status="ACTIVA",
+            )
         )
-        db.session.add(purchase_request_line)
+
+    db.session.add_all(
+        request_line_models
+    )
 
     db.session.commit()
+
     return purchase_request
 
 

@@ -79,11 +79,16 @@ def create_pending_article(
     category_id: int | None,
     unit_id: int | None,
     requested_by_user_id: int | None,
+    commit: bool = True,
 ) -> PendingArticle:
-    provisional_name = (provisional_name or "").strip()
+    provisional_name = (
+        provisional_name or ""
+    ).strip()
 
     if not provisional_name:
-        raise PendingArticleServiceError("El nombre provisional es obligatorio.")
+        raise PendingArticleServiceError(
+            "El nombre provisional es obligatorio."
+        )
 
     pending_article = PendingArticle(
         provisional_code=_generate_provisional_code(),
@@ -96,7 +101,12 @@ def create_pending_article(
     )
 
     db.session.add(pending_article)
-    db.session.commit()
+
+    # Obtiene el ID sin confirmar todavía toda la transacción.
+    db.session.flush()
+
+    if commit:
+        db.session.commit()
 
     return pending_article
 

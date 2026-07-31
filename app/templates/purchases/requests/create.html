@@ -1,478 +1,1196 @@
 {% extends "base.html" %}
 
 {% block content %}
+
+{% set form_header = submitted_header if submitted_header is defined else {
+    "priority": "NORMAL",
+    "site_id": "",
+    "warehouse_id": "",
+    "notes": ""
+} %}
+
+{% set form_lines = submitted_lines if submitted_lines is defined and submitted_lines else [{
+    "article_id": "",
+    "article_search": "",
+    "pending_article_id": "",
+    "manual_name": "",
+    "quantity": "",
+    "unit_id": "",
+    "notes": "",
+    "is_urgent": false
+}] %}
+
+{% set validation_errors = line_errors if line_errors is defined else {} %}
+
 <div class="container-fluid py-4">
+
+    <!-- ===================== ENCABEZADO ===================== -->
     <div class="mb-4">
-        <h2 class="fw-bold mb-1">Nueva solicitud de compra</h2>
-        <p class="text-muted mb-0">Registra una solicitud corporativa con una o varias líneas.</p>
+        <h2 class="fw-bold mb-1">
+            Nueva solicitud de compra
+        </h2>
+
+        <p class="text-muted mb-0">
+            Registra una solicitud corporativa con una o varias líneas.
+        </p>
     </div>
 
-    <form method="POST">
+    {% if validation_errors %}
+    <div class="alert alert-warning border-0 shadow-sm rounded-4 mb-4">
+        <div class="d-flex align-items-start gap-3">
+            <i class="bi bi-exclamation-triangle-fill fs-4"></i>
+
+            <div>
+                <div class="fw-bold">
+                    La solicitud todavía no fue guardada
+                </div>
+
+                <div>
+                    Corrige únicamente las líneas marcadas en rojo.
+                    El resto de la información se conserva.
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" id="purchase-request-form" novalidate>
+
         <div class="row g-4">
+
+            <!-- ===================== DATOS GENERALES ===================== -->
             <div class="col-12 col-xl-4">
-                <div class="card border-0 shadow-sm rounded-4 h-100">
+
+                <div class="card border-0 shadow-sm rounded-4">
                     <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3">Datos generales</h5>
 
+                        <h5 class="fw-bold mb-3">
+                            Datos generales
+                        </h5>
+
+                        <!-- PRIORIDAD -->
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Prioridad</label>
-                            <select name="priority" class="form-select rounded-3" required>
-                                <option value="NORMAL">NORMAL</option>
-                                <option value="URGENTE">URGENTE</option>
-                                <option value="CRITICA">CRITICA</option>
+                            <label class="form-label fw-semibold">
+                                Prioridad
+                            </label>
+
+                            <select
+                                name="priority"
+                                class="form-select rounded-3"
+                                required
+                            >
+                                <option
+                                    value="NORMAL"
+                                    {% if form_header.priority == "NORMAL" %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    NORMAL
+                                </option>
+
+                                <option
+                                    value="URGENTE"
+                                    {% if form_header.priority == "URGENTE" %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    URGENTE
+                                </option>
+
+                                <option
+                                    value="CRITICA"
+                                    {% if form_header.priority == "CRITICA" %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    CRÍTICA
+                                </option>
                             </select>
                         </div>
 
+                        <!-- PREDIO -->
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Predio sugerido</label>
-                            <select name="site_id" class="form-select rounded-3">
-                                <option value="">Sin predio</option>
+                            <label class="form-label fw-semibold">
+                                Predio sugerido
+                            </label>
+
+                            <select
+                                name="site_id"
+                                class="form-select rounded-3"
+                            >
+                                <option value="">
+                                    Sin predio
+                                </option>
+
                                 {% for site in sites %}
-                                <option value="{{ site.id }}">{{ site.name }}</option>
+                                <option
+                                    value="{{ site.id }}"
+                                    {% if form_header.site_id|string == site.id|string %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    {{ site.name }}
+                                </option>
                                 {% endfor %}
                             </select>
-                            <div class="form-text">Opcional. Solo como referencia inicial.</div>
+
+                            <div class="form-text">
+                                Opcional. Solo como referencia inicial.
+                            </div>
                         </div>
 
+                        <!-- BODEGA -->
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Bodega sugerida</label>
-                            <select name="warehouse_id" class="form-select rounded-3">
-                                <option value="">Sin bodega</option>
+                            <label class="form-label fw-semibold">
+                                Bodega sugerida
+                            </label>
+
+                            <select
+                                name="warehouse_id"
+                                class="form-select rounded-3"
+                                id="request-warehouse-select"
+                            >
+                                <option value="">
+                                    Sin bodega
+                                </option>
+
                                 {% for wh in warehouses %}
-                                <option value="{{ wh.id }}">{{ wh.code }} - {{ wh.name }}</option>
+                                <option
+                                    value="{{ wh.id }}"
+                                    {% if form_header.warehouse_id|string == wh.id|string %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    {{ wh.code }} - {{ wh.name }}
+                                </option>
                                 {% endfor %}
                             </select>
-                            <div class="form-text">Seleccione una bodega para ver stock al buscar artículos.</div>
+
+                            <div class="form-text">
+                                Selecciona una bodega para consultar el stock
+                                al buscar artículos.
+                            </div>
                         </div>
 
+                        <!-- OBSERVACIONES -->
                         <div class="mb-0">
-                            <label class="form-label fw-semibold">Observaciones</label>
-                            <textarea name="notes" class="form-control rounded-3" rows="5"></textarea>
+                            <label class="form-label fw-semibold">
+                                Observaciones
+                            </label>
+
+                            <textarea
+                                name="notes"
+                                class="form-control rounded-3"
+                                rows="5"
+                            >{{ form_header.notes or '' }}</textarea>
                         </div>
+
                     </div>
                 </div>
             </div>
 
+            <!-- ===================== LÍNEAS ===================== -->
             <div class="col-12 col-xl-8">
+
                 <div class="card border-0 shadow-sm rounded-4">
                     <div class="card-body p-4">
-                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
-                            <h5 class="fw-bold mb-0">Líneas de solicitud</h5>
-                            <button type="button" class="btn btn-outline-dark rounded-3" id="add-line-btn">
-                                <i class="bi bi-plus-circle me-2"></i>Agregar línea
+
+                        <div
+                            class="d-flex flex-column flex-md-row
+                                   justify-content-between align-items-md-center
+                                   gap-3 mb-3"
+                        >
+                            <div>
+                                <h5 class="fw-bold mb-1">
+                                    Líneas de solicitud
+                                </h5>
+
+                                <p class="text-muted small mb-0">
+                                    Las líneas con errores se mostrarán en rojo
+                                    sin eliminar las demás.
+                                </p>
+                            </div>
+
+                            <button
+                                type="button"
+                                class="btn btn-outline-dark rounded-3"
+                                id="add-line-btn"
+                            >
+                                <i class="bi bi-plus-circle me-2"></i>
+                                Agregar línea
                             </button>
                         </div>
 
+                        <!-- ===================== CONTENEDOR DE LÍNEAS ===================== -->
                         <div id="lines-wrapper">
-                            <div class="request-line border rounded-4 p-3 mb-3 bg-light-subtle">
-                                <div class="row g-3">
-                                    <div class="col-12 col-md-6 position-relative">
-                                        <label class="form-label fw-semibold">Artículo existente</label>
 
-                                        <input type="hidden" name="line_article_id[]" class="line-article-id">
+                            {% for submitted_line in form_lines %}
+
+                            {% set current_errors = validation_errors.get(loop.index0, []) %}
+
+                            <div
+                                class="request-line border rounded-4 p-3 mb-3
+                                       {% if current_errors %}
+                                           border-danger bg-danger-subtle
+                                       {% else %}
+                                           bg-light-subtle
+                                       {% endif %}"
+                                data-line-index="{{ loop.index0 }}"
+                            >
+
+                                <!-- ERRORES DE ESTA LÍNEA -->
+                                {% if current_errors %}
+                                <div class="alert alert-danger py-2 px-3 mb-3">
+                                    <div class="fw-semibold">
+                                        <i class="bi bi-exclamation-circle me-1"></i>
+                                        Revisa esta línea
+                                    </div>
+
+                                    <ul class="mb-0 mt-1 ps-3">
+                                        {% for error in current_errors %}
+                                        <li>{{ error }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                                {% endif %}
+
+                                <div class="row g-3">
+
+                                    <!-- ARTÍCULO EXISTENTE -->
+                                    <div class="col-12 col-md-6 position-relative">
+
+                                        <label class="form-label fw-semibold">
+                                            Artículo existente
+                                        </label>
+
+                                        <input
+                                            type="hidden"
+                                            name="line_article_id[]"
+                                            class="line-article-id"
+                                            value="{{ submitted_line.article_id or '' }}"
+                                        >
+
+                                        <input
+                                            type="hidden"
+                                            name="line_pending_article_id[]"
+                                            class="line-pending-article-id"
+                                            value="{{ submitted_line.pending_article_id or '' }}"
+                                        >
 
                                         <input
                                             type="text"
-                                            class="form-control rounded-3 line-article-search"
+                                            name="line_article_search[]"
+                                            class="form-control rounded-3 line-article-search
+                                                   {% if current_errors %}border-danger{% endif %}"
                                             placeholder="Buscar por código o nombre..."
                                             autocomplete="off"
+                                            value="{{ submitted_line.article_search or '' }}"
                                         >
 
-                                        <div class="line-stock small text-success fw-semibold mt-1 d-none"></div>
-                                        <div class="list-group mt-2 line-search-results d-none"></div>
+                                        <div
+                                            class="line-stock small text-success fw-semibold mt-1 d-none"
+                                        ></div>
+
+                                        <div
+                                            class="list-group position-absolute
+                                                   start-0 end-0 mt-2
+                                                   line-search-results d-none"
+                                            style="z-index: 1050;"
+                                        ></div>
                                     </div>
 
+                                    <!-- ARTÍCULO MANUAL -->
                                     <div class="col-12 col-md-6">
-                                        <label class="form-label fw-semibold">Nuevo artículo (manual)</label>
-                                        <input type="text"
-                                               name="line_manual_name[]"
-                                               class="form-control rounded-3 line-manual-input"
-                                               placeholder="Ej: Tornillo especial M8">
+
+                                        <label class="form-label fw-semibold">
+                                            Nuevo artículo (manual)
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            name="line_manual_name[]"
+                                            class="form-control rounded-3 line-manual-input
+                                                   {% if current_errors %}border-danger{% endif %}"
+                                            placeholder="Ej: Tornillo especial M8"
+                                            value="{{ submitted_line.manual_name or '' }}"
+                                        >
+
                                         <div class="form-text">
-                                            Si escribes aquí, se creará como artículo pendiente automáticamente.
+                                            Si escribes aquí, se creará como artículo
+                                            pendiente automáticamente.
                                         </div>
                                     </div>
 
+                                    <!-- CANTIDAD -->
                                     <div class="col-12 col-md-3">
-                                        <label class="form-label fw-semibold">Cantidad</label>
-                                        <input type="number" step="0.01" min="0" name="line_quantity[]" class="form-control rounded-3">
+
+                                        <label class="form-label fw-semibold">
+                                            Cantidad
+                                        </label>
+
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0.01"
+                                            name="line_quantity[]"
+                                            class="form-control rounded-3
+                                                   {% if current_errors %}border-danger{% endif %}"
+                                            value="{{ submitted_line.quantity or '' }}"
+                                        >
                                     </div>
 
+                                    <!-- UNIDAD -->
                                     <div class="col-12 col-md-3">
-                                        <label class="form-label fw-semibold">Unidad</label>
-                                        <select name="line_unit_id[]" class="form-select rounded-3">
-                                            <option value="">Seleccionar</option>
+
+                                        <label class="form-label fw-semibold">
+                                            Unidad
+                                        </label>
+
+                                        <select
+                                            name="line_unit_id[]"
+                                            class="form-select rounded-3
+                                                   {% if current_errors %}border-danger{% endif %}"
+                                        >
+                                            <option value="">
+                                                Seleccionar
+                                            </option>
+
                                             {% for unit in units %}
-                                            <option value="{{ unit.id }}">{{ unit.name if unit.name is defined else unit.code if unit.code is defined else unit.id }}</option>
+                                            <option
+                                                value="{{ unit.id }}"
+                                                {% if submitted_line.unit_id|string == unit.id|string %}
+                                                    selected
+                                                {% endif %}
+                                            >
+                                                {{
+                                                    unit.name
+                                                    if unit.name is defined
+                                                    else unit.code
+                                                    if unit.code is defined
+                                                    else unit.id
+                                                }}
+                                            </option>
                                             {% endfor %}
                                         </select>
                                     </div>
 
+                                    <!-- URGENTE -->
                                     <div class="col-12 col-md-3 d-flex align-items-end">
-                                        <div class="form-check">
-                                            <input class="form-check-input line-urgent-checkbox" type="checkbox" name="line_is_urgent[]" value="0">
-                                            <label class="form-check-label fw-semibold">Urgente</label>
+
+                                        <div class="form-check mb-2">
+                                            <input
+                                                class="form-check-input line-urgent-checkbox"
+                                                type="checkbox"
+                                                name="line_is_urgent[]"
+                                                value="{{ loop.index0 }}"
+                                                id="urgent-line-{{ loop.index0 }}"
+                                                {% if submitted_line.is_urgent %}
+                                                    checked
+                                                {% endif %}
+                                            >
+
+                                            <label
+                                                class="form-check-label fw-semibold"
+                                                for="urgent-line-{{ loop.index0 }}"
+                                            >
+                                                Urgente
+                                            </label>
                                         </div>
                                     </div>
 
-                                    <div class="col-12 col-md-3 d-flex align-items-end justify-content-end">
-                                        <button type="button" class="btn btn-outline-danger rounded-3 remove-line-btn">
+                                    <!-- ELIMINAR -->
+                                    <div
+                                        class="col-12 col-md-3
+                                               d-flex align-items-end
+                                               justify-content-md-end"
+                                    >
+                                        <button
+                                            type="button"
+                                            class="btn btn-outline-danger rounded-3
+                                                   remove-line-btn"
+                                        >
+                                            <i class="bi bi-trash me-1"></i>
                                             Eliminar
                                         </button>
                                     </div>
 
+                                    <!-- NOTAS -->
                                     <div class="col-12">
-                                        <label class="form-label fw-semibold">Notas de línea</label>
-                                        <input type="text" name="line_notes[]" class="form-control rounded-3">
+
+                                        <label class="form-label fw-semibold">
+                                            Notas de línea
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            name="line_notes[]"
+                                            class="form-control rounded-3"
+                                            value="{{ submitted_line.notes or '' }}"
+                                            placeholder="Observación opcional para esta línea"
+                                        >
                                     </div>
+
                                 </div>
                             </div>
+
+                            {% endfor %}
+
                         </div>
 
-                        <div class="d-flex flex-column flex-md-row gap-2 justify-content-end mt-4">
-                            <a href="{{ url_for('purchases.list_requests') }}" class="btn btn-outline-secondary rounded-3">
+                        <!-- ===================== ACCIONES ===================== -->
+                        <div
+                            class="d-flex flex-column flex-md-row
+                                   gap-2 justify-content-end mt-4"
+                        >
+                            <a
+                                href="{{ url_for('purchases.list_requests') }}"
+                                class="btn btn-outline-secondary rounded-3"
+                            >
                                 Cancelar
                             </a>
-                            <button type="submit" class="btn btn-dark rounded-3">
-                                Guardar solicitud
+
+                            <button
+                                type="submit"
+                                class="btn btn-dark rounded-3"
+                                id="save-request-btn"
+                            >
+                                <span class="save-request-label">
+                                    Guardar solicitud
+                                </span>
+
+                                <span
+                                    class="save-request-loading d-none"
+                                >
+                                    <span
+                                        class="spinner-border spinner-border-sm me-2"
+                                        role="status"
+                                        aria-hidden="true"
+                                    ></span>
+                                    Guardando...
+                                </span>
                             </button>
                         </div>
+
                     </div>
                 </div>
             </div>
+
         </div>
     </form>
 </div>
 
+<!-- ===================== PLANTILLA PARA NUEVAS LÍNEAS ===================== -->
 <template id="request-line-template">
-    <div class="request-line border rounded-4 p-3 mb-3 bg-light-subtle">
-        <div class="row g-3">
-            <div class="col-12 col-md-6 position-relative">
-                <label class="form-label fw-semibold">Artículo existente</label>
 
-                <input type="hidden" name="line_article_id[]" class="line-article-id">
+    <div class="request-line border rounded-4 p-3 mb-3 bg-light-subtle">
+
+        <div class="row g-3">
+
+            <!-- ARTÍCULO EXISTENTE -->
+            <div class="col-12 col-md-6 position-relative">
+
+                <label class="form-label fw-semibold">
+                    Artículo existente
+                </label>
+
+                <input
+                    type="hidden"
+                    name="line_article_id[]"
+                    class="line-article-id"
+                    value=""
+                >
+
+                <input
+                    type="hidden"
+                    name="line_pending_article_id[]"
+                    class="line-pending-article-id"
+                    value=""
+                >
 
                 <input
                     type="text"
+                    name="line_article_search[]"
                     class="form-control rounded-3 line-article-search"
                     placeholder="Buscar por código o nombre..."
                     autocomplete="off"
+                    value=""
                 >
 
-                <div class="line-stock small text-success fw-semibold mt-1 d-none"></div>
-                <div class="list-group mt-2 line-search-results d-none"></div>
+                <div
+                    class="line-stock small text-success fw-semibold mt-1 d-none"
+                ></div>
+
+                <div
+                    class="list-group position-absolute
+                           start-0 end-0 mt-2
+                           line-search-results d-none"
+                    style="z-index: 1050;"
+                ></div>
             </div>
 
+            <!-- ARTÍCULO MANUAL -->
             <div class="col-12 col-md-6">
-                <label class="form-label fw-semibold">Nuevo artículo (manual)</label>
-                <input type="text"
-                       name="line_manual_name[]"
-                       class="form-control rounded-3 line-manual-input"
-                       placeholder="Ej: Tornillo especial M8">
+
+                <label class="form-label fw-semibold">
+                    Nuevo artículo (manual)
+                </label>
+
+                <input
+                    type="text"
+                    name="line_manual_name[]"
+                    class="form-control rounded-3 line-manual-input"
+                    placeholder="Ej: Tornillo especial M8"
+                    value=""
+                >
+
                 <div class="form-text">
-                    Si escribes aquí, se creará como artículo pendiente automáticamente.
+                    Si escribes aquí, se creará como artículo pendiente
+                    automáticamente.
                 </div>
             </div>
 
+            <!-- CANTIDAD -->
             <div class="col-12 col-md-3">
-                <label class="form-label fw-semibold">Cantidad</label>
-                <input type="number" step="0.01" min="0" name="line_quantity[]" class="form-control rounded-3">
+
+                <label class="form-label fw-semibold">
+                    Cantidad
+                </label>
+
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    name="line_quantity[]"
+                    class="form-control rounded-3"
+                    value=""
+                >
             </div>
 
+            <!-- UNIDAD -->
             <div class="col-12 col-md-3">
-                <label class="form-label fw-semibold">Unidad</label>
-                <select name="line_unit_id[]" class="form-select rounded-3">
-                    <option value="">Seleccionar</option>
+
+                <label class="form-label fw-semibold">
+                    Unidad
+                </label>
+
+                <select
+                    name="line_unit_id[]"
+                    class="form-select rounded-3"
+                >
+                    <option value="">
+                        Seleccionar
+                    </option>
+
                     {% for unit in units %}
-                    <option value="{{ unit.id }}">{{ unit.name if unit.name is defined else unit.code if unit.code is defined else unit.id }}</option>
+                    <option value="{{ unit.id }}">
+                        {{
+                            unit.name
+                            if unit.name is defined
+                            else unit.code
+                            if unit.code is defined
+                            else unit.id
+                        }}
+                    </option>
                     {% endfor %}
                 </select>
             </div>
 
+            <!-- URGENTE -->
             <div class="col-12 col-md-3 d-flex align-items-end">
-                <div class="form-check">
-                    <input class="form-check-input line-urgent-checkbox" type="checkbox" name="line_is_urgent[]" value="">
-                    <label class="form-check-label fw-semibold">Urgente</label>
+
+                <div class="form-check mb-2">
+                    <input
+                        class="form-check-input line-urgent-checkbox"
+                        type="checkbox"
+                        name="line_is_urgent[]"
+                        value=""
+                    >
+
+                    <label class="form-check-label fw-semibold">
+                        Urgente
+                    </label>
                 </div>
             </div>
 
-            <div class="col-12 col-md-3 d-flex align-items-end justify-content-end">
-                <button type="button" class="btn btn-outline-danger rounded-3 remove-line-btn">
+            <!-- ELIMINAR -->
+            <div
+                class="col-12 col-md-3
+                       d-flex align-items-end
+                       justify-content-md-end"
+            >
+                <button
+                    type="button"
+                    class="btn btn-outline-danger rounded-3 remove-line-btn"
+                >
+                    <i class="bi bi-trash me-1"></i>
                     Eliminar
                 </button>
             </div>
 
+            <!-- NOTAS -->
             <div class="col-12">
-                <label class="form-label fw-semibold">Notas de línea</label>
-                <input type="text" name="line_notes[]" class="form-control rounded-3">
+
+                <label class="form-label fw-semibold">
+                    Notas de línea
+                </label>
+
+                <input
+                    type="text"
+                    name="line_notes[]"
+                    class="form-control rounded-3"
+                    value=""
+                    placeholder="Observación opcional para esta línea"
+                >
             </div>
+
         </div>
     </div>
 </template>
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("purchase-request-form");
     const linesWrapper = document.getElementById("lines-wrapper");
     const addLineBtn = document.getElementById("add-line-btn");
     const template = document.getElementById("request-line-template");
+    const warehouseSelect = document.getElementById(
+        "request-warehouse-select"
+    );
+    const saveButton = document.getElementById("save-request-btn");
 
-    let searchTimers = new WeakMap();
+    const searchTimers = new WeakMap();
 
-    function refreshUrgentCheckboxValues() {
+    if (!form || !linesWrapper || !addLineBtn || !template) {
+        return;
+    }
+
+    function refreshLineIndexes() {
         const lines = linesWrapper.querySelectorAll(".request-line");
-        lines.forEach((line, index) => {
-            const checkbox = line.querySelector(".line-urgent-checkbox, input[name='line_is_urgent[]']");
+
+        lines.forEach(function (line, index) {
+            line.dataset.lineIndex = index.toString();
+
+            const checkbox = line.querySelector(
+                ".line-urgent-checkbox"
+            );
+
             if (checkbox) {
                 checkbox.value = index.toString();
+                checkbox.id = `urgent-line-${index}`;
+
+                const label = checkbox
+                    .closest(".form-check")
+                    ?.querySelector("label");
+
+                if (label) {
+                    label.setAttribute(
+                        "for",
+                        `urgent-line-${index}`
+                    );
+                }
             }
         });
     }
 
-    function clearLine(line) {
-        line.querySelectorAll("input, select").forEach((field) => {
-            if (field.type === "checkbox") {
-                field.checked = false;
-            } else {
-                field.value = "";
-            }
-        });
-
-        const stockBox = line.querySelector(".line-stock");
-        const resultsBox = line.querySelector(".line-search-results");
-
-        if (stockBox) {
-            stockBox.classList.add("d-none");
-            stockBox.innerHTML = "";
-        }
+    function clearResultBox(line) {
+        const resultsBox = line.querySelector(
+            ".line-search-results"
+        );
 
         if (resultsBox) {
-            resultsBox.classList.add("d-none");
             resultsBox.innerHTML = "";
+            resultsBox.classList.add("d-none");
+        }
+    }
+
+    function clearStockBox(line) {
+        const stockBox = line.querySelector(
+            ".line-stock"
+        );
+
+        if (stockBox) {
+            stockBox.innerHTML = "";
+            stockBox.classList.add("d-none");
         }
     }
 
     function clearArticleSelection(line) {
-        const hiddenId = line.querySelector(".line-article-id");
-        const stockBox = line.querySelector(".line-stock");
+        const articleIdInput = line.querySelector(
+            ".line-article-id"
+        );
 
-        if (hiddenId) {
-            hiddenId.value = "";
+        const pendingArticleIdInput = line.querySelector(
+            ".line-pending-article-id"
+        );
+
+        if (articleIdInput) {
+            articleIdInput.value = "";
         }
 
-        if (stockBox) {
-            stockBox.classList.add("d-none");
-            stockBox.innerHTML = "";
+        if (pendingArticleIdInput) {
+            pendingArticleIdInput.value = "";
         }
+
+        clearStockBox(line);
+    }
+
+    function clearLine(line) {
+        line.querySelectorAll("input, select").forEach(
+            function (field) {
+                if (field.type === "checkbox") {
+                    field.checked = false;
+                } else {
+                    field.value = "";
+                }
+            }
+        );
+
+        clearStockBox(line);
+        clearResultBox(line);
+
+        line.classList.remove(
+            "border-danger",
+            "bg-danger-subtle"
+        );
+
+        line.classList.add(
+            "bg-light-subtle"
+        );
+
+        const alertBox = line.querySelector(
+            ".alert-danger"
+        );
+
+        if (alertBox) {
+            alertBox.remove();
+        }
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
     }
 
     async function searchArticles(input) {
         const line = input.closest(".request-line");
 
-        if (!line) return;
+        if (!line) {
+            return;
+        }
 
-        const warehouseSelect = document.querySelector("select[name='warehouse_id']");
-        const warehouseId = warehouseSelect ? warehouseSelect.value : "";
+        const warehouseId = warehouseSelect
+            ? warehouseSelect.value
+            : "";
 
-        const resultsBox = line.querySelector(".line-search-results");
-        const hiddenId = line.querySelector(".line-article-id");
-        const stockBox = line.querySelector(".line-stock");
+        const resultsBox = line.querySelector(
+            ".line-search-results"
+        );
+
+        const articleIdInput = line.querySelector(
+            ".line-article-id"
+        );
+
+        const stockBox = line.querySelector(
+            ".line-stock"
+        );
 
         const term = input.value.trim();
 
-        if (hiddenId) {
-            hiddenId.value = "";
+        if (articleIdInput) {
+            articleIdInput.value = "";
         }
 
-        if (stockBox) {
-            stockBox.classList.add("d-none");
-            stockBox.innerHTML = "";
-        }
+        clearStockBox(line);
 
-        if (!resultsBox) return;
+        if (!resultsBox) {
+            return;
+        }
 
         if (!warehouseId) {
-            resultsBox.innerHTML =
-                '<div class="list-group-item text-danger">Seleccione primero una bodega.</div>';
+            resultsBox.innerHTML = `
+                <div class="list-group-item text-danger">
+                    Selecciona primero una bodega.
+                </div>
+            `;
+
             resultsBox.classList.remove("d-none");
             return;
         }
 
-        if (term.length < 1) {
-            resultsBox.classList.add("d-none");
-            resultsBox.innerHTML = "";
+        if (term.length < 2) {
+            clearResultBox(line);
             return;
         }
 
         try {
-            const res = await fetch(
-                `/purchases/requests/articles/search?q=${encodeURIComponent(term)}&warehouse_id=${warehouseId}`
+            const params = new URLSearchParams({
+                q: term,
+                warehouse_id: warehouseId
+            });
+
+            const response = await fetch(
+                `{{ url_for('purchases.search_request_articles') }}?${params.toString()}`,
+                {
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest"
+                    }
+                }
             );
 
-            const data = await res.json();
+            if (!response.ok) {
+                throw new Error(
+                    `HTTP ${response.status}`
+                );
+            }
+
+            const data = await response.json();
 
             resultsBox.innerHTML = "";
 
             if (!data.items || !data.items.length) {
-                resultsBox.innerHTML =
-                    '<div class="list-group-item text-muted">Sin resultados</div>';
+                resultsBox.innerHTML = `
+                    <div class="list-group-item text-muted">
+                        Sin resultados
+                    </div>
+                `;
+
                 resultsBox.classList.remove("d-none");
                 return;
             }
 
-            data.items.forEach(item => {
-                const btn = document.createElement("button");
+            data.items.forEach(function (item) {
+                const button = document.createElement("button");
 
-                btn.type = "button";
-                btn.className = "list-group-item list-group-item-action";
+                button.type = "button";
+                button.className =
+                    "list-group-item list-group-item-action";
 
-                btn.innerHTML =
-                    '<div class="fw-semibold">' +
-                        item.code + ' - ' + item.name +
-                    '</div>' +
-                    '<div class="small text-success">' +
-                        'Stock actual: ' + item.quantity_on_hand +
-                    '</div>' +
-                    '<div class="small text-primary">' +
-                        'Disponible: ' + item.available_quantity +
-                    '</div>';
+                button.innerHTML = `
+                    <div class="fw-semibold">
+                        ${escapeHtml(item.code)}
+                        -
+                        ${escapeHtml(item.name)}
+                    </div>
 
-                btn.addEventListener("click", function () {
-                    input.value = item.code + " - " + item.name;
+                    <div class="small text-success">
+                        Stock actual:
+                        ${escapeHtml(item.quantity_on_hand)}
+                    </div>
 
-                    if (hiddenId) {
-                        hiddenId.value = item.id;
+                    <div class="small text-primary">
+                        Disponible:
+                        ${escapeHtml(item.available_quantity)}
+                    </div>
+                `;
+
+                button.addEventListener(
+                    "click",
+                    function () {
+                        input.value =
+                            `${item.code} - ${item.name}`;
+
+                        if (articleIdInput) {
+                            articleIdInput.value = item.id;
+                        }
+
+                        const pendingArticleIdInput =
+                            line.querySelector(
+                                ".line-pending-article-id"
+                            );
+
+                        if (pendingArticleIdInput) {
+                            pendingArticleIdInput.value = "";
+                        }
+
+                        if (stockBox) {
+                            stockBox.textContent =
+                                `Stock actual: ${item.quantity_on_hand} | ` +
+                                `Disponible: ${item.available_quantity}`;
+
+                            stockBox.classList.remove(
+                                "d-none"
+                            );
+                        }
+
+                        const unitSelect = line.querySelector(
+                            "select[name='line_unit_id[]']"
+                        );
+
+                        if (
+                            unitSelect
+                            && item.unit_id
+                        ) {
+                            unitSelect.value =
+                                String(item.unit_id);
+                        }
+
+                        const manualInput = line.querySelector(
+                            ".line-manual-input"
+                        );
+
+                        if (manualInput) {
+                            manualInput.value = "";
+                        }
+
+                        clearResultBox(line);
                     }
+                );
 
-                    if (stockBox) {
-                        stockBox.innerHTML =
-                            "Stock actual en bodega: " + item.quantity_on_hand +
-                            " | Disponible: " + item.available_quantity;
-                        stockBox.classList.remove("d-none");
-                    }
-
-                    resultsBox.classList.add("d-none");
-
-                    const unitSelect = line.querySelector("select[name='line_unit_id[]']");
-                    if (unitSelect && item.unit_id) {
-                        unitSelect.value = item.unit_id;
-                    }
-
-                    const manualInput = line.querySelector(".line-manual-input");
-                    if (manualInput) {
-                        manualInput.value = "";
-                    }
-                });
-
-                resultsBox.appendChild(btn);
+                resultsBox.appendChild(button);
             });
 
             resultsBox.classList.remove("d-none");
 
         } catch (error) {
-            console.error(error);
+            console.error(
+                "[ARTICLE SEARCH ERROR]",
+                error
+            );
 
-            resultsBox.innerHTML =
-                '<div class="list-group-item text-danger">Error buscando artículos.</div>';
+            resultsBox.innerHTML = `
+                <div class="list-group-item text-danger">
+                    No fue posible buscar artículos.
+                </div>
+            `;
+
             resultsBox.classList.remove("d-none");
         }
     }
 
-    addLineBtn.addEventListener("click", function () {
-        const clone = template.content.cloneNode(true);
-        linesWrapper.appendChild(clone);
-        refreshUrgentCheckboxValues();
-    });
+    addLineBtn.addEventListener(
+        "click",
+        function () {
+            const clone = template.content.cloneNode(true);
 
-    linesWrapper.addEventListener("click", function (event) {
-        if (event.target.classList.contains("remove-line-btn")) {
-            const line = event.target.closest(".request-line");
-            if (!line) return;
+            linesWrapper.appendChild(clone);
 
-            const totalLines = linesWrapper.querySelectorAll(".request-line").length;
+            refreshLineIndexes();
+
+            const newLines = linesWrapper.querySelectorAll(
+                ".request-line"
+            );
+
+            const newLine = newLines[
+                newLines.length - 1
+            ];
+
+            const searchInput = newLine?.querySelector(
+                ".line-article-search"
+            );
+
+            if (searchInput) {
+                searchInput.focus();
+            }
+        }
+    );
+
+    linesWrapper.addEventListener(
+        "click",
+        function (event) {
+            const removeButton = event.target.closest(
+                ".remove-line-btn"
+            );
+
+            if (!removeButton) {
+                return;
+            }
+
+            const line = removeButton.closest(
+                ".request-line"
+            );
+
+            if (!line) {
+                return;
+            }
+
+            const totalLines = linesWrapper.querySelectorAll(
+                ".request-line"
+            ).length;
 
             if (totalLines === 1) {
                 clearLine(line);
             } else {
                 line.remove();
-                refreshUrgentCheckboxValues();
+                refreshLineIndexes();
             }
         }
-    });
+    );
 
-    document.addEventListener("input", function (event) {
-        const line = event.target.closest(".request-line");
-        if (!line) return;
+    linesWrapper.addEventListener(
+        "input",
+        function (event) {
+            const line = event.target.closest(
+                ".request-line"
+            );
 
-        const articleSearch = line.querySelector(".line-article-search");
-        const manualInput = line.querySelector(".line-manual-input");
-
-        if (event.target.classList.contains("line-article-search")) {
-            clearArticleSelection(line);
-
-            const previousTimer = searchTimers.get(event.target);
-            if (previousTimer) {
-                clearTimeout(previousTimer);
+            if (!line) {
+                return;
             }
 
-            const timer = setTimeout(function () {
-                searchArticles(event.target);
-            }, 180);
+            if (
+                event.target.classList.contains(
+                    "line-article-search"
+                )
+            ) {
+                clearArticleSelection(line);
 
-            searchTimers.set(event.target, timer);
+                const previousTimer = searchTimers.get(
+                    event.target
+                );
+
+                if (previousTimer) {
+                    clearTimeout(previousTimer);
+                }
+
+                const timer = setTimeout(
+                    function () {
+                        searchArticles(
+                            event.target
+                        );
+                    },
+                    250
+                );
+
+                searchTimers.set(
+                    event.target,
+                    timer
+                );
+            }
+
+            if (
+                event.target.classList.contains(
+                    "line-manual-input"
+                )
+                && event.target.value.trim() !== ""
+            ) {
+                const articleIdInput = line.querySelector(
+                    ".line-article-id"
+                );
+
+                const pendingArticleIdInput =
+                    line.querySelector(
+                        ".line-pending-article-id"
+                    );
+
+                const articleSearchInput =
+                    line.querySelector(
+                        ".line-article-search"
+                    );
+
+                if (articleIdInput) {
+                    articleIdInput.value = "";
+                }
+
+                if (pendingArticleIdInput) {
+                    pendingArticleIdInput.value = "";
+                }
+
+                if (articleSearchInput) {
+                    articleSearchInput.value = "";
+                }
+
+                clearStockBox(line);
+                clearResultBox(line);
+            }
         }
+    );
 
-        if (event.target === manualInput && manualInput.value.trim() !== "") {
-            const hiddenId = line.querySelector(".line-article-id");
-            const articleSearchInput = line.querySelector(".line-article-search");
-            const stockBox = line.querySelector(".line-stock");
-            const resultsBox = line.querySelector(".line-search-results");
+    document.addEventListener(
+        "click",
+        function (event) {
+            if (
+                event.target.closest(
+                    ".line-search-results"
+                )
+                || event.target.classList.contains(
+                    "line-article-search"
+                )
+            ) {
+                return;
+            }
 
-            if (hiddenId) hiddenId.value = "";
-            if (articleSearchInput) articleSearchInput.value = "";
-            if (stockBox) {
-                stockBox.classList.add("d-none");
-                stockBox.innerHTML = "";
-            }
-            if (resultsBox) {
-                resultsBox.classList.add("d-none");
-                resultsBox.innerHTML = "";
-            }
+            document.querySelectorAll(
+                ".line-search-results"
+            ).forEach(function (box) {
+                box.classList.add("d-none");
+            });
         }
-    });
+    );
 
-    document.addEventListener("click", function (event) {
-        if (
-            !event.target.closest(".line-search-results") &&
-            !event.target.classList.contains("line-article-search")
-        ) {
-            document.querySelectorAll(".line-search-results")
-                .forEach(box => {
-                    box.classList.add("d-none");
+    if (warehouseSelect) {
+        warehouseSelect.addEventListener(
+            "change",
+            function () {
+                linesWrapper.querySelectorAll(
+                    ".request-line"
+                ).forEach(function (line) {
+                    const articleIdInput =
+                        line.querySelector(
+                            ".line-article-id"
+                        );
+
+                    const pendingArticleIdInput =
+                        line.querySelector(
+                            ".line-pending-article-id"
+                        );
+
+                    const searchInput =
+                        line.querySelector(
+                            ".line-article-search"
+                        );
+
+                    if (articleIdInput) {
+                        articleIdInput.value = "";
+                    }
+
+                    if (pendingArticleIdInput) {
+                        pendingArticleIdInput.value = "";
+                    }
+
+                    if (searchInput) {
+                        searchInput.value = "";
+                    }
+
+                    clearStockBox(line);
+                    clearResultBox(line);
                 });
+            }
+        );
+    }
+
+    form.addEventListener(
+        "submit",
+        function () {
+            refreshLineIndexes();
+
+            if (saveButton) {
+                saveButton.disabled = true;
+
+                const label = saveButton.querySelector(
+                    ".save-request-label"
+                );
+
+                const loading = saveButton.querySelector(
+                    ".save-request-loading"
+                );
+
+                if (label) {
+                    label.classList.add("d-none");
+                }
+
+                if (loading) {
+                    loading.classList.remove("d-none");
+                }
+            }
         }
-    });
+    );
 
-    document.querySelector("select[name='warehouse_id']").addEventListener("change", function () {
-        document.querySelectorAll(".request-line").forEach(line => {
-            const hiddenId = line.querySelector(".line-article-id");
-            const searchInput = line.querySelector(".line-article-search");
-            const stockBox = line.querySelector(".line-stock");
-            const resultsBox = line.querySelector(".line-search-results");
-
-            if (hiddenId) hiddenId.value = "";
-            if (searchInput) searchInput.value = "";
-            if (stockBox) {
-                stockBox.classList.add("d-none");
-                stockBox.innerHTML = "";
-            }
-            if (resultsBox) {
-                resultsBox.classList.add("d-none");
-                resultsBox.innerHTML = "";
-            }
-        });
-    });
-
-    refreshUrgentCheckboxValues();
+    refreshLineIndexes();
 });
 </script>
+
 {% endblock %}
