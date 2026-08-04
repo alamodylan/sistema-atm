@@ -464,7 +464,6 @@ def create_work_order_action():
                     Equipment.query
                     .filter(
                         Equipment.id == int(equipment_id_raw),
-                        Equipment.site_id == site_id,
                         Equipment.equipment_type_id
                         == equipment_type.id,
                         Equipment.is_active.is_(True),
@@ -616,25 +615,13 @@ def create_work_order_action():
 @permission_required("ot")
 def search_equipment_for_work_order():
     """
-    Busca equipos activos del predio actual.
+    Busca equipos activos por tipo.
 
     Comportamiento:
-    - CONTENEDOR: no devuelve equipos, porque se digita manualmente.
-    - CHASIS: exige al menos 2 caracteres de búsqueda.
-    - Otros tipos: puede devolver todos los equipos del tipo aunque
-      no se haya escrito texto.
+    - CONTENEDOR: no devuelve equipos porque se digita manualmente.
+    - CHASIS: exige al menos 2 caracteres.
+    - Otros tipos: devuelve todos los equipos activos del tipo.
     """
-
-    active_site_id = session.get("active_site_id")
-
-    if not active_site_id:
-        return jsonify(
-            {
-                "ok": False,
-                "message": "No hay un predio activo seleccionado.",
-                "items": [],
-            }
-        ), 400
 
     equipment_type_id = request.args.get(
         "equipment_type_id",
@@ -668,7 +655,9 @@ def search_equipment_for_work_order():
         return jsonify(
             {
                 "ok": False,
-                "message": "El tipo de equipo no existe o está inactivo.",
+                "message": (
+                    "El tipo de equipo no existe o está inactivo."
+                ),
                 "items": [],
             }
         ), 404
@@ -678,7 +667,6 @@ def search_equipment_for_work_order():
         or ""
     ).strip().upper()
 
-    # Los contenedores se ingresan manualmente.
     if equipment_type_code == "CONTENEDOR":
         return jsonify(
             {
@@ -688,8 +676,10 @@ def search_equipment_for_work_order():
             }
         )
 
-    # El chasis conserva el buscador AJAX actual.
-    if equipment_type_code == "CHASIS" and len(q) < 2:
+    if (
+        equipment_type_code == "CHASIS"
+        and len(q) < 2
+    ):
         return jsonify(
             {
                 "ok": True,
@@ -701,23 +691,24 @@ def search_equipment_for_work_order():
     query = (
         Equipment.query
         .filter(
-            Equipment.site_id == int(active_site_id),
-            Equipment.equipment_type_id == equipment_type.id,
+            Equipment.equipment_type_id
+            == equipment_type.id,
             Equipment.is_active.is_(True),
         )
     )
 
-    # Para cualquier equipo se permite filtrar cuando hay texto.
     if q:
         query = query.filter(
             db.or_(
-                Equipment.code.ilike(f"{q}%"),
-                Equipment.description.ilike(f"%{q}%"),
+                Equipment.code.ilike(
+                    f"{q}%"
+                ),
+                Equipment.description.ilike(
+                    f"%{q}%"
+                ),
             )
         )
 
-    # Chasis devuelve pocos resultados mientras se escribe.
-    # Los demás tipos pueden mostrar todo el catálogo del predio.
     result_limit = (
         20
         if equipment_type_code == "CHASIS"
@@ -751,7 +742,9 @@ def search_equipment_for_work_order():
         label = code
 
         if description:
-            label = f"{code} - {description}"
+            label = (
+                f"{code} - {description}"
+            )
 
         items.append(
             {
@@ -759,14 +752,18 @@ def search_equipment_for_work_order():
                 "code": code,
                 "description": description,
                 "label": label,
-                "equipment_type_id": equipment.equipment_type_id,
+                "equipment_type_id": (
+                    equipment.equipment_type_id
+                ),
             }
         )
 
     return jsonify(
         {
             "ok": True,
-            "equipment_type_code": equipment_type_code,
+            "equipment_type_code": (
+                equipment_type_code
+            ),
             "items": items,
         }
     )
