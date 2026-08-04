@@ -1,6 +1,16 @@
 from datetime import datetime
-
-from flask import Blueprint, abort, redirect, render_template, session, url_for
+import hashlib
+from flask import (
+    Blueprint,
+    abort,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -947,3 +957,276 @@ def manager_dashboard():
             "dashboard/manager.html",
             **_empty_manager_context(),
         )
+
+# =========================================================
+# MONITOR DE ARTÍCULOS POR ALISTAR
+# =========================================================
+
+WAREHOUSE_MONITOR_ALLOWED_ROLES = {
+    "BODEGA",
+    "ADMIN",
+    "SUPER_USUARIO",
+}
+
+
+def _validate_warehouse_monitor_access() -> int:
+    """
+    Valida el acceso al monitor y devuelve el predio activo.
+
+    Los equipos y artículos son globales, pero las solicitudes
+    mostradas corresponden al predio activo del usuario.
+    """
+
+    role_code = (
+        current_user.role_code
+        or ""
+    ).strip().upper()
+
+    if role_code not in WAREHOUSE_MONITOR_ALLOWED_ROLES:
+        abort(403)
+
+    active_site_id = session.get(
+        "active_site_id"
+    )
+
+    if not active_site_id:
+        abort(
+            400,
+            description=(
+                "Debe seleccionar un predio activo."
+            ),
+        )
+
+    try:
+        return int(active_site_id)
+
+    except (TypeError, ValueError):
+        abort(
+            400,
+            description=(
+                "El predio activo no es válido."
+            ),
+        )
+
+
+@dashboard_bp.route(
+    "/dashboard/bodega-monitor",
+    methods=["GET"],
+)
+@login_required
+def warehouse_preparation_monitor():
+    """
+    Muestra la pantalla fija de artículos por alistar.
+    """
+
+    _validate_warehouse_monitor_access()
+
+    return render_template(
+        "dashboard/warehouse_preparation_monitor.html"
+    )
+
+
+@dashboard_bp.route(
+    "/dashboard/bodega-monitor/data",
+    methods=["GET"],
+)
+@login_required
+def warehouse_preparation_monitor_data():
+    """
+    Devuelve únicamente las líneas aprobadas y pendientes
+    de preparación para el predio activo.
+
+    La consulta:
+    - selecciona solo las columnas necesarias;
+    - no carga relaciones ORM completas;
+    - no calcula stock;
+    - no modifica objetos;
+    - devuelve 304 si la información no cambió.
+    """
+
+    active_site_id = (
+        _validate_warehouse_monitor_access()
+    )
+
+    try:
+        pending_quantity_expression = (
+            WorkOrderRequestLine.quantity_requested
+            - WorkOrderRequestLine.quantity_attended
+        )
+
+        rows = (
+            db.session.query(
+                WorkOrderRequestLine.id.label(
+                    "line_id"
+                ),
+                WorkOrderRequest.id.label(
+                    "request_id"
+                ),
+                Article.code.label(
+                    "article_code"
+                ),
+                Article.name.label(
+                    "article_name"
+                ),
+                pending_quantity_expression.label(
+                    "pending_quantity"
+                ),
+            )
+            .join(
+                WorkOrderRequest,
+                WorkOrderRequest.id
+                == WorkOrderRequestLine.work_order_request_id,
+            )
+            .join(
+                WorkOrder,
+                WorkOrder.id
+                == WorkOrderRequest.work_order_id,
+            )
+            .join(
+                Article,
+                Article.id
+                == WorkOrderRequestLine.article_id,
+            )
+            .filter(
+                WorkOrder.site_id
+                == active_site_id,
+
+                WorkOrderRequest.request_status
+                == "ENVIADA",
+
+                WorkOrderRequest.sent_to_warehouse_at.isnot(
+                    None
+                ),
+
+                WorkOrderRequestLine.manager_review_status
+                == "APROBADA",
+
+                WorkOrderRequestLine.line_status.in_(
+                    [
+                        "SOLICITADA",
+                        "ATENDIDA_PARCIAL",
+                    ]
+                ),
+
+                pending_quantity_expression > 0,
+            )
+            .order_by(
+                WorkOrderRequest.sent_to_warehouse_at.asc(),
+                WorkOrderRequest.id.asc(),
+                WorkOrderRequestLine.id.asc(),
+            )
+            .all()
+        )
+
+        items = []
+
+        signature_parts = []
+
+        for row in rows:
+            pending_quantity = (
+                row.pending_quantity or 0
+            )
+
+            pending_text = format(
+                pending_quantity,
+                "f",
+            )
+
+            if "." in pending_text:
+                pending_text = pending_text.rstrip(
+                    "0"
+                ).rstrip(".")
+
+            item = {
+                "line_id": int(row.line_id),
+                "request_id": int(row.request_id),
+                "code": (
+                    row.article_code
+                    or ""
+                ).strip(),
+                "name": (
+                    row.article_name
+                    or ""
+                ).strip(),
+                "quantity": pending_text,
+            }
+
+            items.append(item)
+
+            signature_parts.append(
+                "|".join(
+                    [
+                        str(item["line_id"]),
+                        str(item["request_id"]),
+                        item["code"],
+                        item["name"],
+                        item["quantity"],
+                    ]
+                )
+            )
+
+        signature_source = "\n".join(
+            signature_parts
+        )
+
+        etag_value = hashlib.sha256(
+            signature_source.encode("utf-8")
+        ).hexdigest()
+
+        client_etag = (
+            request.headers.get("If-None-Match")
+            or ""
+        ).strip().strip('"')
+
+        if client_etag == etag_value:
+            response = make_response(
+                "",
+                304,
+            )
+
+            response.set_etag(
+                etag_value
+            )
+
+            response.headers[
+                "Cache-Control"
+            ] = "private, no-cache"
+
+            return response
+
+        response = jsonify(
+            {
+                "ok": True,
+                "count": len(items),
+                "items": items,
+            }
+        )
+
+        response.set_etag(
+            etag_value
+        )
+
+        response.headers[
+            "Cache-Control"
+        ] = "private, no-cache"
+
+        return response
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[WAREHOUSE MONITOR ERROR] "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        return jsonify(
+            {
+                "ok": False,
+                "message": (
+                    "No fue posible cargar los "
+                    "artículos pendientes."
+                ),
+                "items": [],
+            }
+        ), 500

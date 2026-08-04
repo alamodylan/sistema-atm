@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>Artículos por alistar</title>
+
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            min-height: 100%;
+            margin: 0;
+            background: #0b1220;
+            color: #ffffff;
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+        }
+
+        body {
+            overflow-x: hidden;
+        }
+
+        .monitor {
+            min-height: 100vh;
+            padding: 12px;
+        }
+
+        .monitor-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+
+            margin-bottom: 10px;
+            padding: 10px 14px;
+
+            border: 2px solid #334155;
+            border-radius: 10px;
+
+            background: #111827;
+        }
+
+        .monitor-title {
+            margin: 0;
+            font-size: clamp(24px, 3vw, 42px);
+            font-weight: 900;
+            letter-spacing: 0.04em;
+        }
+
+        .monitor-counter {
+            flex-shrink: 0;
+
+            min-width: 80px;
+            padding: 7px 14px;
+
+            border-radius: 999px;
+
+            background: #2563eb;
+
+            font-size: clamp(22px, 2.5vw, 36px);
+            font-weight: 900;
+            text-align: center;
+        }
+
+        .status-line {
+            min-height: 22px;
+            margin-bottom: 8px;
+
+            color: #94a3b8;
+            font-size: 14px;
+            text-align: right;
+        }
+
+        .table-wrapper {
+            overflow: hidden;
+
+            border: 2px solid #334155;
+            border-radius: 10px;
+
+            background: #0f172a;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        thead {
+            background: #1e293b;
+        }
+
+        th {
+            padding: 12px 10px;
+            border-bottom: 2px solid #475569;
+
+            color: #cbd5e1;
+
+            font-size: clamp(18px, 2vw, 28px);
+            font-weight: 900;
+            text-align: left;
+            text-transform: uppercase;
+        }
+
+        td {
+            padding: 11px 10px;
+            border-bottom: 1px solid #334155;
+
+            font-size: clamp(20px, 2.1vw, 32px);
+            font-weight: 700;
+            vertical-align: middle;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        tbody tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.035);
+        }
+
+        .code-column {
+            width: 20%;
+        }
+
+        .name-column {
+            width: 62%;
+        }
+
+        .quantity-column {
+            width: 18%;
+            text-align: center;
+        }
+
+        td.code {
+            color: #60a5fa;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        td.name {
+            overflow-wrap: anywhere;
+            line-height: 1.12;
+        }
+
+        td.quantity {
+            color: #facc15;
+            font-size: clamp(28px, 3vw, 46px);
+            font-weight: 900;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .request-separator td {
+            border-top: 5px solid #2563eb;
+        }
+
+        .new-row {
+            animation: newRow 1.2s ease-out;
+        }
+
+        @keyframes newRow {
+            0% {
+                background: #14532d;
+            }
+
+            100% {
+                background: transparent;
+            }
+        }
+
+        .empty-state {
+            display: flex;
+            min-height: calc(100vh - 145px);
+            align-items: center;
+            justify-content: center;
+
+            border: 2px solid #334155;
+            border-radius: 10px;
+
+            background: #0f172a;
+
+            color: #94a3b8;
+
+            font-size: clamp(30px, 4vw, 58px);
+            font-weight: 900;
+            text-align: center;
+        }
+
+        .error-state {
+            color: #fca5a5;
+        }
+
+        @media (max-width: 700px) {
+            .monitor {
+                padding: 6px;
+            }
+
+            .monitor-header {
+                padding: 8px 10px;
+            }
+
+            th,
+            td {
+                padding-left: 6px;
+                padding-right: 6px;
+            }
+
+            .code-column {
+                width: 22%;
+            }
+
+            .name-column {
+                width: 58%;
+            }
+
+            .quantity-column {
+                width: 20%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="monitor">
+
+    <header class="monitor-header">
+        <h1 class="monitor-title">
+            ARTÍCULOS POR ALISTAR
+        </h1>
+
+        <div
+            class="monitor-counter"
+            id="pendingCounter"
+        >
+            0
+        </div>
+    </header>
+
+    <div
+        class="status-line"
+        id="monitorStatus"
+    >
+        Conectando...
+    </div>
+
+    <div
+        class="table-wrapper d-none"
+        id="tableWrapper"
+    >
+        <table>
+            <thead>
+                <tr>
+                    <th class="code-column">
+                        Código
+                    </th>
+
+                    <th class="name-column">
+                        Artículo
+                    </th>
+
+                    <th class="quantity-column">
+                        Cant.
+                    </th>
+                </tr>
+            </thead>
+
+            <tbody id="pendingItemsBody"></tbody>
+        </table>
+    </div>
+
+    <div
+        class="empty-state"
+        id="emptyState"
+    >
+        SIN ARTÍCULOS PENDIENTES
+    </div>
+
+</div>
+
+<script>
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+        const DATA_URL =
+            "{{ url_for('dashboard.warehouse_preparation_monitor_data') }}";
+
+        const NORMAL_INTERVAL = 12000;
+        const MAX_ERROR_INTERVAL = 60000;
+
+        const tableWrapper =
+            document.getElementById("tableWrapper");
+
+        const tableBody =
+            document.getElementById("pendingItemsBody");
+
+        const emptyState =
+            document.getElementById("emptyState");
+
+        const pendingCounter =
+            document.getElementById("pendingCounter");
+
+        const monitorStatus =
+            document.getElementById("monitorStatus");
+
+        let currentEtag = "";
+        let requestInProgress = false;
+        let pollingTimer = null;
+        let currentInterval = NORMAL_INTERVAL;
+
+        const renderedRows = new Map();
+
+        function scheduleNextPoll(delay = currentInterval) {
+            clearTimeout(pollingTimer);
+
+            pollingTimer = setTimeout(
+                loadPendingItems,
+                delay
+            );
+        }
+
+        function setVisibilityState(count) {
+            pendingCounter.textContent =
+                String(count);
+
+            if (count > 0) {
+                tableWrapper.style.display = "block";
+                emptyState.style.display = "none";
+            } else {
+                tableWrapper.style.display = "none";
+                emptyState.style.display = "flex";
+                emptyState.classList.remove(
+                    "error-state"
+                );
+                emptyState.textContent =
+                    "SIN ARTÍCULOS PENDIENTES";
+            }
+        }
+
+        function createRow(item, previousRequestId) {
+            const row =
+                document.createElement("tr");
+
+            row.dataset.lineId =
+                String(item.line_id);
+
+            row.dataset.requestId =
+                String(item.request_id);
+
+            row.classList.add("new-row");
+
+            if (
+                previousRequestId !== null
+                && previousRequestId
+                    !== item.request_id
+            ) {
+                row.classList.add(
+                    "request-separator"
+                );
+            }
+
+            const codeCell =
+                document.createElement("td");
+
+            codeCell.className = "code";
+            codeCell.textContent =
+                item.code || "-";
+
+            const nameCell =
+                document.createElement("td");
+
+            nameCell.className = "name";
+            nameCell.textContent =
+                item.name || "-";
+
+            const quantityCell =
+                document.createElement("td");
+
+            quantityCell.className =
+                "quantity";
+
+            quantityCell.textContent =
+                item.quantity || "0";
+
+            row.appendChild(codeCell);
+            row.appendChild(nameCell);
+            row.appendChild(quantityCell);
+
+            return row;
+        }
+
+        function updateRows(items) {
+            const incomingIds = new Set();
+
+            let previousRequestId = null;
+
+            const fragment =
+                document.createDocumentFragment();
+
+            items.forEach(function (item) {
+                const lineId =
+                    String(item.line_id);
+
+                incomingIds.add(lineId);
+
+                let row =
+                    renderedRows.get(lineId);
+
+                if (!row) {
+                    row = createRow(
+                        item,
+                        previousRequestId
+                    );
+
+                    renderedRows.set(
+                        lineId,
+                        row
+                    );
+                } else {
+                    row.dataset.requestId =
+                        String(item.request_id);
+
+                    row.classList.remove(
+                        "request-separator"
+                    );
+
+                    if (
+                        previousRequestId !== null
+                        && previousRequestId
+                            !== item.request_id
+                    ) {
+                        row.classList.add(
+                            "request-separator"
+                        );
+                    }
+
+                    const cells =
+                        row.children;
+
+                    cells[0].textContent =
+                        item.code || "-";
+
+                    cells[1].textContent =
+                        item.name || "-";
+
+                    cells[2].textContent =
+                        item.quantity || "0";
+                }
+
+                fragment.appendChild(row);
+
+                previousRequestId =
+                    item.request_id;
+            });
+
+            for (
+                const [lineId, row]
+                of renderedRows.entries()
+            ) {
+                if (!incomingIds.has(lineId)) {
+                    row.remove();
+
+                    renderedRows.delete(
+                        lineId
+                    );
+                }
+            }
+
+            tableBody.appendChild(fragment);
+
+            setVisibilityState(items.length);
+        }
+
+        async function loadPendingItems() {
+            if (requestInProgress) {
+                scheduleNextPoll();
+                return;
+            }
+
+            if (document.hidden) {
+                scheduleNextPoll();
+                return;
+            }
+
+            requestInProgress = true;
+
+            try {
+                const headers = {
+                    "Accept": "application/json"
+                };
+
+                if (currentEtag) {
+                    headers["If-None-Match"] =
+                        currentEtag;
+                }
+
+                const response = await fetch(
+                    DATA_URL,
+                    {
+                        method: "GET",
+                        headers: headers,
+                        cache: "no-store"
+                    }
+                );
+
+                if (response.status === 304) {
+                    currentInterval =
+                        NORMAL_INTERVAL;
+
+                    monitorStatus.textContent =
+                        "Actualizado";
+
+                    return;
+                }
+
+                const data =
+                    await response.json();
+
+                if (
+                    !response.ok
+                    || data.ok === false
+                ) {
+                    throw new Error(
+                        data.message
+                        || "Error cargando artículos."
+                    );
+                }
+
+                currentEtag =
+                    response.headers.get("ETag")
+                    || "";
+
+                updateRows(
+                    data.items || []
+                );
+
+                currentInterval =
+                    NORMAL_INTERVAL;
+
+                monitorStatus.textContent =
+                    "Actualizado";
+
+            } catch (error) {
+                console.error(
+                    "[WAREHOUSE MONITOR]",
+                    error
+                );
+
+                currentInterval = Math.min(
+                    currentInterval * 2,
+                    MAX_ERROR_INTERVAL
+                );
+
+                monitorStatus.textContent =
+                    "Error de conexión. Reintentando...";
+
+                if (!renderedRows.size) {
+                    tableWrapper.style.display =
+                        "none";
+
+                    emptyState.style.display =
+                        "flex";
+
+                    emptyState.classList.add(
+                        "error-state"
+                    );
+
+                    emptyState.textContent =
+                        "SIN CONEXIÓN";
+                }
+
+            } finally {
+                requestInProgress = false;
+
+                scheduleNextPoll();
+            }
+        }
+
+        document.addEventListener(
+            "visibilitychange",
+            function () {
+                if (!document.hidden) {
+                    clearTimeout(
+                        pollingTimer
+                    );
+
+                    loadPendingItems();
+                }
+            }
+        );
+
+        loadPendingItems();
+    }
+);
+</script>
+
+</body>
+</html>

@@ -39,6 +39,25 @@
             </a>
             {% endif %}
 
+            {% if current_user.is_authenticated
+                and current_user.role
+                and current_user.role.code in [
+                    "BODEGA",
+                    "ADMIN",
+                    "SUPER_USUARIO"
+                ]
+            %}
+            <a
+                href="{{ url_for('dashboard.warehouse_preparation_monitor') }}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="nav-link sidebar-link"
+            >
+                <i class="bi bi-display me-2"></i>
+                Monitor de alistado
+            </a>
+            {% endif %}
+
             {% if can_use_permissions and current_user.has_permission("terminal_taller") %}
             <a href="{{ url_for('mechanic_terminal.index') }}"
                class="nav-link sidebar-link {% if request.endpoint and request.endpoint.startswith('mechanic_terminal.') %}active{% endif %}">
