@@ -509,15 +509,36 @@ function renderWorkOrders() {
     document.getElementById("noWorkOrders").classList.add("d-none");
 
     currentWorkOrders.forEach(function (ot) {
-        const equipo = ot.equipment_code_snapshot ? ot.equipment_code_snapshot : "Sin equipo";
+        const equipo = ot.equipment_code_snapshot
+            ? ot.equipment_code_snapshot
+            : "Sin equipo";
+
+        const descripcion = ot.description
+            ? escapeHtml(ot.description)
+            : "";
 
         const col = document.createElement("div");
         col.className = "col-12 col-md-6 col-xl-4";
 
         col.innerHTML =
             '<button type="button" class="btn btn-outline-primary w-100 p-3 text-start rounded-4">' +
-                '<div class="fw-bold">OT ' + ot.number + '</div>' +
-                '<div class="small text-muted">Equipo: ' + equipo + '</div>' +
+
+                '<div class="fw-bold">' +
+                    'OT ' + ot.number +
+                '</div>' +
+
+                '<div class="small text-muted">' +
+                    'Equipo: ' + equipo +
+                '</div>' +
+
+                (
+                    descripcion
+                        ? '<div class="small mt-2 text-dark">' +
+                            descripcion +
+                        '</div>'
+                        : ''
+                ) +
+
             '</button>';
 
         col.querySelector("button").onclick = async function (e) {

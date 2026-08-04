@@ -9,7 +9,11 @@
 
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
-        <form method="POST" action="{{ url_for('work_orders.create_work_order_action') }}">
+        <form
+            method="POST"
+            action="{{ url_for('work_orders.create_work_order_action') }}"
+            id="createWorkOrderForm"
+        >
             <input type="hidden" name="responsible_user_id" value="{{ current_user.id }}">
 
             <div class="row g-4">
@@ -178,8 +182,38 @@
             </div>
 
             <div class="d-flex justify-content-end gap-2 mt-4">
-                <a href="{{ url_for('work_orders.list_work_orders') }}" class="btn btn-light border">Cancelar</a>
-                <button type="submit" class="btn btn-primary px-4">Guardar OT</button>
+
+                <a
+                    href="{{ url_for('work_orders.list_work_orders') }}"
+                    class="btn btn-light border"
+                    id="cancelWorkOrderBtn"
+                >
+                    Cancelar
+                </a>
+
+                <button
+                    type="submit"
+                    class="btn btn-primary px-4"
+                    id="saveWorkOrderBtn"
+                >
+                    <span id="saveWorkOrderText">
+                        Guardar OT
+                    </span>
+
+                    <span
+                        id="saveWorkOrderLoading"
+                        class="d-none"
+                    >
+                        <span
+                            class="spinner-border spinner-border-sm me-2"
+                            role="status"
+                            aria-hidden="true"
+                        ></span>
+
+                        Guardando...
+                    </span>
+                </button>
+
             </div>
         </form>
     </div>
@@ -202,6 +236,23 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+
+    const createWorkOrderForm =
+        document.getElementById("createWorkOrderForm");
+
+    const saveWorkOrderBtn =
+        document.getElementById("saveWorkOrderBtn");
+
+    const saveWorkOrderText =
+        document.getElementById("saveWorkOrderText");
+
+    const saveWorkOrderLoading =
+        document.getElementById("saveWorkOrderLoading");
+
+    const cancelWorkOrderBtn =
+        document.getElementById("cancelWorkOrderBtn");
+
+    let workOrderSubmitting = false;
 
     const equipmentTypeSelect =
         document.getElementById("equipment_type_id");
@@ -616,6 +667,69 @@ document.addEventListener("DOMContentLoaded", function () {
     document
         .getElementById("addTaskRowBtn")
         .addEventListener("click", addTaskRow);
+
+    if (createWorkOrderForm) {
+        createWorkOrderForm.addEventListener(
+            "submit",
+            function (event) {
+
+                /*
+                 * Si el formulario ya se está enviando,
+                 * se bloquea cualquier intento adicional.
+                 */
+                if (workOrderSubmitting) {
+                    event.preventDefault();
+                    return;
+                }
+
+                /*
+                 * Permite que el navegador ejecute primero
+                 * las validaciones required, min, pattern, etc.
+                 */
+                if (!createWorkOrderForm.checkValidity()) {
+                    return;
+                }
+
+                workOrderSubmitting = true;
+
+                if (saveWorkOrderBtn) {
+                    saveWorkOrderBtn.disabled = true;
+                    saveWorkOrderBtn.setAttribute(
+                        "aria-disabled",
+                        "true"
+                    );
+                }
+
+                if (cancelWorkOrderBtn) {
+                    cancelWorkOrderBtn.classList.add(
+                        "disabled"
+                    );
+
+                    cancelWorkOrderBtn.setAttribute(
+                        "aria-disabled",
+                        "true"
+                    );
+
+                    cancelWorkOrderBtn.setAttribute(
+                        "tabindex",
+                        "-1"
+                    );
+                }
+
+                if (saveWorkOrderText) {
+                    saveWorkOrderText.classList.add(
+                        "d-none"
+                    );
+                }
+
+                if (saveWorkOrderLoading) {
+                    saveWorkOrderLoading.classList.remove(
+                        "d-none"
+                    );
+                }
+            }
+        );
+    }
 
     toggleEquipmentFields();
 

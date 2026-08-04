@@ -98,6 +98,9 @@ def _build_mechanic_terminal_payload(
                 "equipment_code_snapshot": (
                     work_order.equipment_code_snapshot
                 ),
+                "description": (
+                    work_order.description or ""
+                ),
             }
 
     return {
