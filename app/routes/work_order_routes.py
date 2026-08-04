@@ -615,158 +615,240 @@ def create_work_order_action():
 @permission_required("ot")
 def search_equipment_for_work_order():
     """
-    Busca equipos activos por tipo.
+    Devuelve equipos activos según el tipo seleccionado.
 
-    Comportamiento:
-    - CONTENEDOR: no devuelve equipos porque se digita manualmente.
-    - CHASIS: exige al menos 2 caracteres.
-    - Otros tipos: devuelve todos los equipos activos del tipo.
+    Reglas:
+    - CONTENEDOR:
+        no consulta equipos porque el número se ingresa manualmente.
+    - CHASIS:
+        requiere al menos 2 caracteres de búsqueda.
+    - Cualquier otro tipo:
+        devuelve todos los equipos activos de ese tipo.
+    - Los equipos son globales, no se filtran por predio.
     """
 
-    equipment_type_id = request.args.get(
-        "equipment_type_id",
-        type=int,
-    )
+    try:
+        equipment_type_id = request.args.get(
+            "equipment_type_id",
+            type=int,
+        )
 
-    q = (
-        request.args.get("q")
-        or ""
-    ).strip()
+        q = (
+            request.args.get("q")
+            or ""
+        ).strip()
 
-    if not equipment_type_id:
+        if not equipment_type_id:
+            return jsonify(
+                {
+                    "ok": False,
+                    "message": (
+                        "Debe seleccionar un tipo de equipo."
+                    ),
+                    "equipment_type_code": "",
+                    "items": [],
+                }
+            ), 400
+
+        equipment_type = (
+            EquipmentType.query
+            .filter(
+                EquipmentType.id == equipment_type_id,
+                EquipmentType.is_active.is_(True),
+            )
+            .first()
+        )
+
+        if not equipment_type:
+            return jsonify(
+                {
+                    "ok": False,
+                    "message": (
+                        "El tipo de equipo no existe "
+                        "o está inactivo."
+                    ),
+                    "equipment_type_code": "",
+                    "items": [],
+                }
+            ), 404
+
+        equipment_type_code = (
+            equipment_type.code
+            or ""
+        ).strip().upper()
+
+        # =====================================================
+        # CONTENEDOR: INGRESO MANUAL
+        # =====================================================
+
+        if equipment_type_code == "CONTENEDOR":
+            print(
+                "[EQUIPMENT SEARCH] "
+                f"type_id={equipment_type.id} "
+                f"type_code={equipment_type_code} "
+                "mode=manual_container "
+                "count=0"
+            )
+
+            return jsonify(
+                {
+                    "ok": True,
+                    "message": "",
+                    "equipment_type_code": (
+                        equipment_type_code
+                    ),
+                    "items": [],
+                }
+            )
+
+        # =====================================================
+        # CHASIS: BÚSQUEDA AJAX POR TEXTO
+        # =====================================================
+
+        if (
+            equipment_type_code == "CHASIS"
+            and len(q) < 2
+        ):
+            print(
+                "[EQUIPMENT SEARCH] "
+                f"type_id={equipment_type.id} "
+                f"type_code={equipment_type_code} "
+                f"query={q!r} "
+                "mode=chassis_waiting_query "
+                "count=0"
+            )
+
+            return jsonify(
+                {
+                    "ok": True,
+                    "message": "",
+                    "equipment_type_code": (
+                        equipment_type_code
+                    ),
+                    "items": [],
+                }
+            )
+
+        # =====================================================
+        # CONSULTA GENERAL
+        # =====================================================
+
+        query = (
+            Equipment.query
+            .filter(
+                Equipment.equipment_type_id
+                == equipment_type.id,
+                Equipment.is_active.is_(True),
+            )
+        )
+
+        if q:
+            like_prefix = f"{q}%"
+            like_contains = f"%{q}%"
+
+            query = query.filter(
+                db.or_(
+                    Equipment.code.ilike(
+                        like_prefix
+                    ),
+                    Equipment.description.ilike(
+                        like_contains
+                    ),
+                )
+            )
+
+        result_limit = (
+            20
+            if equipment_type_code == "CHASIS"
+            else 200
+        )
+
+        equipments = (
+            query
+            .order_by(
+                Equipment.code.asc(),
+                Equipment.description.asc(),
+                Equipment.id.asc(),
+            )
+            .limit(result_limit)
+            .all()
+        )
+
+        items = []
+
+        for equipment in equipments:
+            code = (
+                equipment.code
+                or ""
+            ).strip()
+
+            description = (
+                equipment.description
+                or ""
+            ).strip()
+
+            label = code
+
+            if description:
+                label = (
+                    f"{code} - {description}"
+                )
+
+            items.append(
+                {
+                    "id": int(equipment.id),
+                    "code": code,
+                    "description": description,
+                    "label": label,
+                    "equipment_type_id": (
+                        int(
+                            equipment.equipment_type_id
+                        )
+                        if equipment.equipment_type_id
+                        else None
+                    ),
+                }
+            )
+
+        print(
+            "[EQUIPMENT SEARCH] "
+            f"type_id={equipment_type.id} "
+            f"type_code={equipment_type_code} "
+            f"query={q!r} "
+            f"count={len(items)} "
+            f"codes={[item['code'] for item in items[:20]]}"
+        )
+
         return jsonify(
             {
-                "ok": False,
-                "message": "Debe seleccionar un tipo de equipo.",
-                "items": [],
+                "ok": True,
+                "message": "",
+                "equipment_type_code": (
+                    equipment_type_code
+                ),
+                "items": items,
             }
-        ), 400
-
-    equipment_type = (
-        EquipmentType.query
-        .filter(
-            EquipmentType.id == equipment_type_id,
-            EquipmentType.is_active.is_(True),
         )
-        .first()
-    )
 
-    if not equipment_type:
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[EQUIPMENT SEARCH ERROR] "
+            f"{type(exc).__name__}: {exc}"
+        )
+
         return jsonify(
             {
                 "ok": False,
                 "message": (
-                    "El tipo de equipo no existe o está inactivo."
+                    "Ocurrió un error al cargar "
+                    "los equipos."
                 ),
+                "equipment_type_code": "",
                 "items": [],
             }
-        ), 404
-
-    equipment_type_code = (
-        equipment_type.code
-        or ""
-    ).strip().upper()
-
-    if equipment_type_code == "CONTENEDOR":
-        return jsonify(
-            {
-                "ok": True,
-                "equipment_type_code": equipment_type_code,
-                "items": [],
-            }
-        )
-
-    if (
-        equipment_type_code == "CHASIS"
-        and len(q) < 2
-    ):
-        return jsonify(
-            {
-                "ok": True,
-                "equipment_type_code": equipment_type_code,
-                "items": [],
-            }
-        )
-
-    query = (
-        Equipment.query
-        .filter(
-            Equipment.equipment_type_id
-            == equipment_type.id,
-            Equipment.is_active.is_(True),
-        )
-    )
-
-    if q:
-        query = query.filter(
-            db.or_(
-                Equipment.code.ilike(
-                    f"{q}%"
-                ),
-                Equipment.description.ilike(
-                    f"%{q}%"
-                ),
-            )
-        )
-
-    result_limit = (
-        20
-        if equipment_type_code == "CHASIS"
-        else 200
-    )
-
-    equipments = (
-        query
-        .order_by(
-            Equipment.code.asc(),
-            Equipment.description.asc(),
-            Equipment.id.asc(),
-        )
-        .limit(result_limit)
-        .all()
-    )
-
-    items = []
-
-    for equipment in equipments:
-        code = (
-            equipment.code
-            or ""
-        ).strip()
-
-        description = (
-            equipment.description
-            or ""
-        ).strip()
-
-        label = code
-
-        if description:
-            label = (
-                f"{code} - {description}"
-            )
-
-        items.append(
-            {
-                "id": equipment.id,
-                "code": code,
-                "description": description,
-                "label": label,
-                "equipment_type_id": (
-                    equipment.equipment_type_id
-                ),
-            }
-        )
-
-    return jsonify(
-        {
-            "ok": True,
-            "equipment_type_code": (
-                equipment_type_code
-            ),
-            "items": items,
-        }
-    )
+        ), 500
 
 # =========================================================
 # DETALLE OT
