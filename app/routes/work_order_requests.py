@@ -12,11 +12,11 @@ from app.services.inventory_service import add_stock, InventoryServiceError
 from sqlalchemy.orm import joinedload
 from app.models.article import Article
 from app.models.work_order_request import WorkOrderRequest
-
+from sqlalchemy.orm import joinedload, selectinload
 from app.services.work_order_request_service import (
     WorkOrderRequestServiceError,
     add_request_line,
-    attend_request_line,
+    attend_and_post_request_line,
     cancel_request_line,
     confirm_request_line_to_work_order,
     create_request,
@@ -308,28 +308,340 @@ def undo_manager_decision_action(line_id: int):
 
 
 # =========================
-# BODEGA → ATENDER
+# BODEGA → PREPARAR Y APLICAR SALIDA
 # =========================
-@work_order_request_bp.route("/request-lines/<int:line_id>/attend", methods=["POST"])
+@work_order_request_bp.route(
+    "/request-lines/<int:line_id>/attend",
+    methods=["POST"],
+)
 @login_required
 def attend_request_line_action(line_id: int):
     try:
-        qty = Decimal(request.form.get("quantity"))
+        quantity_raw = (
+            request.form.get("quantity")
+            or ""
+        ).strip()
 
-        attend_request_line(
-            request_line_id=line_id,
-            quantity=qty,
-            performed_by_user_id=current_user.id,
-            commit=True,
+        if not quantity_raw:
+            raise ValueError(
+                "Debe indicar la cantidad a preparar."
+            )
+
+        quantity = Decimal(quantity_raw)
+
+        line, work_order_line = (
+            attend_and_post_request_line(
+                request_line_id=line_id,
+                quantity=quantity,
+                performed_by_user_id=current_user.id,
+                commit=True,
+            )
         )
 
-        flash("Línea preparada correctamente.", "success")
+        flash(
+            (
+                "Línea preparada, entregada y rebajada "
+                "del inventario correctamente."
+            ),
+            "success",
+        )
 
-    except (WorkOrderRequestServiceError, InvalidOperation, ValueError) as exc:
-        flash(str(exc), "danger")
+    except (
+        WorkOrderRequestServiceError,
+        InvalidOperation,
+        ValueError,
+    ) as exc:
+        db.session.rollback()
 
-    return redirect(request.referrer or "/")
+        flash(
+            str(exc),
+            "danger",
+        )
 
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[ATTEND AND POST REQUEST LINE ERROR] "
+            f"line_id={line_id} "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        flash(
+            "No fue posible preparar y aplicar "
+            "la salida del artículo.",
+            "danger",
+        )
+
+    return redirect(
+        request.referrer or "/"
+    )
+
+
+# =========================
+# BODEGA → PREPARAR PEDIDO COMPLETO
+# =========================
+@work_order_request_bp.route(
+    "/requests/<int:request_id>/prepare-batch",
+    methods=["POST"],
+)
+@login_required
+def prepare_request_batch_action(request_id: int):
+    try:
+        request_obj = (
+            WorkOrderRequest.query
+            .options(
+                selectinload(
+                    WorkOrderRequest.lines
+                ).joinedload(
+                    WorkOrderRequestLine.article
+                )
+            )
+            .filter(
+                WorkOrderRequest.id == request_id
+            )
+            .with_for_update()
+            .first()
+        )
+
+        if not request_obj:
+            raise WorkOrderRequestServiceError(
+                "La solicitud no existe."
+            )
+
+        if request_obj.request_status not in {
+            "ENVIADA",
+            "ATENDIDA",
+        }:
+            raise WorkOrderRequestServiceError(
+                "La solicitud no está disponible para bodega."
+            )
+
+        if not request_obj.sent_to_warehouse_at:
+            raise WorkOrderRequestServiceError(
+                "La solicitud todavía no fue enviada a bodega."
+            )
+
+        line_ids_raw = request.form.getlist(
+            "line_id[]"
+        )
+
+        actions = request.form.getlist(
+            "action[]"
+        )
+
+        quantities = request.form.getlist(
+            "quantity[]"
+        )
+
+        if not line_ids_raw:
+            raise WorkOrderRequestServiceError(
+                "No hay líneas para procesar."
+            )
+
+        if not (
+            len(line_ids_raw)
+            == len(actions)
+            == len(quantities)
+        ):
+            raise WorkOrderRequestServiceError(
+                "Los datos del pedido están incompletos."
+            )
+
+        request_lines_map = {
+            int(line.id): line
+            for line in request_obj.lines
+        }
+
+        processed_count = 0
+        omitted_count = 0
+
+        for index, line_id_raw in enumerate(
+            line_ids_raw
+        ):
+            try:
+                line_id = int(line_id_raw)
+            except (TypeError, ValueError):
+                raise WorkOrderRequestServiceError(
+                    f"La línea {index + 1} no es válida."
+                )
+
+            line = request_lines_map.get(
+                line_id
+            )
+
+            if not line:
+                raise WorkOrderRequestServiceError(
+                    "Una de las líneas no pertenece "
+                    "a esta solicitud."
+                )
+
+            action = (
+                actions[index]
+                or ""
+            ).strip().upper()
+
+            quantity_raw = (
+                quantities[index]
+                or ""
+            ).strip()
+
+            if action == "OMITIR":
+                omitted_count += 1
+                continue
+
+            if line.line_status not in {
+                "SOLICITADA",
+                "ATENDIDA_PARCIAL",
+            }:
+                raise WorkOrderRequestServiceError(
+                    f"La línea del artículo "
+                    f"{line.article.code if line.article else line.id} "
+                    f"ya no está pendiente."
+                )
+
+            if (
+                line.manager_review_status
+                != "APROBADA"
+            ):
+                raise WorkOrderRequestServiceError(
+                    f"La línea del artículo "
+                    f"{line.article.code if line.article else line.id} "
+                    f"no está aprobada."
+                )
+
+            if not quantity_raw:
+                raise WorkOrderRequestServiceError(
+                    f"Debe indicar la cantidad para "
+                    f"{line.article.code if line.article else 'la línea'}."
+                )
+
+            try:
+                quantity = Decimal(
+                    quantity_raw
+                )
+            except (
+                InvalidOperation,
+                TypeError,
+                ValueError,
+            ):
+                raise WorkOrderRequestServiceError(
+                    f"La cantidad del artículo "
+                    f"{line.article.code if line.article else line.id} "
+                    f"no es válida."
+                )
+
+            article_code = (
+                str(line.article.code).strip()
+                if line.article
+                and line.article.code
+                else ""
+            )
+
+            try:
+                article_code_number = int(
+                    article_code
+                )
+            except (
+                TypeError,
+                ValueError,
+            ):
+                article_code_number = 0
+
+            is_tool_line = (
+                19000
+                <= article_code_number
+                <= 19999
+            )
+
+            if is_tool_line:
+                if action != "PRESTAR":
+                    raise WorkOrderRequestServiceError(
+                        f"Debe seleccionar Prestar u Omitir "
+                        f"para la herramienta {article_code}."
+                    )
+
+                mark_request_line_loaned(
+                    request_line_id=line.id,
+                    quantity=quantity,
+                    performed_by_user_id=(
+                        current_user.id
+                    ),
+                    commit=False,
+                )
+
+            else:
+                if action != "ENTREGAR":
+                    raise WorkOrderRequestServiceError(
+                        f"Debe seleccionar Entregar u Omitir "
+                        f"para el artículo {article_code}."
+                    )
+
+                attend_and_post_request_line(
+                    request_line_id=line.id,
+                    quantity=quantity,
+                    performed_by_user_id=(
+                        current_user.id
+                    ),
+                    commit=False,
+                )
+
+            processed_count += 1
+
+        if processed_count == 0:
+            raise WorkOrderRequestServiceError(
+                "Debe seleccionar al menos una línea "
+                "para entregar o prestar."
+            )
+
+        db.session.commit()
+
+        message = (
+            f"Pedido procesado correctamente. "
+            f"Líneas procesadas: {processed_count}."
+        )
+
+        if omitted_count:
+            message += (
+                f" Líneas omitidas: "
+                f"{omitted_count}."
+            )
+
+        flash(
+            message,
+            "success",
+        )
+
+    except (
+        WorkOrderRequestServiceError,
+        InvalidOperation,
+        ValueError,
+        TypeError,
+    ) as exc:
+        db.session.rollback()
+
+        flash(
+            str(exc),
+            "danger",
+        )
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[PREPARE REQUEST BATCH ERROR] "
+            f"request_id={request_id} "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        flash(
+            "No fue posible preparar el pedido.",
+            "danger",
+        )
+
+    return redirect(
+        request.referrer or "/"
+    )
 
 # =========================
 # BODEGA → NO ENTREGADO

@@ -136,6 +136,23 @@
                 </div>
             </div>
 
+            {% set batch_prepare_mode = (
+                source == "dashboard"
+                and req.sent_to_warehouse_at
+                and req.request_status in ["ENVIADA", "ATENDIDA"]
+            ) %}
+
+            {% if batch_prepare_mode %}
+            <form
+                method="POST"
+                action="{{ url_for(
+                    'work_order_requests.prepare_request_batch_action',
+                    request_id=req.id
+                ) }}"
+                class="js-batch-prepare-form"
+            >
+            {% endif %}
+
             <!-- ===================== TABLA DE LÍNEAS ===================== -->
             <div class="table-responsive">
 
@@ -382,19 +399,7 @@
                                     </div>
                                     {% endif %}
 
-                                    <!-- ===================== IDENTIFICAR HERRAMIENTA ===================== -->
-                                    {% set article_code_number = (
-                                        line.article.code|int
-                                        if line.article and line.article.code
-                                        else 0
-                                    ) %}
-
-                                    {% set is_tool_line = (
-                                        article_code_number >= 19000
-                                        and article_code_number <= 19999
-                                    ) %}
-
-                                    <!-- ===================== BODEGA ===================== -->
+                                    <!-- ===================== IDENTIFICAR HERRAMIENTA ================                                    <!-- ===================== BODEGA ===================== -->
                                     {% if
                                         req.sent_to_warehouse_at
                                         and req.request_status in ["ENVIADA", "ATENDIDA"]
@@ -409,7 +414,60 @@
                                             Bodega
                                         </div>
 
-                                        {% if is_tool_line %}
+                                        {% if batch_prepare_mode %}
+
+                                            <input
+                                                type="hidden"
+                                                name="line_id[]"
+                                                value="{{ line.id }}"
+                                            >
+
+                                            <input
+                                                type="hidden"
+                                                name="line_type[]"
+                                                value="{{ 'TOOL' if is_tool_line else 'NORMAL' }}"
+                                            >
+
+                                            <div class="d-flex flex-column gap-2">
+
+                                                <select
+                                                    name="action[]"
+                                                    class="form-select form-select-sm js-line-action"
+                                                    required
+                                                >
+                                                    <option value="">
+                                                        Seleccione...
+                                                    </option>
+
+                                                    {% if is_tool_line %}
+                                                        <option value="PRESTAR">
+                                                            Prestar
+                                                        </option>
+                                                    {% else %}
+                                                        <option value="ENTREGAR">
+                                                            Entregar
+                                                        </option>
+                                                    {% endif %}
+
+                                                    <option value="OMITIR">
+                                                        Omitir
+                                                    </option>
+                                                </select>
+
+                                                <input
+                                                    name="quantity[]"
+                                                    class="form-control form-control-sm js-line-quantity"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0.01"
+                                                    max="{{ line.stock_available if line.stock_available is defined else '' }}"
+                                                    value="{{ line.suggested_attend_quantity if line.suggested_attend_quantity is defined else line.quantity_requested }}"
+                                                    required
+                                                >
+
+                                            </div>
+
+                                        {% elif is_tool_line %}
 
                                         <form
                                             method="POST"
@@ -465,6 +523,18 @@
                                                 type="submit"
                                                 class="btn btn-sm btn-outline-primary"
                                             >
+                                                Preparar y entregar
+                                            </button>
+                                        </form>
+
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+
+                                           <button
+                                                type="submit"
+                                                class="btn btn-sm btn-outline-primary"
+                                            >
                                                 Preparar
                                             </button>
                                         </form>
@@ -476,7 +546,7 @@
                                     <!-- ===================== MENSAJES DE ESTADO ===================== -->
                                     {% if line.line_status == "ENTREGADA" %}
                                     <div class="small text-success fw-semibold">
-                                        Lista para confirmación en terminal taller.
+                                        Entregada y aplicada al inventario.
                                     </div>
                                     {% endif %}
 
@@ -569,6 +639,33 @@
                     </tbody>
                 </table>
             </div>
+
+            {% if batch_prepare_mode %}
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-3">
+                <div class="small text-muted">
+                    Seleccione <strong>Entregar/Prestar</strong> u <strong>Omitir</strong>
+                    en cada línea. Las líneas omitidas permanecerán pendientes.
+                </div>
+
+                <button
+                    type="submit"
+                    class="btn btn-primary px-4 js-batch-prepare-btn"
+                >
+                    <span class="js-batch-button-text">
+                        Preparar pedido
+                    </span>
+
+                    <span class="d-none js-batch-button-loading">
+                        <span
+                            class="spinner-border spinner-border-sm me-2"
+                            aria-hidden="true"
+                        ></span>
+                        Procesando...
+                    </span>
+                </button>
+            </div>
+            </form>
+            {% endif %}
         </div>
 
         <!-- ===================== MODALES DE ANULACIÓN ===================== -->
@@ -756,3 +853,82 @@
 </div>
 
 {% endif %}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    document
+        .querySelectorAll(".js-batch-prepare-form")
+        .forEach(function (form) {
+            const actionSelects = form.querySelectorAll(
+                ".js-line-action"
+            );
+
+            actionSelects.forEach(function (select) {
+                const row = select.closest("tr");
+                const quantityInput = row
+                    ? row.querySelector(".js-line-quantity")
+                    : null;
+
+                function syncQuantityState() {
+                    if (!quantityInput) {
+                        return;
+                    }
+
+                    const isOmitted =
+                        select.value === "OMITIR";
+
+                    quantityInput.disabled = isOmitted;
+                    quantityInput.required = !isOmitted;
+
+                    if (isOmitted) {
+                        row.classList.add("table-secondary");
+                    } else {
+                        row.classList.remove("table-secondary");
+                    }
+                }
+
+                select.addEventListener(
+                    "change",
+                    syncQuantityState
+                );
+
+                syncQuantityState();
+            });
+
+            form.addEventListener("submit", function (event) {
+                const button = form.querySelector(
+                    ".js-batch-prepare-btn"
+                );
+
+                if (!form.checkValidity()) {
+                    return;
+                }
+
+                if (button && button.disabled) {
+                    event.preventDefault();
+                    return;
+                }
+
+                if (button) {
+                    button.disabled = true;
+
+                    const text = button.querySelector(
+                        ".js-batch-button-text"
+                    );
+
+                    const loading = button.querySelector(
+                        ".js-batch-button-loading"
+                    );
+
+                    if (text) {
+                        text.classList.add("d-none");
+                    }
+
+                    if (loading) {
+                        loading.classList.remove("d-none");
+                    }
+                }
+            });
+        });
+});
+</script>

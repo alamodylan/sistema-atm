@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.extensions import db
@@ -766,6 +767,97 @@ def attend_request_line(
     return line
 
 
+def attend_and_post_request_line(
+    *,
+    request_line_id: int,
+    quantity,
+    performed_by_user_id: int,
+    commit: bool = True,
+) -> tuple[WorkOrderRequestLine, WorkOrderLine]:
+    """
+    Atiende una línea desde Bodega y aplica inmediatamente:
+
+    - cantidad atendida;
+    - estado de la línea;
+    - rebajo de inventario;
+    - movimiento SALIDA_OT en kardex;
+    - creación o actualización de WorkOrderLine;
+    - recepción automática.
+
+    El proceso se ejecuta dentro de la misma transacción.
+
+    Esta función sustituye el flujo anterior:
+
+        Preparar en Bodega
+        -> esperar recepción en Terminal Taller
+        -> rebajar inventario
+
+    Nuevo flujo:
+
+        Preparar en Bodega
+        -> rebajar inventario
+        -> registrar recepción automática
+    """
+
+    # Bloquea la línea para evitar que dos clics o peticiones
+    # simultáneas atiendan la misma cantidad dos veces.
+    locked_line = (
+        WorkOrderRequestLine.query
+        .filter(
+            WorkOrderRequestLine.id == request_line_id,
+        )
+        .with_for_update()
+        .first()
+    )
+
+    if not locked_line:
+        raise WorkOrderRequestServiceError(
+            "La línea no existe."
+        )
+
+    line = attend_request_line(
+        request_line_id=locked_line.id,
+        quantity=quantity,
+        performed_by_user_id=performed_by_user_id,
+        commit=False,
+    )
+
+    work_order_line = confirm_request_line_to_work_order(
+        request_line_id=line.id,
+        delivered_by_user_id=performed_by_user_id,
+        received_by_user_id=performed_by_user_id,
+        auto_received=True,
+        commit=False,
+    )
+
+    db.session.flush()
+
+    log_action(
+        user_id=performed_by_user_id,
+        action="ATTEND_AND_POST_REQUEST_LINE",
+        table_name="work_order_request_lines",
+        record_id=str(line.id),
+        details={
+            "request_line_id": line.id,
+            "request_id": line.work_order_request_id,
+            "article_id": line.article_id,
+            "quantity_processed": str(quantity),
+            "quantity_attended": str(
+                line.quantity_attended or 0
+            ),
+            "line_status": line.line_status,
+            "work_order_line_id": work_order_line.id,
+            "inventory_posted": True,
+            "auto_received": True,
+        },
+        commit=False,
+    )
+
+    if commit:
+        db.session.commit()
+
+    return line, work_order_line
+
 def mark_request_line_not_delivered(
     *,
     request_line_id: int,
@@ -939,51 +1031,155 @@ def confirm_request_line_to_work_order(
     *,
     request_line_id: int,
     delivered_by_user_id: int,
-    received_by_user_id: int,
+    received_by_user_id: int | None = None,
+    auto_received: bool = False,
     commit: bool = True,
 ) -> WorkOrderLine:
-    line = WorkOrderRequestLine.query.get(request_line_id)
-    if not line:
-        raise WorkOrderRequestServiceError("La línea no existe.")
+    """
+    Registra inmediatamente en la OT la cantidad atendida y aplica
+    el rebajo de inventario.
 
-    if line.line_status != "ENTREGADA":
-        raise WorkOrderRequestServiceError(
-            "Solo las líneas entregadas de artículos normales pueden confirmarse en la OT."
+    Soporta:
+    - entregas completas;
+    - entregas parciales;
+    - múltiples preparaciones sobre la misma línea;
+    - reintentos sin duplicar el rebajo.
+
+    La cantidad que se rebaja es únicamente:
+
+        cantidad atendida acumulada
+        menos
+        cantidad ya registrada en WorkOrderLine
+    """
+
+    line = (
+        WorkOrderRequestLine.query
+        .filter(
+            WorkOrderRequestLine.id == request_line_id,
         )
-
-    if not line.article:
-        raise WorkOrderRequestServiceError("La línea no tiene artículo asociado.")
-
-    if _is_tool_article_code(line.article.code):
-        raise WorkOrderRequestServiceError(
-            "Las herramientas no generan líneas de consumo en la OT. Deben manejarse como préstamo."
-        )
-
-    request_obj = line.work_order_request
-    work_order = request_obj.work_order
-
-    existing_line = (
-        WorkOrderLine.query
-        .filter_by(request_line_id=line.id)
+        .with_for_update()
         .first()
     )
 
-    if existing_line:
-        raise WorkOrderRequestServiceError("Esta línea ya fue confirmada en la OT.")
+    if not line:
+        raise WorkOrderRequestServiceError(
+            "La línea no existe."
+        )
 
-    qty = Decimal(str(line.quantity_attended or 0))
+    if line.line_status not in {
+        "ATENDIDA_PARCIAL",
+        "ENTREGADA",
+    }:
+        raise WorkOrderRequestServiceError(
+            "La línea debe estar atendida parcial o totalmente "
+            "antes de aplicarla a la OT."
+        )
 
-    if qty <= 0:
-        raise WorkOrderRequestServiceError("La línea no tiene cantidad atendida para confirmar.")
+    if line.manager_review_status != "APROBADA":
+        raise WorkOrderRequestServiceError(
+            "La línea no fue aprobada por jefatura."
+        )
+
+    if not line.article:
+        raise WorkOrderRequestServiceError(
+            "La línea no tiene artículo asociado."
+        )
+
+    if _is_tool_article_code(line.article.code):
+        raise WorkOrderRequestServiceError(
+            "Las herramientas no generan líneas de consumo en la OT. "
+            "Deben manejarse como préstamo."
+        )
+
+    request_obj = line.work_order_request
+
+    if not request_obj:
+        raise WorkOrderRequestServiceError(
+            "La línea no tiene una solicitud asociada."
+        )
+
+    if not request_obj.sent_to_warehouse_at:
+        raise WorkOrderRequestServiceError(
+            "La solicitud todavía no fue enviada a bodega."
+        )
+
+    work_order = request_obj.work_order
+
+    if not work_order:
+        raise WorkOrderRequestServiceError(
+            "La solicitud no tiene una OT asociada."
+        )
+
+    if not work_order.warehouse_id:
+        raise WorkOrderRequestServiceError(
+            "La OT no tiene una bodega asignada."
+        )
+
+    attended_quantity = Decimal(
+        str(line.quantity_attended or 0)
+    )
+
+    if attended_quantity <= 0:
+        raise WorkOrderRequestServiceError(
+            "La línea no tiene cantidad atendida para aplicar."
+        )
+
+    # =====================================================
+    # CANTIDAD YA REGISTRADA EN LA OT
+    # =====================================================
+
+    existing_lines = (
+        WorkOrderLine.query
+        .filter(
+            WorkOrderLine.request_line_id == line.id,
+            WorkOrderLine.line_status != "REMOVED",
+        )
+        .order_by(
+            WorkOrderLine.id.asc(),
+        )
+        .with_for_update()
+        .all()
+    )
+
+    already_posted_quantity = sum(
+        (
+            Decimal(str(existing.quantity or 0))
+            for existing in existing_lines
+            if existing.inventory_posted
+        ),
+        Decimal("0"),
+    )
+
+    quantity_to_post = (
+        attended_quantity
+        - already_posted_quantity
+    )
+
+    # Idempotencia:
+    # si la cantidad ya fue aplicada, no vuelve a rebajar inventario.
+    if quantity_to_post <= 0:
+        if existing_lines:
+            return existing_lines[0]
+
+        raise WorkOrderRequestServiceError(
+            "No existe cantidad pendiente por aplicar a inventario."
+        )
+
+    # =====================================================
+    # REBAJO DE INVENTARIO Y KARDEX
+    # =====================================================
 
     try:
         subtract_stock(
             article_id=line.article_id,
             warehouse_id=work_order.warehouse_id,
-            quantity=qty,
+            quantity=quantity_to_post,
             performed_by_user_id=delivered_by_user_id,
             movement_type="SALIDA_OT",
-            reason=f"Salida por OT {work_order.number}",
+            reason=(
+                f"Salida por OT {work_order.number} "
+                f"al preparar pedido en bodega"
+            ),
             reference_type="WORK_ORDER",
             reference_id=work_order.id,
             reference_number=work_order.number,
@@ -991,36 +1187,118 @@ def confirm_request_line_to_work_order(
         )
 
     except InventoryServiceError as exc:
-        raise WorkOrderRequestServiceError(str(exc)) from exc
+        raise WorkOrderRequestServiceError(
+            str(exc)
+        ) from exc
 
-    work_order_line = WorkOrderLine(
-        work_order_id=work_order.id,
-        request_line_id=line.id,
-        article_id=line.article_id,
-        quantity=qty,
-        delivered_by_user_id=delivered_by_user_id,
-        received_by_user_id=received_by_user_id,
-        line_status="ACTIVE",
-        inventory_posted=True,
-        notes=line.notes,
-    )
+    now = datetime.now(UTC)
 
-    db.session.add(work_order_line)
+    if auto_received:
+        effective_received_by_user_id = (
+            received_by_user_id
+            or delivered_by_user_id
+        )
+        received_at = now
+    else:
+        effective_received_by_user_id = (
+            received_by_user_id
+        )
+        received_at = (
+            now
+            if received_by_user_id
+            else None
+        )
+
+    # =====================================================
+    # CREAR O ACTUALIZAR LA LÍNEA DE LA OT
+    # =====================================================
+
+    if existing_lines:
+        work_order_line = existing_lines[0]
+
+        work_order_line.quantity = (
+            Decimal(
+                str(work_order_line.quantity or 0)
+            )
+            + quantity_to_post
+        )
+
+        work_order_line.delivered_by_user_id = (
+            delivered_by_user_id
+        )
+
+        work_order_line.received_by_user_id = (
+            effective_received_by_user_id
+        )
+
+        work_order_line.received_at = received_at
+        work_order_line.inventory_posted = True
+        work_order_line.line_status = "ACTIVE"
+
+        if not work_order_line.notes:
+            work_order_line.notes = line.notes
+
+    else:
+        work_order_line = WorkOrderLine(
+            work_order_id=work_order.id,
+            request_line_id=line.id,
+            article_id=line.article_id,
+            quantity=quantity_to_post,
+            delivered_by_user_id=delivered_by_user_id,
+            received_by_user_id=(
+                effective_received_by_user_id
+            ),
+            delivered_at=now,
+            received_at=received_at,
+            line_status="ACTIVE",
+            inventory_posted=True,
+            notes=(
+                line.notes
+                or (
+                    "Salida aplicada automáticamente "
+                    "al preparar el pedido en bodega."
+                )
+            ),
+        )
+
+        db.session.add(work_order_line)
+
     db.session.flush()
 
     log_action(
-        user_id=received_by_user_id,
+        user_id=(
+            effective_received_by_user_id
+            or delivered_by_user_id
+        ),
         action="CONFIRM_REQUEST_LINE_TO_WORK_ORDER",
         table_name="work_order_lines",
         record_id=str(work_order_line.id),
         details={
             "work_order_id": work_order.id,
+            "work_order_number": work_order.number,
+            "request_id": request_obj.id,
             "request_line_id": line.id,
             "article_id": line.article_id,
             "article_code": line.article.code,
-            "quantity": str(qty),
-            "delivered_by_user_id": delivered_by_user_id,
-            "received_by_user_id": received_by_user_id,
+            "quantity_posted_now": str(
+                quantity_to_post
+            ),
+            "quantity_attended_total": str(
+                attended_quantity
+            ),
+            "quantity_posted_total": str(
+                already_posted_quantity
+                + quantity_to_post
+            ),
+            "delivered_by_user_id": (
+                delivered_by_user_id
+            ),
+            "received_by_user_id": (
+                effective_received_by_user_id
+            ),
+            "auto_received": auto_received,
+            "warehouse_id": work_order.warehouse_id,
+            "inventory_posted": True,
         },
         commit=False,
     )
