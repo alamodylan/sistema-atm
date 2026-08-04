@@ -102,11 +102,11 @@
                         {% endif %}
                     </select>
 
-                    <!-- BUSCADOR EQUIPOS -->
+                    <!-- BUSCADOR AJAX PARA CHASIS -->
                     <div id="equipmentSelectWrapper" class="d-none">
 
                         <label class="form-label fw-semibold">
-                            Equipo
+                            Buscar chasis
                         </label>
 
                         <input
@@ -121,12 +121,56 @@
                             class="form-control"
                             id="equipment_search"
                             list="filtered_equipment_list"
-                            placeholder="Digite código del equipo..."
+                            placeholder="Digite el código del chasis..."
                             autocomplete="off"
                         >
 
                         <datalist id="filtered_equipment_list"></datalist>
 
+                        <div class="form-text">
+                            Debe seleccionar un chasis registrado en la lista.
+                        </div>
+
+                    </div>
+
+                    <!-- TARJETAS PARA CABEZAL, MULA, PICKUP Y DEMÁS -->
+                    <div
+                        id="equipmentCardsWrapper"
+                        class="d-none mt-3"
+                    >
+                        <label class="form-label fw-semibold">
+                            Seleccione el equipo
+                        </label>
+
+                        <div
+                            id="equipmentCardsLoading"
+                            class="text-muted small py-3 d-none"
+                        >
+                            <span
+                                class="spinner-border spinner-border-sm me-2"
+                                aria-hidden="true"
+                            ></span>
+                            Cargando equipos...
+                        </div>
+
+                        <div
+                            id="equipmentCardsEmpty"
+                            class="alert alert-warning py-2 d-none"
+                        >
+                            No existen equipos activos de este tipo en el predio.
+                        </div>
+
+                        <div
+                            id="equipmentCardsList"
+                            class="row g-2"
+                        ></div>
+                    </div>
+
+                    <div
+                        id="equipmentSelectionError"
+                        class="text-danger small mt-2 d-none"
+                    >
+                        Debe seleccionar un equipo registrado.
                     </div>
 
                     <!-- INPUT CONTENEDOR -->
@@ -269,6 +313,21 @@ document.addEventListener("DOMContentLoaded", function () {
     const equipmentDatalist =
         document.getElementById("filtered_equipment_list");
 
+    const equipmentCardsWrapper =
+    document.getElementById("equipmentCardsWrapper");
+
+    const equipmentCardsList =
+        document.getElementById("equipmentCardsList");
+
+    const equipmentCardsLoading =
+        document.getElementById("equipmentCardsLoading");
+
+    const equipmentCardsEmpty =
+        document.getElementById("equipmentCardsEmpty");
+
+    const equipmentSelectionError =
+        document.getElementById("equipmentSelectionError");
+
     const equipmentCodeSnapshotInput =
         document.getElementById("equipment_code_snapshot");
 
@@ -313,52 +372,200 @@ document.addEventListener("DOMContentLoaded", function () {
         return getSelectedEquipmentTypeCode() === "CONTENEDOR";
     }
 
-    function resetEquipmentSearch() {
+    function isChassisTypeSelected() {
+        return getSelectedEquipmentTypeCode() === "CHASIS";
+    }
 
+    function resetEquipmentSelection() {
         equipmentIdInput.value = "";
+        equipmentCodeSnapshotInput.value = "";
 
         equipmentSearchInput.value = "";
-
         equipmentDatalist.innerHTML = "";
+
+        equipmentCardsList.innerHTML = "";
+
+        equipmentCardsEmpty.classList.add("d-none");
+        equipmentCardsLoading.classList.add("d-none");
+        equipmentSelectionError.classList.add("d-none");
 
         currentEquipments = [];
     }
 
-    function toggleEquipmentFields() {
+    function selectEquipment(equipment, selectedButton = null) {
+        equipmentIdInput.value = String(equipment.id);
+        equipmentCodeSnapshotInput.value =
+            equipment.code || "";
 
-        equipmentCodeSnapshotInput.value = "";
+        equipmentSelectionError.classList.add("d-none");
+
+        equipmentCardsList
+            .querySelectorAll(".equipment-card-btn")
+            .forEach(function (button) {
+                button.classList.remove(
+                    "btn-primary",
+                    "text-white"
+                );
+
+                button.classList.add(
+                    "btn-outline-primary"
+                );
+
+                button.setAttribute(
+                    "aria-pressed",
+                    "false"
+                );
+            });
+
+        if (selectedButton) {
+            selectedButton.classList.remove(
+                "btn-outline-primary"
+            );
+
+            selectedButton.classList.add(
+                "btn-primary",
+                "text-white"
+            );
+
+            selectedButton.setAttribute(
+                "aria-pressed",
+                "true"
+            );
+        }
+    }
+
+    async function loadEquipmentCards() {
+        if (!equipmentTypeSelect.value) {
+            return;
+        }
+
+        equipmentCardsList.innerHTML = "";
+        equipmentCardsEmpty.classList.add("d-none");
+        equipmentCardsLoading.classList.remove("d-none");
+
+        try {
+            const params = new URLSearchParams({
+                equipment_type_id: equipmentTypeSelect.value
+            });
+
+            const response = await fetch(
+                `/work-orders/equipment/search?${params.toString()}`,
+                {
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest"
+                    }
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok || data.ok === false) {
+                throw new Error(
+                    data.message || "No se pudieron cargar los equipos."
+                );
+            }
+
+            const items = data.items || [];
+
+            currentEquipments = items;
+
+            equipmentCardsLoading.classList.add("d-none");
+
+            if (!items.length) {
+                equipmentCardsEmpty.classList.remove("d-none");
+                return;
+            }
+
+            items.forEach(function (equipment) {
+                const column = document.createElement("div");
+
+                column.className =
+                    "col-6 col-md-4 col-xl-3";
+
+                const button = document.createElement("button");
+
+                button.type = "button";
+                button.className =
+                    "btn btn-outline-primary w-100 h-100 " +
+                    "text-start rounded-3 p-3 equipment-card-btn";
+
+                button.setAttribute(
+                    "aria-pressed",
+                    "false"
+                );
+
+                const code = document.createElement("div");
+                code.className = "fw-bold";
+                code.textContent =
+                    equipment.code || "Sin código";
+
+                const description =
+                    document.createElement("div");
+
+                description.className =
+                    "small mt-1 opacity-75";
+
+                description.textContent =
+                    equipment.description ||
+                    "Equipo registrado";
+
+                button.appendChild(code);
+                button.appendChild(description);
+
+                button.addEventListener(
+                    "click",
+                    function () {
+                        selectEquipment(
+                            equipment,
+                            button
+                        );
+                    }
+                );
+
+                column.appendChild(button);
+                equipmentCardsList.appendChild(column);
+            });
+
+        } catch (error) {
+            console.error(
+                "Error cargando equipos:",
+                error
+            );
+
+            equipmentCardsLoading.classList.add("d-none");
+            equipmentCardsEmpty.textContent =
+                "No fue posible cargar los equipos de este tipo.";
+            equipmentCardsEmpty.classList.remove("d-none");
+        }
+    }
+
+    async function toggleEquipmentFields() {
+        resetEquipmentSelection();
 
         containerInput.value = "";
-
         containerError.classList.add("d-none");
 
+        equipmentSelectWrapper.classList.add("d-none");
+        equipmentCardsWrapper.classList.add("d-none");
+        containerInputWrapper.classList.add("d-none");
+
         if (!equipmentTypeSelect.value) {
-
-            equipmentSelectWrapper.classList.add("d-none");
-
-            containerInputWrapper.classList.add("d-none");
-
-            resetEquipmentSearch();
-
             return;
         }
 
         if (isContainerTypeSelected()) {
-
-            equipmentSelectWrapper.classList.add("d-none");
-
             containerInputWrapper.classList.remove("d-none");
-
-            resetEquipmentSearch();
-
             return;
         }
 
-        containerInputWrapper.classList.add("d-none");
+        if (isChassisTypeSelected()) {
+            equipmentSelectWrapper.classList.remove("d-none");
+            return;
+        }
 
-        equipmentSelectWrapper.classList.remove("d-none");
+        equipmentCardsWrapper.classList.remove("d-none");
 
-        resetEquipmentSearch();
+        await loadEquipmentCards();
     }
 
     equipmentTypeSelect.addEventListener(
@@ -371,18 +578,17 @@ document.addEventListener("DOMContentLoaded", function () {
     // =====================================================
 
     async function searchEquipments(query) {
-
-        if (!query || query.length < 2) {
-
+        if (
+            !isChassisTypeSelected()
+            || !query
+            || query.length < 2
+        ) {
             equipmentDatalist.innerHTML = "";
-
             currentEquipments = [];
-
             return;
         }
 
         try {
-
             const params = new URLSearchParams({
                 q: query,
                 equipment_type_id: equipmentTypeSelect.value
@@ -397,105 +603,103 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
             );
 
-            if (!response.ok) {
-                throw new Error("Error buscando equipos.");
-            }
-
             const data = await response.json();
 
-            currentEquipments = data;
+            if (!response.ok || data.ok === false) {
+                throw new Error(
+                    data.message || "Error buscando equipos."
+                );
+            }
 
+            const items = data.items || [];
+
+            currentEquipments = items;
             equipmentDatalist.innerHTML = "";
 
-            data.forEach(function (equipment) {
-
+            items.forEach(function (equipment) {
                 const option =
                     document.createElement("option");
 
                 option.value = equipment.label;
 
                 equipmentDatalist.appendChild(option);
-
             });
 
         } catch (error) {
-
             console.error(
                 "Error buscando equipos:",
                 error
             );
+
+            currentEquipments = [];
+            equipmentDatalist.innerHTML = "";
         }
+    }
+
+    function resolveSelectedChassis() {
+        const value =
+            equipmentSearchInput.value.trim();
+
+        const normalizedValue =
+            value.toUpperCase();
+
+        const selectedEquipment =
+            currentEquipments.find(function (equipment) {
+                return (
+                    String(equipment.label || "")
+                        .trim()
+                        .toUpperCase()
+                        === normalizedValue
+                    ||
+                    String(equipment.code || "")
+                        .trim()
+                        .toUpperCase()
+                        === normalizedValue
+                );
+            });
+
+        if (selectedEquipment) {
+            selectEquipment(selectedEquipment);
+
+            equipmentSearchInput.value =
+                selectedEquipment.label;
+
+            return true;
+        }
+
+        equipmentIdInput.value = "";
+        equipmentCodeSnapshotInput.value = "";
+
+        return false;
     }
 
     equipmentSearchInput.addEventListener(
         "input",
         function () {
-
             const value =
                 this.value.trim();
 
             equipmentIdInput.value = "";
-
             equipmentCodeSnapshotInput.value = "";
+            equipmentSelectionError.classList.add("d-none");
 
             clearTimeout(searchTimeout);
 
-            searchTimeout = setTimeout(function () {
+            searchTimeout = setTimeout(
+                function () {
+                    searchEquipments(value);
+                },
+                250
+            );
 
-                searchEquipments(value);
-
-            }, 250);
-
-            const selectedEquipment =
-                currentEquipments.find(function (equipment) {
-
-                    return (
-                        equipment.label === value
-                        || equipment.code === value
-                    );
-                });
-
-            if (selectedEquipment) {
-
-                equipmentIdInput.value =
-                    selectedEquipment.id;
-
-                equipmentCodeSnapshotInput.value =
-                    selectedEquipment.code;
-            }
+            resolveSelectedChassis();
         }
     );
 
     equipmentSearchInput.addEventListener(
         "change",
         function () {
-
-            const value =
-                this.value.trim();
-
-            const selectedEquipment =
-                currentEquipments.find(function (equipment) {
-
-                    return (
-                        equipment.label === value
-                        || equipment.code === value
-                    );
-                });
-
-            if (selectedEquipment) {
-
-                equipmentIdInput.value =
-                    selectedEquipment.id;
-
-                equipmentCodeSnapshotInput.value =
-                    selectedEquipment.code;
-
-            } else {
-
-                equipmentIdInput.value = "";
-
-                equipmentCodeSnapshotInput.value = "";
-            }
+            resolveSelectedChassis();
         }
     );
 
@@ -687,6 +891,47 @@ document.addEventListener("DOMContentLoaded", function () {
                  * las validaciones required, min, pattern, etc.
                  */
                 if (!createWorkOrderForm.checkValidity()) {
+                    return;
+                }
+
+                const selectedEquipmentTypeCode =
+                    getSelectedEquipmentTypeCode();
+
+                if (
+                    selectedEquipmentTypeCode
+                    && selectedEquipmentTypeCode !== "CONTENEDOR"
+                    && !equipmentIdInput.value
+                ) {
+                    event.preventDefault();
+
+                    equipmentSelectionError.classList.remove("d-none");
+
+                    if (isChassisTypeSelected()) {
+                        equipmentSearchInput.focus();
+
+                        equipmentSelectWrapper.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center"
+                        });
+                    } else {
+                        equipmentCardsWrapper.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center"
+                        });
+                    }
+
+                    return;
+                }
+
+                if (
+                    selectedEquipmentTypeCode === "CONTENEDOR"
+                    && !isValidContainer(containerInput.value)
+                ) {
+                    event.preventDefault();
+
+                    containerError.classList.remove("d-none");
+                    containerInput.focus();
+
                     return;
                 }
 

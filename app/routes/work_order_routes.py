@@ -247,145 +247,529 @@ def create_work_order_page():
 # =========================================================
 # CREAR OT
 # =========================================================
+# =========================================================
+# CREAR OT
+# =========================================================
 @work_order_bp.route("/", methods=["POST"])
 @login_required
 @permission_required("ot")
 def create_work_order_action():
     try:
         site_id = session.get("active_site_id")
-        warehouse_id = request.form.get("warehouse_id")
-        repair_type_ids = request.form.getlist("repair_type_id[]")
-        mechanic_ids = request.form.getlist("mechanic_id[]")
-        description = request.form.get("description")
 
-        equipment_type_id = request.form.get("equipment_type_id")
-        equipment_id = request.form.get("equipment_id")
-        equipment_code_snapshot = (request.form.get("equipment_code_snapshot") or "").strip()
-        container_number = (request.form.get("container_number") or "").strip().upper()
+        warehouse_id = (
+            request.form.get("warehouse_id")
+            or ""
+        ).strip()
+
+        description = (
+            request.form.get("description")
+            or ""
+        ).strip()
+
+        repair_type_ids = request.form.getlist(
+            "repair_type_id[]"
+        )
+
+        mechanic_ids = request.form.getlist(
+            "mechanic_id[]"
+        )
+
+        equipment_type_id_raw = (
+            request.form.get("equipment_type_id")
+            or ""
+        ).strip()
+
+        equipment_id_raw = (
+            request.form.get("equipment_id")
+            or ""
+        ).strip()
+
+        container_number = (
+            request.form.get("container_number")
+            or ""
+        ).strip().upper()
 
         if not site_id:
-            raise ValueError("No hay un predio activo seleccionado.")
+            raise ValueError(
+                "No hay un predio activo seleccionado."
+            )
+
+        site_id = int(site_id)
 
         if not warehouse_id:
-            raise ValueError("La bodega es obligatoria.")
+            raise ValueError(
+                "La bodega es obligatoria."
+            )
 
-        if not repair_type_ids:
-            raise ValueError("Debe agregar al menos un trabajo.")
+        warehouse_id = int(warehouse_id)
 
-        if not mechanic_ids:
-            raise ValueError("Debe asignar mecánicos a los trabajos.")
+        warehouse = (
+            Warehouse.query
+            .filter(
+                Warehouse.id == warehouse_id,
+                Warehouse.site_id == site_id,
+                Warehouse.is_active.is_(True),
+            )
+            .first()
+        )
 
-        first_repair_type = db.session.get(RepairType, int(repair_type_ids[0]))
-        task_title = first_repair_type.name if first_repair_type else "Trabajo"
+        if not warehouse:
+            raise ValueError(
+                "La bodega seleccionada no existe, está inactiva "
+                "o no pertenece al predio actual."
+            )
 
-        if not task_title:
-            raise ValueError("Debe indicar el trabajo a realizar.")
+        # =====================================================
+        # VALIDAR TRABAJOS Y MECÁNICOS
+        # =====================================================
 
-        if equipment_type_id:
-            equipment_type = db.session.get(EquipmentType, int(equipment_type_id))
+        task_rows = []
 
-            if equipment_type and equipment_type.code == "CONTENEDOR":
-                if not re.match(r"^[A-Z]{4}-\d{6}-\d{1}$", container_number):
-                    raise ValueError("Ingrese un contenedor con formato correcto.")
+        max_task_rows = max(
+            len(repair_type_ids),
+            len(mechanic_ids),
+        )
 
-                equipment_id = None
+        for index in range(max_task_rows):
+            repair_type_id_raw = (
+                repair_type_ids[index].strip()
+                if index < len(repair_type_ids)
+                else ""
+            )
+
+            mechanic_id_raw = (
+                mechanic_ids[index].strip()
+                if index < len(mechanic_ids)
+                else ""
+            )
+
+            # Ignorar filas completamente vacías.
+            if not repair_type_id_raw and not mechanic_id_raw:
+                continue
+
+            if not repair_type_id_raw:
+                raise ValueError(
+                    f"Debe seleccionar el tipo de reparación "
+                    f"en el trabajo {index + 1}."
+                )
+
+            if not mechanic_id_raw:
+                raise ValueError(
+                    f"Debe seleccionar el mecánico "
+                    f"en el trabajo {index + 1}."
+                )
+
+            repair_type = (
+                RepairType.query
+                .filter(
+                    RepairType.id == int(repair_type_id_raw),
+                    RepairType.is_active.is_(True),
+                )
+                .first()
+            )
+
+            if not repair_type:
+                raise ValueError(
+                    f"El tipo de reparación del trabajo "
+                    f"{index + 1} no existe o está inactivo."
+                )
+
+            mechanic = (
+                Mechanic.query
+                .filter(
+                    Mechanic.id == int(mechanic_id_raw),
+                    Mechanic.site_id == site_id,
+                    Mechanic.is_active.is_(True),
+                )
+                .first()
+            )
+
+            if not mechanic:
+                raise ValueError(
+                    f"El mecánico del trabajo {index + 1} "
+                    f"no existe, está inactivo o pertenece "
+                    f"a otro predio."
+                )
+
+            task_rows.append(
+                {
+                    "repair_type_id": repair_type.id,
+                    "repair_type_name": repair_type.name,
+                    "mechanic_id": mechanic.id,
+                }
+            )
+
+        if not task_rows:
+            raise ValueError(
+                "Debe agregar al menos un trabajo con su mecánico."
+            )
+
+        # =====================================================
+        # VALIDAR EQUIPO
+        # =====================================================
+
+        selected_equipment_id = None
+        equipment_code_snapshot = None
+
+        if equipment_type_id_raw:
+            equipment_type = (
+                EquipmentType.query
+                .filter(
+                    EquipmentType.id
+                    == int(equipment_type_id_raw),
+                    EquipmentType.is_active.is_(True),
+                )
+                .first()
+            )
+
+            if not equipment_type:
+                raise ValueError(
+                    "El tipo de equipo seleccionado no existe "
+                    "o está inactivo."
+                )
+
+            equipment_type_code = (
+                equipment_type.code
+                or ""
+            ).strip().upper()
+
+            # =============================================
+            # CONTENEDOR: INGRESO MANUAL
+            # =============================================
+            if equipment_type_code == "CONTENEDOR":
+                if not re.fullmatch(
+                    r"[A-Z]{4}-\d{6}-\d",
+                    container_number,
+                ):
+                    raise ValueError(
+                        "Ingrese un contenedor con formato correcto: "
+                        "ABCD-123456-7."
+                    )
+
+                selected_equipment_id = None
                 equipment_code_snapshot = container_number
+
+            # =============================================
+            # RESTO DE EQUIPOS: DEBEN EXISTIR EN LA BD
+            # =============================================
+            else:
+                if not equipment_id_raw:
+                    raise ValueError(
+                        "Debe seleccionar un equipo registrado "
+                        "para el tipo indicado."
+                    )
+
+                selected_equipment = (
+                    Equipment.query
+                    .filter(
+                        Equipment.id == int(equipment_id_raw),
+                        Equipment.site_id == site_id,
+                        Equipment.equipment_type_id
+                        == equipment_type.id,
+                        Equipment.is_active.is_(True),
+                    )
+                    .first()
+                )
+
+                if not selected_equipment:
+                    raise ValueError(
+                        "El equipo seleccionado no existe, está inactivo, "
+                        "pertenece a otro predio o no corresponde "
+                        "al tipo indicado."
+                    )
+
+                selected_equipment_id = (
+                    selected_equipment.id
+                )
+
+                # El código se obtiene desde la base de datos.
+                # No se confía en el valor enviado por el navegador.
+                equipment_code_snapshot = (
+                    selected_equipment.code
+                    or ""
+                ).strip()
+
+                if not equipment_code_snapshot:
+                    raise ValueError(
+                        "El equipo seleccionado no tiene código registrado."
+                    )
+
+        # Si no seleccionó tipo, la OT puede quedar sin equipo.
+        else:
+            selected_equipment_id = None
+            equipment_code_snapshot = None
+
+        # =====================================================
+        # CREAR OT CON EL PRIMER TRABAJO
+        # =====================================================
+
+        first_task = task_rows[0]
 
         work_order = create_work_order(
             number="",
-            site_id=int(site_id),
-            warehouse_id=int(warehouse_id),
+            site_id=site_id,
+            warehouse_id=warehouse_id,
             responsible_user_id=current_user.id,
             created_by_user_id=current_user.id,
-            repair_type_id=int(repair_type_ids[0]),
-            mechanic_id=int(mechanic_ids[0]),
-            task_title=task_title,
+            repair_type_id=(
+                first_task["repair_type_id"]
+            ),
+            mechanic_id=(
+                first_task["mechanic_id"]
+            ),
+            task_title=(
+                first_task["repair_type_name"]
+                or "Trabajo"
+            ),
             task_description=None,
-            description=description,
-            equipment_id=int(equipment_id) if equipment_id else None,
-            equipment_code_snapshot=equipment_code_snapshot,
+            description=description or None,
+            equipment_id=selected_equipment_id,
+            equipment_code_snapshot=(
+                equipment_code_snapshot
+            ),
             commit=False,
         )
 
-        for i in range(1, len(repair_type_ids)):
-            rt_id = repair_type_ids[i]
-            mech_id = mechanic_ids[i] if i < len(mechanic_ids) else None
+        db.session.flush()
 
-            if not rt_id or not mech_id:
-                continue
+        # =====================================================
+        # CREAR TRABAJOS ADICIONALES
+        # =====================================================
 
-            repair_type = db.session.get(RepairType, int(rt_id))
-            title = repair_type.name if repair_type else "Trabajo"
-
+        for task_row in task_rows[1:]:
             create_task_line(
                 work_order_id=work_order.id,
-                repair_type_id=int(rt_id),
-                title=title,
+                repair_type_id=(
+                    task_row["repair_type_id"]
+                ),
+                title=(
+                    task_row["repair_type_name"]
+                    or "Trabajo"
+                ),
                 description=None,
-                assigned_mechanic_id=int(mech_id),
+                assigned_mechanic_id=(
+                    task_row["mechanic_id"]
+                ),
                 created_by_user_id=current_user.id,
                 commit=False,
             )
 
         db.session.commit()
 
-        flash(f"Orden de trabajo {work_order.number} creada correctamente.", "success")
-        return redirect(url_for("work_orders.get_work_order", work_order_id=work_order.id))
+        flash(
+            f"Orden de trabajo {work_order.number} "
+            f"creada correctamente.",
+            "success",
+        )
 
-    except (WorkOrderServiceError, WorkOrderTaskServiceError, ValueError) as exc:
+        return redirect(
+            url_for(
+                "work_orders.get_work_order",
+                work_order_id=work_order.id,
+            )
+        )
+
+    except (
+        WorkOrderServiceError,
+        WorkOrderTaskServiceError,
+        ValueError,
+        TypeError,
+    ) as exc:
         db.session.rollback()
-        flash(str(exc), "danger")
-        return redirect(url_for("work_orders.create_work_order_page"))
+
+        flash(
+            str(exc),
+            "danger",
+        )
+
+        return redirect(
+            url_for(
+                "work_orders.create_work_order_page"
+            )
+        )
 
     except Exception as exc:
         db.session.rollback()
-        print(f"[CREATE OT ERROR] {exc}")
-        flash("Error interno al crear la OT.", "danger")
-        return redirect(url_for("work_orders.create_work_order_page"))
 
-@work_order_bp.route("/equipment/search", methods=["GET"])
+        print(
+            "[CREATE OT ERROR] "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        flash(
+            "Error interno al crear la OT.",
+            "danger",
+        )
+
+        return redirect(
+            url_for(
+                "work_orders.create_work_order_page"
+            )
+        )
+
+@work_order_bp.route(
+    "/equipment/search",
+    methods=["GET"],
+)
 @login_required
 @permission_required("ot")
 def search_equipment_for_work_order():
-    q = (request.args.get("q") or "").strip()
-    equipment_type_id = request.args.get("equipment_type_id", type=int)
+    """
+    Busca equipos activos del predio actual.
 
-    if len(q) < 2:
-        return jsonify([])
+    Comportamiento:
+    - CONTENEDOR: no devuelve equipos, porque se digita manualmente.
+    - CHASIS: exige al menos 2 caracteres de búsqueda.
+    - Otros tipos: puede devolver todos los equipos del tipo aunque
+      no se haya escrito texto.
+    """
+
+    active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return jsonify(
+            {
+                "ok": False,
+                "message": "No hay un predio activo seleccionado.",
+                "items": [],
+            }
+        ), 400
+
+    equipment_type_id = request.args.get(
+        "equipment_type_id",
+        type=int,
+    )
+
+    q = (
+        request.args.get("q")
+        or ""
+    ).strip()
+
+    if not equipment_type_id:
+        return jsonify(
+            {
+                "ok": False,
+                "message": "Debe seleccionar un tipo de equipo.",
+                "items": [],
+            }
+        ), 400
+
+    equipment_type = (
+        EquipmentType.query
+        .filter(
+            EquipmentType.id == equipment_type_id,
+            EquipmentType.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if not equipment_type:
+        return jsonify(
+            {
+                "ok": False,
+                "message": "El tipo de equipo no existe o está inactivo.",
+                "items": [],
+            }
+        ), 404
+
+    equipment_type_code = (
+        equipment_type.code
+        or ""
+    ).strip().upper()
+
+    # Los contenedores se ingresan manualmente.
+    if equipment_type_code == "CONTENEDOR":
+        return jsonify(
+            {
+                "ok": True,
+                "equipment_type_code": equipment_type_code,
+                "items": [],
+            }
+        )
+
+    # El chasis conserva el buscador AJAX actual.
+    if equipment_type_code == "CHASIS" and len(q) < 2:
+        return jsonify(
+            {
+                "ok": True,
+                "equipment_type_code": equipment_type_code,
+                "items": [],
+            }
+        )
 
     query = (
         Equipment.query
-        .filter(Equipment.is_active.is_(True))
+        .filter(
+            Equipment.site_id == int(active_site_id),
+            Equipment.equipment_type_id == equipment_type.id,
+            Equipment.is_active.is_(True),
+        )
     )
 
-    if equipment_type_id:
+    # Para cualquier equipo se permite filtrar cuando hay texto.
+    if q:
         query = query.filter(
-            Equipment.equipment_type_id == equipment_type_id
+            db.or_(
+                Equipment.code.ilike(f"{q}%"),
+                Equipment.description.ilike(f"%{q}%"),
+            )
         )
 
-    query = query.filter(
-        db.or_(
-            Equipment.code.ilike(f"{q}%"),
-            Equipment.description.ilike(f"%{q}%"),
-        )
+    # Chasis devuelve pocos resultados mientras se escribe.
+    # Los demás tipos pueden mostrar todo el catálogo del predio.
+    result_limit = (
+        20
+        if equipment_type_code == "CHASIS"
+        else 200
     )
 
     equipments = (
         query
-        .order_by(Equipment.code.asc(), Equipment.description.asc())
-        .limit(20)
+        .order_by(
+            Equipment.code.asc(),
+            Equipment.description.asc(),
+            Equipment.id.asc(),
+        )
+        .limit(result_limit)
         .all()
     )
 
-    return jsonify([
+    items = []
+
+    for equipment in equipments:
+        code = (
+            equipment.code
+            or ""
+        ).strip()
+
+        description = (
+            equipment.description
+            or ""
+        ).strip()
+
+        label = code
+
+        if description:
+            label = f"{code} - {description}"
+
+        items.append(
+            {
+                "id": equipment.id,
+                "code": code,
+                "description": description,
+                "label": label,
+                "equipment_type_id": equipment.equipment_type_id,
+            }
+        )
+
+    return jsonify(
         {
-            "id": equipment.id,
-            "code": equipment.code,
-            "description": equipment.description or "",
-            "label": f"{equipment.code} - {equipment.description or ''}".strip(),
+            "ok": True,
+            "equipment_type_code": equipment_type_code,
+            "items": items,
         }
-        for equipment in equipments
-    ])
+    )
 
 # =========================================================
 # DETALLE OT
