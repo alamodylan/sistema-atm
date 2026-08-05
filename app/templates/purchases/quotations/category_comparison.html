@@ -488,8 +488,7 @@
                                                                 (
                                                                     quotation.quoted_quantity
                                                                     if quotation.quoted_quantity is not none
-                                                                    else line.quantity_requested
-                                                                    else 0
+                                                                    else (line.quantity_requested or 0)
                                                                 )|float
                                                             ) }}
                                                         </strong>
@@ -498,8 +497,7 @@
                                                     {% set quoted_qty = (
                                                         quotation.quoted_quantity
                                                         if quotation.quoted_quantity is not none
-                                                        else line.quantity_requested
-                                                        else 0
+                                                        else (line.quantity_requested or 0)
                                                     ) %}
 
                                                     {% if quoted_qty|float < (line.quantity_requested or 0)|float %}
