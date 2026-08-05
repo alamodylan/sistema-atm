@@ -196,7 +196,10 @@ function resetTerminal() {
 
 async function processMechanic(data, successMessage) {
     currentMechanic = data;
-    currentWorkOrders = data.work_orders || [];
+    currentWorkOrders = Array.isArray(data.work_orders)
+        ? data.work_orders
+        : [];
+
     selectedWorkOrder = null;
     currentItems = [];
     currentTasks = [];
@@ -205,51 +208,130 @@ async function processMechanic(data, successMessage) {
     pendingReceptionRequestId = null;
     receptionMode = false;
 
-    document
-        .getElementById("terminalContent")
-        .classList.remove("d-none");
+    const terminalContent =
+        document.getElementById("terminalContent");
 
-    document
-        .getElementById("toolsSection")
-        .classList.remove("d-none");
+    const toolsSection =
+        document.getElementById("toolsSection");
 
-    document.getElementById("mechanicName").innerText =
-        data.mechanic || "";
+    const mechanicName =
+        document.getElementById("mechanicName");
 
-    document.getElementById("mechanicCode").innerText =
-        data.code || "";
-
-    scanStatus.innerText =
-        successMessage || "Mecánico seleccionado correctamente.";
+    const mechanicCode =
+        document.getElementById("mechanicCode");
 
     const profilesSection =
         document.getElementById("mechanicProfilesSection");
+
+    const workOrdersList =
+        document.getElementById("workOrdersList");
+
+    const receptionList =
+        document.getElementById("receptionList");
+
+    const taskList =
+        document.getElementById("taskList");
+
+    const noWorkOrders =
+        document.getElementById("noWorkOrders");
+
+    const selectedWorkOrderSection =
+        document.getElementById("selectedWorkOrderSection");
+
+    const taskSection =
+        document.getElementById("taskSection");
+
+    const itemsSection =
+        document.getElementById("itemsSection");
+
+    const cartSection =
+        document.getElementById("cartSection");
+
+    const quantitySection =
+        document.getElementById("quantitySection");
+
+    if (terminalContent) {
+        terminalContent.classList.remove("d-none");
+    }
+
+    if (toolsSection) {
+        toolsSection.classList.remove("d-none");
+    }
+
+    if (mechanicName) {
+        mechanicName.innerText =
+            data.mechanic || "";
+    }
+
+    if (mechanicCode) {
+        mechanicCode.innerText =
+            data.code || "";
+    }
+
+    if (scanStatus) {
+        scanStatus.innerText =
+            successMessage ||
+            "Mecánico seleccionado correctamente.";
+    }
 
     if (profilesSection) {
         profilesSection.classList.add("d-none");
     }
 
-    document.getElementById("workOrdersList").innerHTML = "";
-    document.getElementById("receptionList").innerHTML = "";
-    document.getElementById("taskList").innerHTML = "";
+    if (workOrdersList) {
+        workOrdersList.innerHTML = "";
+    }
 
     /*
-     * Primero mostramos inmediatamente las OT.
-     * Las recepciones se cargan después sin bloquear la pantalla.
+     * El flujo nuevo ya no requiere recepción desde Terminal.
+     * Se valida la existencia del elemento para mantener
+     * compatibilidad sin detener el JavaScript.
      */
+    if (receptionList) {
+        receptionList.innerHTML = "";
+    }
+
+    if (taskList) {
+        taskList.innerHTML = "";
+    }
+
+    if (noWorkOrders) {
+        noWorkOrders.classList.add("d-none");
+    }
+
+    if (selectedWorkOrderSection) {
+        selectedWorkOrderSection.classList.add("d-none");
+    }
+
+    if (taskSection) {
+        taskSection.classList.add("d-none");
+    }
+
+    if (itemsSection) {
+        itemsSection.classList.add("d-none");
+    }
+
+    if (cartSection) {
+        cartSection.classList.add("d-none");
+    }
+
+    if (quantitySection) {
+        quantitySection.classList.add("d-none");
+    }
+
     renderWorkOrders();
 
-    document.getElementById("terminalContent").scrollIntoView({
-        behavior: "smooth",
-        block: "start"
-    });
+    if (terminalContent) {
+        terminalContent.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+    }
 
-    loadPendingReceptions().catch(function (error) {
-        console.error(
-            "Error al cargar recepciones pendientes:",
-            error
-        );
-    });
+    /*
+     * Ya no se cargan recepciones pendientes porque Bodega
+     * aplica la entrega y el rebajo de inventario al preparar.
+     */
 }
 
 async function handleScannerEnter() {
