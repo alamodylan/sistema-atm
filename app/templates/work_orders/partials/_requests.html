@@ -399,7 +399,19 @@
                                     </div>
                                     {% endif %}
 
-                                    <!-- ===================== IDENTIFICAR HERRAMIENTA ================                                    <!-- ===================== BODEGA ===================== -->
+                                    <!-- ===================== IDENTIFICAR HERRAMIENTA ===================== -->
+                                    {% set article_code_number = (
+                                        line.article.code|int
+                                        if line.article and line.article.code
+                                        else 0
+                                    ) %}
+
+                                    {% set is_tool_line = (
+                                        article_code_number >= 19000
+                                        and article_code_number <= 19999
+                                    ) %}
+
+                                    <!-- ===================== BODEGA ===================== -->
                                     {% if
                                         req.sent_to_warehouse_at
                                         and req.request_status in ["ENVIADA", "ATENDIDA"]
@@ -524,18 +536,6 @@
                                                 class="btn btn-sm btn-outline-primary"
                                             >
                                                 Preparar y entregar
-                                            </button>
-                                        </form>
-
-                                        {% endif %}
-                                    </div>
-                                    {% endif %}
-
-                                           <button
-                                                type="submit"
-                                                class="btn btn-sm btn-outline-primary"
-                                            >
-                                                Preparar
                                             </button>
                                         </form>
 

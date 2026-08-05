@@ -1041,7 +1041,8 @@ def warehouse_preparation_monitor_data():
     - no carga relaciones ORM completas;
     - no calcula stock;
     - no modifica objetos;
-    - devuelve 304 si la información no cambió.
+    - devuelve 304 si la información no cambió;
+    - incluye OT/EQUIPO en formato 345/40231.
     """
 
     active_site_id = (
@@ -1061,6 +1062,12 @@ def warehouse_preparation_monitor_data():
                 ),
                 WorkOrderRequest.id.label(
                     "request_id"
+                ),
+                WorkOrder.number.label(
+                    "work_order_number"
+                ),
+                WorkOrder.equipment_code_snapshot.label(
+                    "equipment_code"
                 ),
                 Article.code.label(
                     "article_code"
@@ -1119,7 +1126,6 @@ def warehouse_preparation_monitor_data():
         )
 
         items = []
-
         signature_parts = []
 
         for row in rows:
@@ -1137,9 +1143,26 @@ def warehouse_preparation_monitor_data():
                     "0"
                 ).rstrip(".")
 
+            work_order_number = (
+                str(row.work_order_number).strip()
+                if row.work_order_number is not None
+                else "-"
+            )
+
+            equipment_code = (
+                str(row.equipment_code).strip()
+                if row.equipment_code
+                else "SIN EQUIPO"
+            )
+
+            ot_equipo = (
+                f"{work_order_number}/{equipment_code}"
+            )
+
             item = {
                 "line_id": int(row.line_id),
                 "request_id": int(row.request_id),
+                "ot_equipo": ot_equipo,
                 "code": (
                     row.article_code
                     or ""
@@ -1158,6 +1181,7 @@ def warehouse_preparation_monitor_data():
                     [
                         str(item["line_id"]),
                         str(item["request_id"]),
+                        item["ot_equipo"],
                         item["code"],
                         item["name"],
                         item["quantity"],
