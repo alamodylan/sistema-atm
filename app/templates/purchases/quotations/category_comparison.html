@@ -378,6 +378,7 @@
                                     (line.item_name or '')
                                 )|lower }}"
                                 data-has-selection="{{ '1' if line.has_selection else '0' }}"
+                                data-requested-quantity="{{ line.quantity_requested or 0 }}"
                             >
                                 <td class="sticky-column sticky-code item-code-cell">
                                     {{ line.item_code or "-" }}
@@ -480,6 +481,37 @@
                                                 </div>
 
                                                 <div class="quotation-details mt-3">
+                                                    <div class="quotation-detail-row">
+                                                        <span>Cantidad cotizada</span>
+                                                        <strong>
+                                                            {{ "{:,.2f}".format(
+                                                                (
+                                                                    quotation.quoted_quantity
+                                                                    if quotation.quoted_quantity is not none
+                                                                    else line.quantity_requested
+                                                                    else 0
+                                                                )|float
+                                                            ) }}
+                                                        </strong>
+                                                    </div>
+
+                                                    {% set quoted_qty = (
+                                                        quotation.quoted_quantity
+                                                        if quotation.quoted_quantity is not none
+                                                        else line.quantity_requested
+                                                        else 0
+                                                    ) %}
+
+                                                    {% if quoted_qty|float < (line.quantity_requested or 0)|float %}
+                                                        <div class="quotation-partial-warning">
+                                                            <i class="bi bi-exclamation-triangle-fill"></i>
+                                                            Oferta parcial:
+                                                            {{ "{:,.2f}".format(quoted_qty|float) }}
+                                                            de
+                                                            {{ "{:,.2f}".format((line.quantity_requested or 0)|float) }}
+                                                        </div>
+                                                    {% endif %}
+
                                                     <div class="quotation-detail-row">
                                                         <span>Precio ingresado</span>
                                                         <strong>
@@ -688,14 +720,43 @@
 
                                             <div class="edit-cell-view d-none">
                                                 <div class="edit-cell-form">
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.0001"
-                                                        class="form-control form-control-sm quote-unit-price"
-                                                        placeholder="Precio"
-                                                        value="{{ quotation.unit_price }}"
-                                                    >
+                                                    <div>
+                                                        <label class="form-label small fw-semibold mb-1">
+                                                            Cantidad cotizada
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            min="0.01"
+                                                            max="{{ line.quantity_requested or 0 }}"
+                                                            step="0.01"
+                                                            class="form-control form-control-sm quote-quantity"
+                                                            placeholder="Cantidad"
+                                                            value="{{ (
+                                                                quotation.quoted_quantity
+                                                                if quotation.quoted_quantity is not none
+                                                                else line.quantity_requested
+                                                                else 0
+                                                            ) }}"
+                                                        >
+                                                        <div class="form-text">
+                                                            Solicitado:
+                                                            {{ "{:,.2f}".format((line.quantity_requested or 0)|float) }}
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label class="form-label small fw-semibold mb-1">
+                                                            Precio unitario
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.0001"
+                                                            class="form-control form-control-sm quote-unit-price"
+                                                            placeholder="Precio por unidad"
+                                                            value="{{ quotation.unit_price }}"
+                                                        >
+                                                    </div>
 
                                                     <div class="row g-2">
                                                         <div class="col-6">
@@ -774,13 +835,37 @@
 
                                             <div class="edit-cell-view d-none">
                                                 <div class="edit-cell-form">
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.0001"
-                                                        class="form-control form-control-sm quote-unit-price"
-                                                        placeholder="Precio"
-                                                    >
+                                                    <div>
+                                                        <label class="form-label small fw-semibold mb-1">
+                                                            Cantidad cotizada
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            min="0.01"
+                                                            max="{{ line.quantity_requested or 0 }}"
+                                                            step="0.01"
+                                                            class="form-control form-control-sm quote-quantity"
+                                                            placeholder="Cantidad"
+                                                            value="{{ line.quantity_requested or 0 }}"
+                                                        >
+                                                        <div class="form-text">
+                                                            Solicitado:
+                                                            {{ "{:,.2f}".format((line.quantity_requested or 0)|float) }}
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label class="form-label small fw-semibold mb-1">
+                                                            Precio unitario
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.0001"
+                                                            class="form-control form-control-sm quote-unit-price"
+                                                            placeholder="Precio por unidad"
+                                                        >
+                                                    </div>
 
                                                     <div class="row g-2">
                                                         <div class="col-6">
@@ -1287,6 +1372,21 @@
         margin-top: 0.2rem;
     }
 
+    .quotation-partial-warning {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        margin: 0.15rem 0 0.35rem;
+        padding: 0.35rem 0.45rem;
+        border: 1px solid #f59e0b;
+        border-radius: 0.45rem;
+        background: #fffbeb;
+        color: #92400e;
+        font-size: 0.7rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
     .quotation-more {
         font-size: 0.72rem;
     }
@@ -1477,7 +1577,332 @@
 
 <script>
 (function() {
-    "use strict"; const page = document.getElementById("quotationComparisonPage"), table = document.getElementById("comparisonTable"); if (!page || !table) return; const startEditButton = document.getElementById("startEditButton"), addSupplierButton = document.getElementById("addSupplierButton"), saveComparisonButton = document.getElementById("saveComparisonButton"), cancelEditButton = document.getElementById("cancelEditButton"), editModeBadge = document.getElementById("editModeBadge"), saveStatus = document.getElementById("saveStatus"), supplierCount = document.getElementById("supplierCount"), searchInput = document.getElementById("comparisonSearch"), clearSearchButton = document.getElementById("clearComparisonSearch"), noSearchResults = document.getElementById("noSearchResults"), scrollWrapper = document.getElementById("comparisonScrollWrapper"), scrollToSelectedButton = document.getElementById("scrollToSelected"), supplierModalElement = document.getElementById("supplierModal"), supplierSearchInput = document.getElementById("supplierSearchInput"), supplierSearchButton = document.getElementById("supplierSearchButton"), supplierLoading = document.getElementById("supplierLoading"), supplierList = document.getElementById("supplierList"), supplierEmpty = document.getElementById("supplierEmpty"), newSupplierName = document.getElementById("newSupplierName"), addNewSupplierButton = document.getElementById("addNewSupplierButton"); let editMode = false, supplierModal = null, temporarySupplierCounter = 0; function normalizeText(v) { return String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim(); } function setStatus(m, c) { if (!saveStatus) return; saveStatus.className = `small ${c || "text-muted"}`; saveStatus.textContent = m || ""; } function setEditMode(enabled) { editMode = Boolean(enabled); document.querySelectorAll(".read-cell-view").forEach(e => e.classList.toggle("d-none", editMode)); document.querySelectorAll(".edit-cell-view").forEach(e => e.classList.toggle("d-none", !editMode)); document.querySelectorAll(".edit-only").forEach(e => e.classList.toggle("d-none", !editMode)); startEditButton.classList.toggle("d-none", editMode); addSupplierButton.classList.toggle("d-none", !editMode); saveComparisonButton.classList.toggle("d-none", !editMode); cancelEditButton.classList.toggle("d-none", !editMode); editModeBadge.classList.toggle("d-none", !editMode); setStatus(editMode ? "Realiza los cambios y presiona Guardar cambios." : "", editMode ? "text-warning fw-semibold" : "text-muted"); } function filterRows() { const term = normalizeText(searchInput ? searchInput.value : ""); const rows = table.querySelectorAll("tbody .comparison-row"); let visibleRows = 0; rows.forEach(row => { const matches = !term || normalizeText(row.dataset.searchText || "").includes(term); row.classList.toggle("is-hidden", !matches); if (matches) visibleRows++; }); if (noSearchResults) noSearchResults.classList.toggle("d-none", visibleRows > 0); if (scrollWrapper) scrollWrapper.classList.toggle("d-none", visibleRows === 0); } function getExistingSupplierIds() { return Array.from(table.querySelectorAll("thead [data-supplier-column][data-supplier-id]")).map(h => Number(h.dataset.supplierId || 0)).filter(id => id > 0); } function updateSupplierIndexes() { table.querySelectorAll("thead [data-supplier-column]").forEach((header, index) => { const el = header.querySelector(".supplier-header-index"); if (el) el.textContent = String(index + 1); }); if (supplierCount) supplierCount.textContent = String(table.querySelectorAll("thead [data-supplier-column]").length); } function createSupplierHeader(options) { const supplierId = options.supplierId || "", supplierName = options.supplierName, isNew = Boolean(options.isNew), temporaryId = options.temporaryId || ""; const header = document.createElement("th"); header.className = "supplier-header"; header.dataset.supplierColumn = "1"; header.dataset.supplierId = String(supplierId); header.dataset.newSupplier = isNew ? "1" : "0"; header.dataset.temporarySupplierId = temporaryId; header.dataset.supplierName = supplierName; header.innerHTML = `<div class="supplier-header-content"><span class="supplier-header-index"></span><span class="supplier-header-name"></span></div><div class="supplier-column-settings edit-only"><select class="form-select form-select-sm column-currency"><option value="CRC">CRC</option><option value="USD">USD</option><option value="EUR">EUR</option></select><select class="form-select form-select-sm column-payment-type"><option value="">Pago</option><option value="CONTADO">Contado</option><option value="CREDITO">Crédito</option></select><input type="number" min="0" step="1" class="form-control form-control-sm column-payment-months" placeholder="Meses"><select class="form-select form-select-sm column-origin-type"><option value="">Origen</option><option value="LOCAL">Local</option><option value="IMPORTACION">Importación</option></select><button type="button" class="btn btn-sm btn-outline-danger remove-temporary-supplier"><i class="bi bi-trash me-1"></i>Quitar</button></div>`; header.querySelector(".supplier-header-name").textContent = supplierName; return header; } function createSupplierCell(options) { const supplierId = options.supplierId || "", temporaryId = options.temporaryId || ""; const cell = document.createElement("td"); cell.className = "supplier-cell quotation-cell-empty"; cell.dataset.supplierCell = "1"; cell.dataset.supplierId = String(supplierId); cell.dataset.temporarySupplierId = temporaryId; cell.dataset.newSupplier = "1"; cell.dataset.hasQuotation = "0"; cell.innerHTML = `<div class="read-cell-view d-none"><div class="empty-quotation"><span>-</span><small>Sin cotización</small></div></div><div class="edit-cell-view"><div class="edit-cell-form"><input type="number" min="0" step="0.0001" class="form-control form-control-sm quote-unit-price" placeholder="Precio"><div class="row g-2"><div class="col-6"><input type="number" min="0" max="100" step="0.01" class="form-control form-control-sm quote-discount" placeholder="Desc. %" value="0"></div><div class="col-6"><input type="number" min="0" step="0.01" class="form-control form-control-sm quote-tax" placeholder="IVA %" value="13"></div></div><div class="form-check"><input class="form-check-input quote-tax-included" type="checkbox"><label class="form-check-label small">Precio con IVA incluido</label></div><input type="number" min="0" step="1" class="form-control form-control-sm quote-lead-time" placeholder="Entrega en días"><input type="text" class="form-control form-control-sm quote-brand-model" placeholder="Marca / modelo"><textarea class="form-control form-control-sm quote-notes" rows="2" placeholder="Notas"></textarea><div class="small text-muted">Deja el precio vacío para no crear cotización.</div></div></div>`; return cell; } function addSupplierColumn(options) { const headerRow = document.getElementById("supplierHeaderRow"), rows = table.querySelectorAll("tbody .comparison-row"); const duplicate = Array.from(headerRow.querySelectorAll("[data-supplier-column]")).some(header => options.supplierId ? Number(header.dataset.supplierId || 0) === Number(options.supplierId) : normalizeText(header.dataset.supplierName) === normalizeText(options.supplierName)); if (duplicate) { window.alert("Este proveedor ya está incluido en el comparativo."); return false; } const temporaryId = `temporary-${++temporarySupplierCounter}`; headerRow.appendChild(createSupplierHeader({ supplierId: options.supplierId || "", supplierName: options.supplierName, isNew: true, temporaryId })); rows.forEach(row => row.appendChild(createSupplierCell({ supplierId: options.supplierId || "", temporaryId }))); updateSupplierIndexes(); if (scrollWrapper) window.setTimeout(() => { scrollWrapper.scrollLeft = scrollWrapper.scrollWidth; }, 100); return true; } function removeTemporarySupplier(id) { const header = table.querySelector(`thead [data-temporary-supplier-id="${id}"]`); if (header) header.remove(); table.querySelectorAll(`tbody [data-temporary-supplier-id="${id}"]`).forEach(cell => cell.remove()); updateSupplierIndexes(); } async function loadSuppliers() { if (!supplierList || !supplierLoading || !supplierEmpty) return; supplierLoading.classList.remove("d-none"); supplierList.innerHTML = ""; supplierEmpty.classList.add("d-none"); const url = new URL(page.dataset.suppliersUrl, window.location.origin), search = supplierSearchInput ? supplierSearchInput.value.trim() : ""; if (search) url.searchParams.set("search", search); getExistingSupplierIds().forEach(id => url.searchParams.append("exclude_supplier_id", String(id))); try { const response = await fetch(url.toString(), { headers: { Accept: "application/json" } }), payload = await response.json(); if (!response.ok) throw new Error(payload.error || "No fue posible cargar los proveedores."); const suppliers = payload.items || []; supplierEmpty.classList.toggle("d-none", suppliers.length > 0); suppliers.forEach(supplier => { const row = document.createElement("div"); row.className = "supplier-result"; const nameBlock = document.createElement("div"); nameBlock.innerHTML = `<div class="fw-bold"></div><div class="small text-muted"></div>`; nameBlock.querySelector(".fw-bold").textContent = supplier.supplier_name || "Proveedor"; nameBlock.querySelector(".small").textContent = supplier.tax_id ? `Identificación: ${supplier.tax_id}` : (supplier.legal_name || ""); const relationBadge = document.createElement("div"); relationBadge.className = "supplier-related-badge"; relationBadge.innerHTML = supplier.covers_all_articles ? `<span class="badge text-bg-success">Relacionado con todos</span>` : supplier.is_related ? `<span class="badge text-bg-primary">${supplier.related_article_count}/${supplier.total_article_count}</span>` : `<span class="badge text-bg-light border text-dark">Sin relación previa</span>`; const action = document.createElement("div"), button = document.createElement("button"); button.type = "button"; button.className = "btn btn-sm btn-dark"; button.innerHTML = `<i class="bi bi-plus-circle me-1"></i>Agregar`; button.addEventListener("click", () => { const added = addSupplierColumn({ supplierId: supplier.supplier_id, supplierName: supplier.supplier_name }); if (added && supplierModal) supplierModal.hide(); }); action.appendChild(button); row.appendChild(nameBlock); row.appendChild(relationBadge); row.appendChild(action); supplierList.appendChild(row); }); } catch (error) { supplierEmpty.classList.remove("d-none"); supplierEmpty.querySelector("h6").textContent = error.message || "No fue posible cargar los proveedores."; } finally { supplierLoading.classList.add("d-none"); } } function collectSupplierColumns() { const headers = Array.from(table.querySelectorAll("thead [data-supplier-column]")), rows = Array.from(table.querySelectorAll("tbody .comparison-row")); return headers.map((header, columnIndex) => { const supplierId = Number(header.dataset.supplierId || 0), isNewSupplier = header.dataset.newSupplier === "1", currencyElement = header.querySelector(".column-currency"), paymentTypeElement = header.querySelector(".column-payment-type"), paymentMonthsElement = header.querySelector(".column-payment-months"), originTypeElement = header.querySelector(".column-origin-type"), column = { supplier_id: supplierId > 0 ? supplierId : null, new_supplier_name: isNewSupplier && supplierId <= 0 ? header.dataset.supplierName : null, quote_date: new Date().toISOString(), currency_code: currencyElement ? currencyElement.value : "CRC", payment_type: paymentTypeElement ? (paymentTypeElement.value || null) : null, payment_term_months: paymentMonthsElement ? (paymentMonthsElement.value || null) : null, origin_type: originTypeElement ? (originTypeElement.value || null) : null, lines: [] }; rows.forEach(row => { const cell = row.children[columnIndex + 3]; if (!cell) return; const unitPrice = cell.querySelector(".quote-unit-price"), discount = cell.querySelector(".quote-discount"), tax = cell.querySelector(".quote-tax"), taxIncluded = cell.querySelector(".quote-tax-included"), leadTime = cell.querySelector(".quote-lead-time"), brandModel = cell.querySelector(".quote-brand-model"), notes = cell.querySelector(".quote-notes"); column.lines.push({ purchase_request_line_id: Number(row.dataset.requestLineId), unit_price: unitPrice ? unitPrice.value.trim() : "", discount_pct: discount ? discount.value.trim() : "0", tax_pct: tax ? tax.value.trim() : "0", tax_included: taxIncluded ? taxIncluded.checked : false, lead_time_days: leadTime ? leadTime.value.trim() : "", brand_model: brandModel ? brandModel.value.trim() : "", notes: notes ? notes.value.trim() : "" }); }); return column; }); } async function saveComparison() { const supplierColumns = collectSupplierColumns(); if (!supplierColumns.length) { window.alert("No hay columnas de proveedor para guardar."); return; } if (!window.confirm("¿Guardar todos los cambios realizados en el comparativo?")) return; saveComparisonButton.disabled = true; addSupplierButton.disabled = true; cancelEditButton.disabled = true; saveComparisonButton.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Guardando...`; setStatus("Guardando comparativo...", "text-primary fw-semibold"); try { const response = await fetch(page.dataset.saveUrl, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ supplier_columns: supplierColumns }) }), payload = await response.json(); if (!response.ok || payload.success === false) throw new Error(payload.error || "No fue posible guardar el comparativo."); setStatus(payload.message || "Comparativo guardado correctamente.", "text-success fw-semibold"); window.alert(payload.message || "Comparativo guardado correctamente."); window.location.reload(); } catch (error) { setStatus(error.message || "No fue posible guardar el comparativo.", "text-danger fw-semibold"); window.alert(error.message || "No fue posible guardar el comparativo."); } finally { saveComparisonButton.disabled = false; addSupplierButton.disabled = false; cancelEditButton.disabled = false; saveComparisonButton.innerHTML = `<i class="bi bi-floppy me-2"></i>Guardar cambios`; } } startEditButton.addEventListener("click", () => setEditMode(true)); cancelEditButton.addEventListener("click", () => { if (window.confirm("Se perderán los cambios no guardados. ¿Deseas continuar?")) window.location.reload(); }); addSupplierButton.addEventListener("click", () => {
+    "use strict"; const page = document.getElementById("quotationComparisonPage"), table = document.getElementById("comparisonTable"); if (!page || !table) return; const startEditButton = document.getElementById("startEditButton"), addSupplierButton = document.getElementById("addSupplierButton"), saveComparisonButton = document.getElementById("saveComparisonButton"), cancelEditButton = document.getElementById("cancelEditButton"), editModeBadge = document.getElementById("editModeBadge"), saveStatus = document.getElementById("saveStatus"), supplierCount = document.getElementById("supplierCount"), searchInput = document.getElementById("comparisonSearch"), clearSearchButton = document.getElementById("clearComparisonSearch"), noSearchResults = document.getElementById("noSearchResults"), scrollWrapper = document.getElementById("comparisonScrollWrapper"), scrollToSelectedButton = document.getElementById("scrollToSelected"), supplierModalElement = document.getElementById("supplierModal"), supplierSearchInput = document.getElementById("supplierSearchInput"), supplierSearchButton = document.getElementById("supplierSearchButton"), supplierLoading = document.getElementById("supplierLoading"), supplierList = document.getElementById("supplierList"), supplierEmpty = document.getElementById("supplierEmpty"), newSupplierName = document.getElementById("newSupplierName"), addNewSupplierButton = document.getElementById("addNewSupplierButton"); let editMode = false, supplierModal = null, temporarySupplierCounter = 0; function normalizeText(v) { return String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim(); } function setStatus(m, c) { if (!saveStatus) return; saveStatus.className = `small ${c || "text-muted"}`; saveStatus.textContent = m || ""; } function setEditMode(enabled) { editMode = Boolean(enabled); document.querySelectorAll(".read-cell-view").forEach(e => e.classList.toggle("d-none", editMode)); document.querySelectorAll(".edit-cell-view").forEach(e => e.classList.toggle("d-none", !editMode)); document.querySelectorAll(".edit-only").forEach(e => e.classList.toggle("d-none", !editMode)); startEditButton.classList.toggle("d-none", editMode); addSupplierButton.classList.toggle("d-none", !editMode); saveComparisonButton.classList.toggle("d-none", !editMode); cancelEditButton.classList.toggle("d-none", !editMode); editModeBadge.classList.toggle("d-none", !editMode); setStatus(editMode ? "Realiza los cambios y presiona Guardar cambios." : "", editMode ? "text-warning fw-semibold" : "text-muted"); } function filterRows() { const term = normalizeText(searchInput ? searchInput.value : ""); const rows = table.querySelectorAll("tbody .comparison-row"); let visibleRows = 0; rows.forEach(row => { const matches = !term || normalizeText(row.dataset.searchText || "").includes(term); row.classList.toggle("is-hidden", !matches); if (matches) visibleRows++; }); if (noSearchResults) noSearchResults.classList.toggle("d-none", visibleRows > 0); if (scrollWrapper) scrollWrapper.classList.toggle("d-none", visibleRows === 0); } function getExistingSupplierIds() { return Array.from(table.querySelectorAll("thead [data-supplier-column][data-supplier-id]")).map(h => Number(h.dataset.supplierId || 0)).filter(id => id > 0); } function updateSupplierIndexes() { table.querySelectorAll("thead [data-supplier-column]").forEach((header, index) => { const el = header.querySelector(".supplier-header-index"); if (el) el.textContent = String(index + 1); }); if (supplierCount) supplierCount.textContent = String(table.querySelectorAll("thead [data-supplier-column]").length); } function createSupplierHeader(options) { const supplierId = options.supplierId || "", supplierName = options.supplierName, isNew = Boolean(options.isNew), temporaryId = options.temporaryId || ""; const header = document.createElement("th"); header.className = "supplier-header"; header.dataset.supplierColumn = "1"; header.dataset.supplierId = String(supplierId); header.dataset.newSupplier = isNew ? "1" : "0"; header.dataset.temporarySupplierId = temporaryId; header.dataset.supplierName = supplierName; header.innerHTML = `<div class="supplier-header-content"><span class="supplier-header-index"></span><span class="supplier-header-name"></span></div><div class="supplier-column-settings edit-only"><select class="form-select form-select-sm column-currency"><option value="CRC">CRC</option><option value="USD">USD</option><option value="EUR">EUR</option></select><select class="form-select form-select-sm column-payment-type"><option value="">Pago</option><option value="CONTADO">Contado</option><option value="CREDITO">Crédito</option></select><input type="number" min="0" step="1" class="form-control form-control-sm column-payment-months" placeholder="Meses"><select class="form-select form-select-sm column-origin-type"><option value="">Origen</option><option value="LOCAL">Local</option><option value="IMPORTACION">Importación</option></select><button type="button" class="btn btn-sm btn-outline-danger remove-temporary-supplier"><i class="bi bi-trash me-1"></i>Quitar</button></div>`; header.querySelector(".supplier-header-name").textContent = supplierName; return header; } function createSupplierCell(options) {
+        const supplierId = options.supplierId || "";
+        const temporaryId = options.temporaryId || "";
+        const requestedQuantity = Number(options.requestedQuantity || 0);
+
+        const cell = document.createElement("td");
+
+        cell.className = "supplier-cell quotation-cell-empty";
+        cell.dataset.supplierCell = "1";
+        cell.dataset.supplierId = String(supplierId);
+        cell.dataset.temporarySupplierId = temporaryId;
+        cell.dataset.newSupplier = "1";
+        cell.dataset.hasQuotation = "0";
+
+        cell.innerHTML = `
+            <div class="read-cell-view d-none">
+                <div class="empty-quotation">
+                    <span>-</span>
+                    <small>Sin cotización</small>
+                </div>
+            </div>
+
+            <div class="edit-cell-view">
+                <div class="edit-cell-form">
+                    <div>
+                        <label class="form-label small fw-semibold mb-1">
+                            Cantidad cotizada
+                        </label>
+
+                        <input
+                            type="number"
+                            min="0.01"
+                            max="${requestedQuantity}"
+                            step="0.01"
+                            class="form-control form-control-sm quote-quantity"
+                            placeholder="Cantidad"
+                            value="${requestedQuantity}"
+                        >
+
+                        <div class="form-text">
+                            Solicitado: ${requestedQuantity}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="form-label small fw-semibold mb-1">
+                            Precio unitario
+                        </label>
+
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.0001"
+                            class="form-control form-control-sm quote-unit-price"
+                            placeholder="Precio por unidad"
+                        >
+                    </div>
+
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                class="form-control form-control-sm quote-discount"
+                                placeholder="Desc. %"
+                                value="0"
+                            >
+                        </div>
+
+                        <div class="col-6">
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                class="form-control form-control-sm quote-tax"
+                                placeholder="IVA %"
+                                value="13"
+                            >
+                        </div>
+                    </div>
+
+                    <div class="form-check">
+                        <input
+                            class="form-check-input quote-tax-included"
+                            type="checkbox"
+                        >
+
+                        <label class="form-check-label small">
+                            Precio con IVA incluido
+                        </label>
+                    </div>
+
+                    <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        class="form-control form-control-sm quote-lead-time"
+                        placeholder="Entrega en días"
+                    >
+
+                    <input
+                        type="text"
+                        class="form-control form-control-sm quote-brand-model"
+                        placeholder="Marca / modelo"
+                    >
+
+                    <textarea
+                        class="form-control form-control-sm quote-notes"
+                        rows="2"
+                        placeholder="Notas"
+                    ></textarea>
+
+                    <div class="small text-muted">
+                        Deja el precio vacío para no crear cotización.
+                    </div>
+                </div>
+            </div>
+        `;
+
+        return cell;
+    }
+
+    function addSupplierColumn(options) { const headerRow = document.getElementById("supplierHeaderRow"), rows = table.querySelectorAll("tbody .comparison-row"); const duplicate = Array.from(headerRow.querySelectorAll("[data-supplier-column]")).some(header => options.supplierId ? Number(header.dataset.supplierId || 0) === Number(options.supplierId) : normalizeText(header.dataset.supplierName) === normalizeText(options.supplierName)); if (duplicate) { window.alert("Este proveedor ya está incluido en el comparativo."); return false; } const temporaryId = `temporary-${++temporarySupplierCounter}`; headerRow.appendChild(createSupplierHeader({ supplierId: options.supplierId || "", supplierName: options.supplierName, isNew: true, temporaryId })); rows.forEach(row => {
+        row.appendChild(
+            createSupplierCell({
+                supplierId: options.supplierId || "",
+                temporaryId,
+                requestedQuantity: row.dataset.requestedQuantity || "0"
+            })
+        );
+    }); updateSupplierIndexes(); if (scrollWrapper) window.setTimeout(() => { scrollWrapper.scrollLeft = scrollWrapper.scrollWidth; }, 100); return true; } function removeTemporarySupplier(id) { const header = table.querySelector(`thead [data-temporary-supplier-id="${id}"]`); if (header) header.remove(); table.querySelectorAll(`tbody [data-temporary-supplier-id="${id}"]`).forEach(cell => cell.remove()); updateSupplierIndexes(); } async function loadSuppliers() { if (!supplierList || !supplierLoading || !supplierEmpty) return; supplierLoading.classList.remove("d-none"); supplierList.innerHTML = ""; supplierEmpty.classList.add("d-none"); const url = new URL(page.dataset.suppliersUrl, window.location.origin), search = supplierSearchInput ? supplierSearchInput.value.trim() : ""; if (search) url.searchParams.set("search", search); getExistingSupplierIds().forEach(id => url.searchParams.append("exclude_supplier_id", String(id))); try { const response = await fetch(url.toString(), { headers: { Accept: "application/json" } }), payload = await response.json(); if (!response.ok) throw new Error(payload.error || "No fue posible cargar los proveedores."); const suppliers = payload.items || []; supplierEmpty.classList.toggle("d-none", suppliers.length > 0); suppliers.forEach(supplier => { const row = document.createElement("div"); row.className = "supplier-result"; const nameBlock = document.createElement("div"); nameBlock.innerHTML = `<div class="fw-bold"></div><div class="small text-muted"></div>`; nameBlock.querySelector(".fw-bold").textContent = supplier.supplier_name || "Proveedor"; nameBlock.querySelector(".small").textContent = supplier.tax_id ? `Identificación: ${supplier.tax_id}` : (supplier.legal_name || ""); const relationBadge = document.createElement("div"); relationBadge.className = "supplier-related-badge"; relationBadge.innerHTML = supplier.covers_all_articles ? `<span class="badge text-bg-success">Relacionado con todos</span>` : supplier.is_related ? `<span class="badge text-bg-primary">${supplier.related_article_count}/${supplier.total_article_count}</span>` : `<span class="badge text-bg-light border text-dark">Sin relación previa</span>`; const action = document.createElement("div"), button = document.createElement("button"); button.type = "button"; button.className = "btn btn-sm btn-dark"; button.innerHTML = `<i class="bi bi-plus-circle me-1"></i>Agregar`; button.addEventListener("click", () => { const added = addSupplierColumn({ supplierId: supplier.supplier_id, supplierName: supplier.supplier_name }); if (added && supplierModal) supplierModal.hide(); }); action.appendChild(button); row.appendChild(nameBlock); row.appendChild(relationBadge); row.appendChild(action); supplierList.appendChild(row); }); } catch (error) { supplierEmpty.classList.remove("d-none"); supplierEmpty.querySelector("h6").textContent = error.message || "No fue posible cargar los proveedores."; } finally { supplierLoading.classList.add("d-none"); } } function collectSupplierColumns() {
+        const headers = Array.from(
+            table.querySelectorAll(
+                "thead [data-supplier-column]"
+            )
+        );
+
+        const rows = Array.from(
+            table.querySelectorAll(
+                "tbody .comparison-row"
+            )
+        );
+
+        return headers.map(
+            (header, columnIndex) => {
+                const supplierId = Number(
+                    header.dataset.supplierId || 0
+                );
+
+                const isNewSupplier =
+                    header.dataset.newSupplier === "1";
+
+                const currencyElement =
+                    header.querySelector(
+                        ".column-currency"
+                    );
+
+                const paymentTypeElement =
+                    header.querySelector(
+                        ".column-payment-type"
+                    );
+
+                const paymentMonthsElement =
+                    header.querySelector(
+                        ".column-payment-months"
+                    );
+
+                const originTypeElement =
+                    header.querySelector(
+                        ".column-origin-type"
+                    );
+
+                const column = {
+                    supplier_id:
+                        supplierId > 0
+                            ? supplierId
+                            : null,
+
+                    new_supplier_name:
+                        isNewSupplier
+                        && supplierId <= 0
+                            ? header.dataset.supplierName
+                            : null,
+
+                    quote_date:
+                        new Date().toISOString(),
+
+                    currency_code:
+                        currencyElement
+                            ? currencyElement.value
+                            : "CRC",
+
+                    payment_type:
+                        paymentTypeElement
+                            ? (
+                                paymentTypeElement.value
+                                || null
+                            )
+                            : null,
+
+                    payment_term_months:
+                        paymentMonthsElement
+                            ? (
+                                paymentMonthsElement.value
+                                || null
+                            )
+                            : null,
+
+                    origin_type:
+                        originTypeElement
+                            ? (
+                                originTypeElement.value
+                                || null
+                            )
+                            : null,
+
+                    lines: []
+                };
+
+                rows.forEach(row => {
+                    const cell =
+                        row.children[columnIndex + 3];
+
+                    if (!cell) {
+                        return;
+                    }
+
+                    const quotedQuantity =
+                        cell.querySelector(
+                            ".quote-quantity"
+                        );
+
+                    const unitPrice =
+                        cell.querySelector(
+                            ".quote-unit-price"
+                        );
+
+                    const discount =
+                        cell.querySelector(
+                            ".quote-discount"
+                        );
+
+                    const tax =
+                        cell.querySelector(
+                            ".quote-tax"
+                        );
+
+                    const taxIncluded =
+                        cell.querySelector(
+                            ".quote-tax-included"
+                        );
+
+                    const leadTime =
+                        cell.querySelector(
+                            ".quote-lead-time"
+                        );
+
+                    const brandModel =
+                        cell.querySelector(
+                            ".quote-brand-model"
+                        );
+
+                    const notes =
+                        cell.querySelector(
+                            ".quote-notes"
+                        );
+
+                    column.lines.push({
+                        purchase_request_line_id:
+                            Number(
+                                row.dataset.requestLineId
+                            ),
+
+                        quoted_quantity:
+                            quotedQuantity
+                                ? quotedQuantity.value.trim()
+                                : (
+                                    row.dataset.requestedQuantity
+                                    || ""
+                                ),
+
+                        unit_price:
+                            unitPrice
+                                ? unitPrice.value.trim()
+                                : "",
+
+                        discount_pct:
+                            discount
+                                ? discount.value.trim()
+                                : "0",
+
+                        tax_pct:
+                            tax
+                                ? tax.value.trim()
+                                : "0",
+
+                        tax_included:
+                            taxIncluded
+                                ? taxIncluded.checked
+                                : false,
+
+                        lead_time_days:
+                            leadTime
+                                ? leadTime.value.trim()
+                                : "",
+
+                        brand_model:
+                            brandModel
+                                ? brandModel.value.trim()
+                                : "",
+
+                        notes:
+                            notes
+                                ? notes.value.trim()
+                                : ""
+                    });
+                });
+
+                return column;
+            }
+        );
+    }
+
+    async function saveComparison() { const supplierColumns = collectSupplierColumns(); if (!supplierColumns.length) { window.alert("No hay columnas de proveedor para guardar."); return; } if (!window.confirm("¿Guardar todos los cambios realizados en el comparativo?")) return; saveComparisonButton.disabled = true; addSupplierButton.disabled = true; cancelEditButton.disabled = true; saveComparisonButton.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Guardando...`; setStatus("Guardando comparativo...", "text-primary fw-semibold"); try { const response = await fetch(page.dataset.saveUrl, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ supplier_columns: supplierColumns }) }), payload = await response.json(); if (!response.ok || payload.success === false) throw new Error(payload.error || "No fue posible guardar el comparativo."); setStatus(payload.message || "Comparativo guardado correctamente.", "text-success fw-semibold"); window.alert(payload.message || "Comparativo guardado correctamente."); window.location.reload(); } catch (error) { setStatus(error.message || "No fue posible guardar el comparativo.", "text-danger fw-semibold"); window.alert(error.message || "No fue posible guardar el comparativo."); } finally { saveComparisonButton.disabled = false; addSupplierButton.disabled = false; cancelEditButton.disabled = false; saveComparisonButton.innerHTML = `<i class="bi bi-floppy me-2"></i>Guardar cambios`; } } startEditButton.addEventListener("click", () => setEditMode(true)); cancelEditButton.addEventListener("click", () => { if (window.confirm("Se perderán los cambios no guardados. ¿Deseas continuar?")) window.location.reload(); }); addSupplierButton.addEventListener("click", () => {
         if (!supplierModalElement || !window.bootstrap?.Modal) {
             window.alert("Bootstrap todavía no está disponible. Recarga la página e inténtalo nuevamente.");
             return;

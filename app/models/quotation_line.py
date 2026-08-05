@@ -50,6 +50,12 @@ class QuotationLine(db.Model):
 
     unit_price = db.Column(db.Numeric(14, 4), nullable=False)
 
+    quoted_quantity = db.Column(
+        db.Numeric(14, 4),
+        nullable=False,
+        default=1,
+    )
+
     discount_pct = db.Column(
         db.Numeric(7, 4),
         nullable=False,

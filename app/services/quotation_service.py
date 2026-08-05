@@ -32,6 +32,7 @@ class QuotationLinePayload:
     supplier_id: int
     quote_date: Any
     unit_price: Decimal
+    quoted_quantity: Decimal | None = None
     currency_code: str = "CRC"
     article_id: int | None = None
     pending_article_id: int | None = None
@@ -297,6 +298,7 @@ def _quotation_values_are_equal(
     *,
     quotation_line: QuotationLine,
     unit_price: Decimal,
+    quoted_quantity: Decimal,
     currency_code: str,
     discount_pct: Decimal,
     tax_pct: Decimal,
@@ -324,6 +326,13 @@ def _quotation_values_are_equal(
                     or 0
                 )
             ) == unit_price,
+
+            Decimal(
+                str(
+                    quotation_line.quoted_quantity
+                    or 0
+                )
+            ) == quoted_quantity,
 
             _normalize_currency_code(
                 quotation_line.currency_code
@@ -510,6 +519,17 @@ def _validate_quotation_line(line: QuotationLinePayload) -> None:
 
     if _normalize_decimal(line.unit_price, "precio unitario") < 0:
         raise QuotationServiceError("El precio unitario no puede ser negativo.")
+
+    if line.quoted_quantity is not None:
+        quoted_quantity = _normalize_decimal(
+            line.quoted_quantity,
+            "cantidad cotizada",
+        )
+
+        if quoted_quantity <= 0:
+            raise QuotationServiceError(
+                "La cantidad cotizada debe ser mayor que cero."
+            )
 
     valid_statuses = {
         "BORRADOR",
@@ -1027,6 +1047,7 @@ def create_single_line_quotation(
     created_by_user_id: int,
     quote_date: Any | None = None,
     unit_price: Any | None = None,
+    quoted_quantity: Any | None = None,
     use_last_price: bool = False,
     currency_code: str = "CRC",
     discount_pct: Any = Decimal("0"),
@@ -1084,6 +1105,12 @@ def create_single_line_quotation(
 
         unit_price = last_line.unit_price
 
+        if quoted_quantity in (None, ""):
+            quoted_quantity = (
+                last_line.quoted_quantity
+                or request_line.quantity_requested
+            )
+
         if discount_pct in (None, ""):
             discount_pct = last_line.discount_pct
 
@@ -1111,11 +1138,35 @@ def create_single_line_quotation(
     if unit_price is None or unit_price == "":
         raise QuotationServiceError("Debe indicar el precio unitario.")
 
+    if quoted_quantity in (None, ""):
+        quoted_quantity = request_line.quantity_requested
+
+    quoted_quantity = _normalize_decimal(
+        quoted_quantity,
+        "cantidad cotizada",
+    )
+
+    quantity_requested = _normalize_decimal(
+        request_line.quantity_requested or Decimal("0"),
+        "cantidad solicitada",
+    )
+
+    if quoted_quantity <= 0:
+        raise QuotationServiceError(
+            "La cantidad cotizada debe ser mayor que cero."
+        )
+
+    if quoted_quantity > quantity_requested:
+        raise QuotationServiceError(
+            "La cantidad cotizada no puede superar la cantidad solicitada."
+        )
+
     payload = QuotationLinePayload(
         purchase_request_line_id=purchase_request_line_id,
         supplier_id=supplier_id,
         quote_date=quote_date,
         unit_price=_normalize_decimal(unit_price, "precio unitario"),
+        quoted_quantity=quoted_quantity,
         currency_code=(currency_code or "CRC").strip() or "CRC",
         article_id=article_id,
         pending_article_id=pending_article_id,
@@ -1156,6 +1207,7 @@ def create_single_line_quotation(
         quote_date=payload.quote_date,
         currency_code=payload.currency_code,
         unit_price=payload.unit_price,
+        quoted_quantity=payload.quoted_quantity,
         discount_pct=payload.discount_pct,
         tax_pct=payload.tax_pct,
         tax_included=payload.tax_included,
@@ -1225,6 +1277,14 @@ def create_quotation_batch(
             quote_date=line.quote_date,
             currency_code=(line.currency_code or "CRC").strip() or "CRC",
             unit_price=_normalize_decimal(line.unit_price, "precio unitario"),
+            quoted_quantity=(
+                _normalize_decimal(
+                    line.quoted_quantity,
+                    "cantidad cotizada",
+                )
+                if line.quoted_quantity is not None
+                else None
+            ),
             discount_pct=_normalize_decimal(line.discount_pct, "descuento"),
             tax_pct=_normalize_decimal(line.tax_pct, "impuesto"),
             tax_included=bool(line.tax_included),
@@ -1503,9 +1563,16 @@ def get_comparison_for_purchase_request_line(
             supplier_id
         )
 
+        quoted_quantity = _normalize_decimal(
+            quotation_line.quoted_quantity
+            if quotation_line.quoted_quantity is not None
+            else quantity_requested,
+            "cantidad cotizada",
+        )
+
         amounts = _calculate_quotation_amounts(
             quotation_line,
-            quantity_requested,
+            quoted_quantity,
         )
 
         currency_code = (
@@ -1535,6 +1602,9 @@ def get_comparison_for_purchase_request_line(
                 ),
                 "quantity_requested": (
                     quantity_requested
+                ),
+                "quoted_quantity": (
+                    quoted_quantity
                 ),
                 "quote_date": (
                     quotation_line.quote_date
@@ -2129,10 +2199,17 @@ def get_category_comparison_matrix(
                 selected_candidate.quotation_line_id
             ]
 
+            selected_quoted_quantity = _normalize_decimal(
+                selected_quotation.quoted_quantity
+                if selected_quotation.quoted_quantity is not None
+                else quantity_requested,
+                "cantidad cotizada",
+            )
+
             selected_amounts = (
                 _calculate_quotation_amounts(
                     selected_quotation,
-                    quantity_requested,
+                    selected_quoted_quantity,
                 )
             )
 
@@ -2154,6 +2231,8 @@ def get_category_comparison_matrix(
                         selected_quotation.currency_code
                     )
                 ),
+                "quantity_requested": quantity_requested,
+                "quoted_quantity": selected_quoted_quantity,
                 "unit_total": (
                     selected_amounts[
                         "unit_total"
@@ -2217,10 +2296,17 @@ def get_category_comparison_matrix(
                 supplier_name,
             ) = quotation_data
 
+            quoted_quantity = _normalize_decimal(
+                quotation_line.quoted_quantity
+                if quotation_line.quoted_quantity is not None
+                else quantity_requested,
+                "cantidad cotizada",
+            )
+
             amounts = (
                 _calculate_quotation_amounts(
                     quotation_line,
-                    quantity_requested,
+                    quoted_quantity,
                 )
             )
 
@@ -2286,6 +2372,8 @@ def get_category_comparison_matrix(
                     "currency_code": (
                         currency_code
                     ),
+                    "quantity_requested": quantity_requested,
+                    "quoted_quantity": quoted_quantity,
                     "unit_price": (
                         amounts["unit_price"]
                     ),
@@ -3218,6 +3306,32 @@ def save_category_comparison_matrix(
                         f"El precio de la línea {line_index} de la columna {column_index} debe ser mayor que cero."
                     )
 
+                quantity_requested = _normalize_decimal(
+                    request_line.quantity_requested or Decimal("0"),
+                    "cantidad solicitada",
+                )
+
+                raw_quoted_quantity = raw_line.get(
+                    "quoted_quantity"
+                )
+
+                quoted_quantity = _normalize_decimal(
+                    raw_quoted_quantity
+                    if raw_quoted_quantity not in {None, ""}
+                    else quantity_requested,
+                    "cantidad cotizada",
+                )
+
+                if quoted_quantity <= 0:
+                    raise QuotationServiceError(
+                        f"La cantidad cotizada de la línea {line_index} debe ser mayor que cero."
+                    )
+
+                if quoted_quantity > quantity_requested:
+                    raise QuotationServiceError(
+                        f"La cantidad cotizada de la línea {line_index} no puede superar la cantidad solicitada."
+                    )
+
                 discount_pct = (
                     _normalize_decimal(
                         raw_line.get(
@@ -3373,6 +3487,7 @@ def save_category_comparison_matrix(
                         "quote_date"
                     ],
                     unit_price=unit_price,
+                    quoted_quantity=quoted_quantity,
                     currency_code=currency_code,
                     article_id=(
                         request_line.article_id
@@ -3417,6 +3532,7 @@ def save_category_comparison_matrix(
                             current_quotation
                         ),
                         unit_price=unit_price,
+                        quoted_quantity=quoted_quantity,
                         currency_code=(
                             currency_code
                         ),
@@ -3507,6 +3623,9 @@ def save_category_comparison_matrix(
                         ),
                         unit_price=(
                             payload.unit_price
+                        ),
+                        quoted_quantity=(
+                            payload.quoted_quantity
                         ),
                         discount_pct=(
                             payload.discount_pct
@@ -4065,15 +4184,22 @@ def list_pending_purchase_order_candidates_by_supplier(
             current_supplier_id
         ]
 
-        quantity = _normalize_decimal(
+        quantity_requested = _normalize_decimal(
             request_line.quantity_requested
             or Decimal("0"),
             "cantidad solicitada",
         )
 
+        quoted_quantity = _normalize_decimal(
+            quotation_line.quoted_quantity
+            if quotation_line.quoted_quantity is not None
+            else quantity_requested,
+            "cantidad cotizada",
+        )
+
         amounts = _calculate_quotation_amounts(
             quotation_line,
-            quantity,
+            quoted_quantity,
         )
 
         currency_code = (
@@ -4194,7 +4320,8 @@ def list_pending_purchase_order_candidates_by_supplier(
                     else "Sin categoría"
                 ),
 
-                "quantity_requested": quantity,
+                "quantity_requested": quantity_requested,
+                "quoted_quantity": quoted_quantity,
                 "unit_id": request_line.unit_id,
                 "currency_code": currency_code,
                 "unit_price": (
