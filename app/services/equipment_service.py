@@ -31,7 +31,17 @@ def list_equipment(include_inactive=True):
 
 
 def get_equipment(equipment_id):
-    return Equipment.query.get(equipment_id)
+    try:
+        equipment_id = int(
+            equipment_id
+        )
+    except (TypeError, ValueError):
+        return None
+
+    return db.session.get(
+        Equipment,
+        equipment_id,
+    )
 
 
 def get_equipment_or_404(equipment_id):
@@ -48,12 +58,32 @@ def list_equipment_types(include_inactive=True):
 
 
 def get_equipment_type(equipment_type_id):
-    return EquipmentType.query.get(equipment_type_id)
+    try:
+        equipment_type_id = int(
+            equipment_type_id
+        )
+    except (TypeError, ValueError):
+        return None
+
+    return db.session.get(
+        EquipmentType,
+        equipment_type_id,
+    )
 
 
 def get_equipment_type_or_404(equipment_type_id):
     return EquipmentType.query.get_or_404(equipment_type_id)
 
+def _parse_required_int(value, error_message):
+    value = _clean_text(value)
+
+    if value is None:
+        raise EquipmentServiceError(error_message)
+
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise EquipmentServiceError(error_message) from exc
 
 def create_equipment_type(code, name, description=None):
     code = _normalize_code(code)
@@ -136,24 +166,48 @@ def create_equipment(
     size_label = _clean_text(size_label)
 
     if not code:
-        raise EquipmentServiceError("El código del equipo es obligatorio.")
+        raise EquipmentServiceError(
+            "El código del equipo es obligatorio."
+        )
 
-    equipment_type = EquipmentType.query.filter_by(
-        id=equipment_type_id,
-        is_active=True,
-    ).first()
+    equipment_type_id = _parse_required_int(
+        equipment_type_id,
+        "Debe seleccionar un tipo de equipo válido.",
+    )
+
+    equipment_type = (
+        EquipmentType.query
+        .filter(
+            EquipmentType.id == equipment_type_id,
+            EquipmentType.is_active.is_(True),
+        )
+        .first()
+    )
 
     if not equipment_type:
-        raise EquipmentServiceError("Debe seleccionar un tipo de equipo activo.")
+        raise EquipmentServiceError(
+            "Debe seleccionar un tipo de equipo activo."
+        )
 
-    existing = Equipment.query.filter(
-        db.func.upper(Equipment.code) == code
-    ).first()
+    existing = (
+        Equipment.query
+        .filter(
+            db.func.upper(
+                db.func.trim(Equipment.code)
+            ) == code
+        )
+        .first()
+    )
 
     if existing:
-        raise EquipmentServiceError("Ya existe un equipo con ese código.")
+        raise EquipmentServiceError(
+            "Ya existe un equipo con ese código."
+        )
 
-    axle_count = _parse_optional_int(axle_count, "La cantidad de ejes debe ser un número entero.")
+    axle_count = _parse_optional_int(
+        axle_count,
+        "La cantidad de ejes debe ser un número entero.",
+    )
 
     equipment = Equipment(
         code=code,
@@ -180,40 +234,72 @@ def update_equipment(
     size_label=None,
     is_active=True,
 ):
-    equipment = get_equipment_or_404(equipment_id)
+    equipment = get_equipment_or_404(
+        equipment_id
+    )
 
     code = _normalize_code(code)
     description = _clean_text(description)
     size_label = _clean_text(size_label)
 
     if not code:
-        raise EquipmentServiceError("El código del equipo es obligatorio.")
+        raise EquipmentServiceError(
+            "El código del equipo es obligatorio."
+        )
 
-    equipment_type = EquipmentType.query.filter_by(
-        id=equipment_type_id,
-        is_active=True,
-    ).first()
+    equipment_type_id = _parse_required_int(
+        equipment_type_id,
+        "Debe seleccionar un tipo de equipo válido.",
+    )
+
+    equipment_type = (
+        EquipmentType.query
+        .filter(
+            EquipmentType.id == equipment_type_id,
+            EquipmentType.is_active.is_(True),
+        )
+        .first()
+    )
 
     if not equipment_type:
-        raise EquipmentServiceError("Debe seleccionar un tipo de equipo activo.")
+        raise EquipmentServiceError(
+            "Debe seleccionar un tipo de equipo activo."
+        )
 
-    existing = Equipment.query.filter(
-        db.func.upper(Equipment.code) == code,
-        Equipment.id != equipment.id,
-    ).first()
+    existing = (
+        Equipment.query
+        .filter(
+            db.func.upper(
+                db.func.trim(Equipment.code)
+            ) == code,
+            Equipment.id != equipment.id,
+        )
+        .first()
+    )
 
     if existing:
-        raise EquipmentServiceError("Ya existe otro equipo con ese código.")
+        raise EquipmentServiceError(
+            "Ya existe otro equipo con ese código."
+        )
 
-    axle_count = _parse_optional_int(axle_count, "La cantidad de ejes debe ser un número entero.")
+    axle_count = _parse_optional_int(
+        axle_count,
+        "La cantidad de ejes debe ser un número entero.",
+    )
 
     equipment.code = code
-    equipment.equipment_type_id = equipment_type.id
-    equipment.equipment_type = equipment_type.code
+    equipment.equipment_type_id = (
+        equipment_type.id
+    )
+    equipment.equipment_type = (
+        equipment_type.code
+    )
     equipment.description = description
     equipment.axle_count = axle_count
     equipment.size_label = size_label
-    equipment.is_active = bool(is_active)
+    equipment.is_active = bool(
+        is_active
+    )
 
     db.session.commit()
 
