@@ -1466,43 +1466,105 @@ function renderItems() {
 }
 
 function renderCart() {
-    const container = document.getElementById("cartList");
-    container.innerHTML = "";
+    const container =
+        document.getElementById("cartList");
 
-    if (!cart.length) {
-        document.getElementById("cartSection").classList.add("d-none");
+    const cartSection =
+        document.getElementById(
+            "cartSection"
+        );
+
+    const submitButton =
+        document.getElementById(
+            "submitRequestBtn"
+        );
+
+    if (
+        !container
+        || !cartSection
+        || !submitButton
+    ) {
         return;
     }
 
-    cart.forEach(function (c, i) {
-        const row = document.createElement("div");
-        row.className = "d-flex justify-content-between align-items-center border-bottom py-2";
+    container.innerHTML = "";
+
+    if (
+        !Array.isArray(cart)
+        || !cart.length
+    ) {
+        cartSection.classList.add(
+            "d-none"
+        );
+
+        submitButton.disabled = false;
+
+        return;
+    }
+
+    cart.forEach(function (item, index) {
+        const row =
+            document.createElement("div");
+
+        row.className =
+            "d-flex justify-content-between "
+            + "align-items-center "
+            + "border-bottom py-2";
 
         row.innerHTML =
-            '<div>' + c.name + ' - ' + c.quantity + '</div>' +
-            '<button type="button" class="btn btn-sm btn-danger rounded-3 ms-2">X</button>';
+            "<div>"
+            + escapeHtml(item.name)
+            + " - "
+            + escapeHtml(item.quantity)
+            + "</div>"
+            + '<button type="button" '
+            + 'class="btn btn-sm btn-danger '
+            + 'rounded-3 ms-2">'
+            + "X"
+            + "</button>";
 
-        row.querySelector("button").onclick = function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            cart.splice(i, 1);
-            renderCart();
-        };
+        row
+            .querySelector("button")
+            .onclick = function (event) {
+                event.preventDefault();
+                event.stopPropagation();
 
-        container.appendChild(row);
+                cart.splice(
+                    index,
+                    1
+                );
+
+                renderCart();
+            };
+
+        container.appendChild(
+            row
+        );
     });
 
-    const title = cartMode === "tools"
-        ? "Solicitud de herramientas"
-        : "Solicitud";
+    const title =
+        cartMode === "tools"
+            ? "Solicitud de herramientas"
+            : "Solicitud";
 
-    document.querySelector("#cartSection h5").innerText = title;
+    const titleElement =
+        cartSection.querySelector("h5");
 
-    document.getElementById("submitRequestBtn").innerText = cartMode === "tools"
-        ? "Enviar solicitud de herramientas"
-        : "Enviar solicitud";
+    if (titleElement) {
+        titleElement.innerText =
+            title;
+    }
 
-    document.getElementById("cartSection").classList.remove("d-none");
+    submitButton.disabled = false;
+
+    submitButton.innerText =
+        cartMode === "tools"
+            ? "Enviar solicitud de herramientas"
+            : "Enviar solicitud";
+
+    cartSection.classList.remove(
+        "d-none"
+    );
 }
 
 document.getElementById("confirmQuantityBtn").onclick = function (e) {
@@ -1549,90 +1611,177 @@ document.getElementById("cancelQuantityBtn").onclick = function (e) {
     focusItemsSearch();
 };
 
-document.getElementById("submitRequestBtn").onclick = async function (e) {
+document.getElementById("submitRequestBtn").onclick =
+async function (e) {
     e.preventDefault();
     e.stopPropagation();
 
     pauseScannerFocus(2000);
 
-    if (!currentMechanic || !currentMechanic.mechanic_id) {
+    const button = this;
+
+    if (button.disabled) {
+        return;
+    }
+
+    if (
+        !currentMechanic
+        || !currentMechanic.mechanic_id
+    ) {
         alert("No hay mecánico escaneado.");
         return;
     }
 
-    if (!cart.length) {
-        alert("Sin items");
+    if (!Array.isArray(cart) || !cart.length) {
+        alert("No hay artículos en la solicitud.");
         return;
     }
-
-    const button = this;
-    button.disabled = true;
-    button.innerText = "Enviando...";
 
     let url = "";
     let payload = {};
 
-    if (cartMode === "tools") {
-        const warehouseId = getToolWarehouseId();
+    const isToolRequest =
+        cartMode === "tools";
 
-        if (!warehouseId) {
-            button.disabled = false;
-            button.innerText = "Enviar solicitud de herramientas";
-            alert("No se pudo determinar la bodega para solicitar herramientas.");
-            return;
+    const normalButtonText =
+        isToolRequest
+            ? "Enviar solicitud de herramientas"
+            : "Enviar solicitud";
+
+    try {
+        button.disabled = true;
+        button.innerText = "Enviando...";
+
+        if (isToolRequest) {
+            const warehouseId =
+                getToolWarehouseId();
+
+            if (!warehouseId) {
+                throw new Error(
+                    "No se pudo determinar la bodega "
+                    + "para solicitar herramientas."
+                );
+            }
+
+            url =
+                "/terminal/tools/request-batch";
+
+            payload = {
+                mechanic_id:
+                    currentMechanic.mechanic_id,
+
+                warehouse_id:
+                    warehouseId,
+
+                lines:
+                    cart
+            };
+
+        } else {
+            if (!selectedWorkOrder) {
+                throw new Error(
+                    "Debe seleccionar una OT."
+                );
+            }
+
+            url =
+                "/terminal/work-orders/"
+                + selectedWorkOrder.id
+                + "/requests/submit";
+
+            payload = {
+                lines: cart,
+
+                mechanic_id:
+                    currentMechanic.mechanic_id
+            };
         }
 
-        url = "/terminal/tools/request-batch";
+        const res = await fetch(
+            url,
+            {
+                method: "POST",
 
-        payload = {
-            mechanic_id: currentMechanic.mechanic_id,
-            warehouse_id: warehouseId,
-            lines: cart
-        };
-    } else {
-        if (!selectedWorkOrder) {
-            button.disabled = false;
-            button.innerText = "Enviar solicitud";
-            alert("Debe seleccionar una OT.");
-            return;
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify(
+                    payload
+                )
+            }
+        );
+
+        const contentType =
+            res.headers.get("content-type")
+            || "";
+
+        if (
+            !contentType.includes(
+                "application/json"
+            )
+        ) {
+            throw new Error(
+                "El servidor devolvió una "
+                + "respuesta no válida."
+            );
         }
 
-        url = "/terminal/work-orders/" + selectedWorkOrder.id + "/requests/submit";
+        const data =
+            await res.json();
 
-        payload = {
-            lines: cart,
-            mechanic_id: currentMechanic.mechanic_id
-        };
-    }
+        if (!res.ok || !data.ok) {
+            throw new Error(
+                data.error
+                || "Error al enviar la solicitud."
+            );
+        }
 
-    const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    });
+        scanStatus.innerText =
+            data.message
+            || "Solicitud enviada correctamente.";
 
-    const data = await res.json();
-
-    if (data.ok) {
-        scanStatus.innerText = data.message || "Solicitud enviada correctamente.";
         cart = [];
+
         renderCart();
 
-        if (cartMode === "articles") {
-            await loadPendingReceptions();
+        /*
+         * Ya no se cargan recepciones pendientes.
+         * Bodega aplica directamente la entrega
+         * y el rebajo del inventario.
+         */
+
+        if (
+            document.getElementById(
+                "itemsSection"
+            )
+        ) {
+            document
+                .getElementById(
+                    "itemsSection"
+                )
+                .classList.add("d-none");
         }
 
-        button.disabled = false;
-        button.innerText = cartMode === "tools"
-            ? "Enviar solicitud de herramientas"
-            : "Enviar solicitud";
-    } else {
-        button.disabled = false;
-        button.innerText = cartMode === "tools"
-            ? "Enviar solicitud de herramientas"
-            : "Enviar solicitud";
+    } catch (error) {
+        console.error(
+            "[SUBMIT TERMINAL REQUEST]",
+            error
+        );
 
-        alert(data.error || "Error al enviar solicitud.");
+        alert(
+            error.message
+            || "No fue posible enviar la solicitud."
+        );
+
+        scanStatus.innerText =
+            "No fue posible enviar la solicitud.";
+
+    } finally {
+        button.disabled = false;
+        button.innerText =
+            normalButtonText;
     }
 };
 
