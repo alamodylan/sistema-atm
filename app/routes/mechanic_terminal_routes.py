@@ -50,27 +50,55 @@ def _build_mechanic_terminal_payload(
 ) -> dict:
     active_site_id = session.get("active_site_id")
 
+    base_payload = {
+        "mechanic_id": mechanic.id,
+        "mechanic": mechanic.name,
+        "code": mechanic.code,
+        "work_orders": [],
+    }
+
     if not active_site_id:
-        return {
-            "mechanic_id": mechanic.id,
-            "mechanic": mechanic.name,
-            "code": mechanic.code,
-            "work_orders": [],
-        }
+        print(
+            "[TERMINAL PAYLOAD] "
+            f"mechanic_id={mechanic.id} "
+            "sin active_site_id"
+        )
+
+        return base_payload
+
+    try:
+        active_site_id = int(active_site_id)
+    except (TypeError, ValueError):
+        print(
+            "[TERMINAL PAYLOAD] "
+            f"mechanic_id={mechanic.id} "
+            f"active_site_id_invalido={active_site_id!r}"
+        )
+
+        return base_payload
 
     task_lines = (
         WorkOrderTaskLine.query
         .options(
-            joinedload(WorkOrderTaskLine.work_order),
+            joinedload(
+                WorkOrderTaskLine.work_order
+            ),
         )
         .join(
             WorkOrder,
-            WorkOrder.id == WorkOrderTaskLine.work_order_id,
+            WorkOrder.id
+            == WorkOrderTaskLine.work_order_id,
         )
         .filter(
-            WorkOrderTaskLine.assigned_mechanic_id == mechanic.id,
-            WorkOrder.site_id == int(active_site_id),
-            WorkOrder.status == "EN_PROCESO",
+            WorkOrderTaskLine.assigned_mechanic_id
+            == mechanic.id,
+
+            WorkOrder.site_id
+            == active_site_id,
+
+            WorkOrder.status
+            == "EN_PROCESO",
+
             WorkOrderTaskLine.status.in_(
                 [
                     "EN_PROCESO",
@@ -79,7 +107,20 @@ def _build_mechanic_terminal_payload(
                 ]
             ),
         )
+        .order_by(
+            WorkOrder.id.asc(),
+            WorkOrderTaskLine.id.asc(),
+        )
         .all()
+    )
+
+    print(
+        "[TERMINAL PAYLOAD] "
+        f"mechanic_id={mechanic.id} "
+        f"mechanic_code={mechanic.code!r} "
+        f"mechanic_site_id={mechanic.site_id} "
+        f"active_site_id={active_site_id} "
+        f"task_lines_found={len(task_lines)}"
     )
 
     work_orders_map = {}
@@ -87,27 +128,57 @@ def _build_mechanic_terminal_payload(
     for task_line in task_lines:
         work_order = task_line.work_order
 
+        print(
+            "[TERMINAL PAYLOAD TASK] "
+            f"task_line_id={task_line.id} "
+            f"task_status={task_line.status!r} "
+            f"assigned_mechanic_id="
+            f"{task_line.assigned_mechanic_id} "
+            f"work_order_id={task_line.work_order_id} "
+            f"work_order_number="
+            f"{work_order.number if work_order else None!r} "
+            f"work_order_status="
+            f"{work_order.status if work_order else None!r} "
+            f"work_order_site_id="
+            f"{work_order.site_id if work_order else None!r}"
+        )
+
         if not work_order:
             continue
 
-        if work_order.id not in work_orders_map:
-            work_orders_map[work_order.id] = {
-                "id": work_order.id,
-                "number": work_order.number,
-                "warehouse_id": work_order.warehouse_id,
-                "equipment_code_snapshot": (
-                    work_order.equipment_code_snapshot
-                ),
-                "description": (
-                    work_order.description or ""
-                ),
-            }
+        if work_order.id in work_orders_map:
+            continue
+
+        work_orders_map[work_order.id] = {
+            "id": work_order.id,
+            "number": work_order.number,
+            "warehouse_id": work_order.warehouse_id,
+            "equipment_code_snapshot": (
+                work_order.equipment_code_snapshot
+                or ""
+            ),
+            "description": (
+                work_order.description
+                or ""
+            ),
+        }
+
+    work_orders = list(
+        work_orders_map.values()
+    )
+
+    print(
+        "[TERMINAL PAYLOAD RESPONSE] "
+        f"mechanic_id={mechanic.id} "
+        f"work_orders_count={len(work_orders)} "
+        f"work_orders={work_orders}"
+    )
 
     return {
         "mechanic_id": mechanic.id,
         "mechanic": mechanic.name,
         "code": mechanic.code,
-        "work_orders": list(work_orders_map.values()),
+        "work_orders": work_orders,
     }
 
 @terminal_bp.route("/")
