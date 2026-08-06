@@ -2,6 +2,407 @@
 
 {% block title %}Dashboard Jefatura | Sistema de Bodega{% endblock %}
 
+{% block extra_css %}
+<style>
+    .manager-hero {
+        border-radius: 1.35rem;
+        background: linear-gradient(135deg, #003B7A, #0d6efd);
+        color: #fff;
+        padding: 1.35rem;
+        box-shadow: 0 14px 34px rgba(0, 59, 122, .18);
+    }
+
+    .manager-live-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: .5rem;
+        padding: .55rem .85rem;
+        border: 1px solid rgba(255,255,255,.25);
+        border-radius: 999px;
+        background: rgba(255,255,255,.12);
+        font-size: .82rem;
+        font-weight: 700;
+    }
+
+    .manager-live-dot {
+        width: .55rem;
+        height: .55rem;
+        border-radius: 50%;
+        background: #65e89a;
+        box-shadow: 0 0 0 5px rgba(101,232,154,.14);
+    }
+
+    .manager-summary-card {
+        border: 1px solid #e7ebf1;
+        border-radius: 1.15rem;
+        box-shadow: 0 8px 24px rgba(25, 35, 55, .06);
+    }
+
+    .manager-summary-icon {
+        width: 46px;
+        height: 46px;
+        border-radius: .95rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+    }
+
+    .manager-tabs {
+        display: flex;
+        gap: .5rem;
+        overflow-x: auto;
+        padding-bottom: .25rem;
+    }
+
+    .manager-tab-btn {
+        border: 1px solid #dde3eb;
+        background: #fff;
+        color: #4e596b;
+        border-radius: 999px;
+        padding: .65rem .95rem;
+        white-space: nowrap;
+        font-weight: 700;
+    }
+
+    .manager-tab-btn.active {
+        background: #003B7A;
+        border-color: #003B7A;
+        color: #fff;
+    }
+
+    .manager-panel {
+        display: none;
+    }
+
+    .manager-panel.active {
+        display: block;
+    }
+
+    .manager-section-card {
+        border: 1px solid #e7ebf1;
+        border-radius: 1.25rem;
+        background: #fff;
+        box-shadow: 0 10px 28px rgba(25, 35, 55, .06);
+    }
+
+    .manager-section-header {
+        padding: 1.1rem 1.2rem;
+        border-bottom: 1px solid #e7ebf1;
+    }
+
+    .manager-section-body {
+        padding: 1.2rem;
+    }
+
+    .manager-search-wrap {
+        position: relative;
+    }
+
+    .manager-search-wrap i {
+        position: absolute;
+        top: 50%;
+        left: .9rem;
+        transform: translateY(-50%);
+        color: #8a94a4;
+    }
+
+    .manager-search {
+        min-height: 46px;
+        padding-left: 2.55rem;
+        border-radius: .9rem;
+    }
+
+    .manager-request-card {
+        border: 1px solid #e1e6ee;
+        border-radius: 1.15rem;
+        overflow: hidden;
+        margin-bottom: 1rem;
+        background: #fff;
+        box-shadow: 0 8px 22px rgba(25, 35, 55, .055);
+    }
+
+    .manager-request-card.is-processing {
+        opacity: .7;
+        pointer-events: none;
+    }
+
+    .manager-request-header {
+        padding: 1rem 1.1rem;
+        border-bottom: 1px solid #e7ebf1;
+        background: linear-gradient(180deg, #fff, #fbfcfe);
+    }
+
+    .manager-request-title {
+        font-size: 1.08rem;
+        font-weight: 800;
+        color: #172033;
+    }
+
+    .manager-request-meta {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: .75rem;
+        margin-top: .9rem;
+    }
+
+    .manager-meta-label {
+        color: #6d7788;
+        font-size: .7rem;
+        text-transform: uppercase;
+        font-weight: 800;
+    }
+
+    .manager-meta-value {
+        color: #172033;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    .manager-progress {
+        height: 7px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #edf0f4;
+    }
+
+    .manager-progress-bar {
+        height: 100%;
+        width: 0;
+        background: linear-gradient(90deg, #0d6efd, #198754);
+        transition: width .2s ease;
+    }
+
+    .manager-lines {
+        padding: .9rem;
+    }
+
+    .manager-line-card {
+        border: 1px solid #e1e6ee;
+        border-radius: 1rem;
+        padding: .95rem;
+        margin-bottom: .75rem;
+        background: #fff;
+        transition: background .16s ease, border-color .16s ease;
+    }
+
+    .manager-line-card:last-child {
+        margin-bottom: 0;
+    }
+
+    .manager-line-card[data-decision="APROBADA"] {
+        border-color: #87d4aa;
+        background: #edf9f2;
+    }
+
+    .manager-line-card[data-decision="RECHAZADA"] {
+        border-color: #ef9ca7;
+        background: #fff0f2;
+    }
+
+    .manager-line-grid {
+        display: grid;
+        grid-template-columns: minmax(230px, 1.6fr) 110px 110px minmax(300px, 1.2fr);
+        gap: .8rem;
+        align-items: center;
+    }
+
+    .manager-line-code {
+        color: #003B7A;
+        font-size: .76rem;
+        font-weight: 800;
+    }
+
+    .manager-line-name {
+        color: #172033;
+        font-weight: 750;
+        line-height: 1.25;
+    }
+
+    .manager-number-box {
+        border: 1px solid #e1e6ee;
+        border-radius: .8rem;
+        padding: .55rem .65rem;
+        background: rgba(255,255,255,.78);
+    }
+
+    .manager-number-label {
+        display: block;
+        color: #6d7788;
+        font-size: .68rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+
+    .manager-number-value {
+        display: block;
+        margin-top: .1rem;
+        color: #172033;
+        font-weight: 800;
+    }
+
+    .manager-stock-ok {
+        color: #198754;
+    }
+
+    .manager-stock-low {
+        color: #a66f00;
+    }
+
+    .manager-stock-zero {
+        color: #dc3545;
+    }
+
+    .manager-decision-buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: .45rem;
+    }
+
+    .manager-decision-btn {
+        min-height: 40px;
+        border-radius: .75rem;
+        font-weight: 750;
+    }
+
+    .manager-decision-fields {
+        display: grid;
+        grid-template-columns: 125px minmax(150px, 1fr);
+        gap: .55rem;
+        margin-top: .55rem;
+    }
+
+    .manager-decision-fields .form-control {
+        min-height: 40px;
+        border-radius: .75rem;
+    }
+
+    .manager-reason-wrap {
+        display: none;
+    }
+
+    .manager-line-card[data-decision="RECHAZADA"] .manager-reason-wrap {
+        display: block;
+    }
+
+    .manager-line-card[data-decision="RECHAZADA"] .manager-quantity-wrap {
+        opacity: .55;
+    }
+
+    .manager-request-footer {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: .75rem;
+        padding: .95rem 1.1rem;
+        border-top: 1px solid #e7ebf1;
+        background: #fbfcfe;
+    }
+
+    .manager-submit-btn {
+        min-height: 46px;
+        min-width: 230px;
+        border-radius: .85rem;
+        font-weight: 800;
+    }
+
+    .manager-empty {
+        text-align: center;
+        padding: 2.3rem 1rem;
+        border: 1px dashed #cfd6e2;
+        border-radius: 1.1rem;
+        background: #fbfcfe;
+        color: #6d7788;
+    }
+
+    .manager-empty-icon {
+        width: 62px;
+        height: 62px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto .8rem;
+        border-radius: 50%;
+        background: #eaf2fb;
+        color: #003B7A;
+        font-size: 1.65rem;
+    }
+
+    .manager-skeleton-card {
+        padding: 1rem;
+        margin-bottom: .8rem;
+        border: 1px solid #e7ebf1;
+        border-radius: 1rem;
+    }
+
+    .manager-skeleton {
+        height: 12px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #edf0f4 25%, #f7f8fa 50%, #edf0f4 75%);
+        background-size: 200% 100%;
+        animation: manager-skeleton 1.2s infinite;
+    }
+
+    @keyframes manager-skeleton {
+        from { background-position: 200% 0; }
+        to { background-position: -200% 0; }
+    }
+
+    @media (max-width: 991.98px) {
+        .manager-request-meta {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .manager-line-grid {
+            grid-template-columns: minmax(0, 1fr) 105px 105px;
+        }
+
+        .manager-action-zone {
+            grid-column: 1 / -1;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .manager-section-header,
+        .manager-section-body {
+            padding: 1rem;
+        }
+
+        .manager-line-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .manager-article-zone,
+        .manager-action-zone {
+            grid-column: 1 / -1;
+        }
+
+        .manager-decision-fields {
+            grid-template-columns: 1fr;
+        }
+
+        .manager-request-footer {
+            position: sticky;
+            bottom: 0;
+            z-index: 4;
+            box-shadow: 0 -8px 18px rgba(25, 35, 55, .08);
+        }
+
+        .manager-submit-btn {
+            width: 100%;
+        }
+    }
+
+    @media (max-width: 430px) {
+        .manager-request-meta {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+
 {% block content %}
 {% include 'components/page_header.html' with context %}
 
@@ -63,171 +464,74 @@
     </div>
 </div>
 
-<div class="card border-0 shadow-sm rounded-4 mb-4">
-    <div class="card-body p-4">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+
+<section class="manager-section-card mb-4">
+    <div class="manager-section-header">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
             <div>
-                <div class="text-primary small fw-semibold text-uppercase mb-1">Órdenes de trabajo</div>
-                <h5 class="fw-bold mb-1">Solicitudes de artículos</h5>
+                <div class="text-primary small fw-bold text-uppercase mb-1">
+                    Órdenes de trabajo
+                </div>
+
+                <h5 class="fw-bold mb-1">
+                    Solicitudes de artículos
+                </h5>
+
                 <div class="text-muted small">
-                    Revise las solicitudes generadas desde OT antes de que lleguen a bodega.
-                </div>
-            </div>
-        </div>
-
-        {% for req in pending_requests %}
-        <div class="border rounded-4 p-3 p-lg-4 mb-4 bg-white">
-            <div class="row g-3 mb-3">
-                <div class="col-12 col-lg-8">
-                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-                        <span class="badge rounded-pill text-bg-primary">SOLICITUD OT</span>
-                        <span class="badge rounded-pill text-bg-warning text-dark">PENDIENTE JEFATURA</span>
-                    </div>
-
-                    <h6 class="fw-bold mb-2">Solicitud #{{ req.id }}</h6>
-
-                    <div class="row g-2 small">
-                        <div class="col-12 col-md-6">
-                            <div class="text-muted">OT</div>
-                            <div class="fw-semibold text-dark">{{ req.work_order_number }}</div>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <div class="text-muted">Equipo</div>
-                            <div class="fw-semibold text-dark">{{ req.equipment_code_snapshot or 'Sin equipo' }}</div>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <div class="text-muted">Solicitó</div>
-                            <div class="fw-semibold text-dark">{{ req.requested_by_name }}</div>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <div class="text-muted">Fecha</div>
-                            <div class="fw-semibold text-dark">{{ req.created_at|cr_datetime }}</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-12 col-lg-4 d-flex justify-content-lg-end align-items-start">
-                    {% if req.send_to_warehouse_enabled %}
-                    <form method="POST" action="{{ url_for('work_order_requests.send_request_to_warehouse_action', request_id=req.id) }}">
-                        <button class="btn btn-primary rounded-3 px-4">
-                            Enviar a bodega
-                        </button>
-                    </form>
-                    {% endif %}
+                    Apruebe o rechace cada línea, ajuste la cantidad y envíe toda la solicitud en una sola operación.
                 </div>
             </div>
 
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Artículo</th>
-                            <th class="text-end">Cantidad solicitada</th>
-                            <th class="text-end">Stock bodega</th>
-                            <th>Estado</th>
-                            <th style="min-width: 320px;">Acción jefatura</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for line in req.visible_lines %}
-                        <tr>
-                            <td>
-                                <div class="fw-semibold">{{ line.article.code }} - {{ line.article.name }}</div>
-                                {% if line.notes %}
-                                    <div class="small text-muted mt-1">{{ line.notes }}</div>
-                                {% endif %}
-                                {% if line.not_delivered_reason %}
-                                    <div class="small text-danger mt-1">Motivo: {{ line.not_delivered_reason }}</div>
-                                {% endif %}
-                            </td>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="manager-live-badge text-primary border-primary-subtle bg-primary-subtle">
+                    <span class="manager-live-dot"></span>
+                    Autoactualización
+                </span>
 
-                            <td class="text-end">
-                                {% if line.stock_available >= line.quantity_requested %}
-                                    <span class="fw-semibold text-success">{{ line.stock_available }}</span>
-                                {% elif line.stock_available > 0 %}
-                                    <span class="fw-semibold text-warning">{{ line.stock_available }}</span>
-                                {% else %}
-                                    <span class="fw-semibold text-danger">{{ line.stock_available }}</span>
-                                {% endif %}
-                            </td>
-
-                            <td>
-                                {% if line.manager_decision == "PENDIENTE" %}
-                                    <span class="badge text-bg-secondary rounded-pill">PENDIENTE</span>
-                                {% elif line.manager_decision == "APROBADA" %}
-                                    <span class="badge text-bg-success rounded-pill">APROBADA</span>
-                                {% elif line.manager_decision == "RECHAZADA" %}
-                                    <span class="badge text-bg-danger rounded-pill">RECHAZADA</span>
-                                {% else %}
-                                    <span class="badge text-bg-secondary rounded-pill">PENDIENTE</span>
-                                {% endif %}
-                            </td>
-
-                            <td>
-                                {% if line.manager_decision == "PENDIENTE" %}
-                                <div class="d-flex flex-column flex-lg-row gap-2">
-                                    <form method="POST" action="{{ url_for('work_order_requests.approve_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2">
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0.01"
-                                            name="quantity"
-                                            value="{{ line.quantity_requested }}"
-                                            class="form-control form-control-sm"
-                                            style="width: 120px;"
-                                        >
-                                        <button class="btn btn-sm btn-outline-success rounded-3">
-                                            Aprobar / Ajustar
-                                        </button>
-                                    </form>
-
-                                    <form method="POST" action="{{ url_for('work_order_requests.reject_request_line_action', line_id=line.id) }}" class="d-flex flex-wrap gap-2">
-                                        <input
-                                            type="text"
-                                            name="reason"
-                                            class="form-control form-control-sm"
-                                            placeholder="Motivo rechazo"
-                                            style="width: 180px;"
-                                        >
-                                        <button class="btn btn-sm btn-outline-danger rounded-3">
-                                            Rechazar
-                                        </button>
-                                    </form>
-                                </div>
-
-                                {% elif line.manager_decision == "APROBADA" %}
-                                <div class="text-success small fw-semibold">
-                                    Línea aprobada por jefatura
-                                </div>
-
-                                {% elif line.manager_decision == "RECHAZADA" %}
-                                <div class="text-danger small fw-semibold">
-                                    Línea rechazada por jefatura
-                                </div>
-
-                                {% else %}
-                                <span class="text-muted small">—</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="4" class="text-center text-muted py-4">
-                                Esta solicitud no tiene líneas visibles.
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <button
+                    type="button"
+                    class="btn btn-outline-primary rounded-3"
+                    id="reloadMaterialRequestsBtn"
+                >
+                    <i class="bi bi-arrow-clockwise me-1"></i>
+                    Actualizar
+                </button>
             </div>
         </div>
-        {% else %}
-        <div class="text-muted">
-            No hay solicitudes pendientes de revisión en jefatura.
-        </div>
-        {% endfor %}
     </div>
-</div>
+
+    <div class="manager-section-body">
+        <div class="row g-3 align-items-center mb-3">
+            <div class="col-12 col-lg">
+                <div class="manager-search-wrap">
+                    <i class="bi bi-search"></i>
+
+                    <input
+                        type="search"
+                        class="form-control manager-search"
+                        id="materialRequestSearch"
+                        placeholder="Buscar por OT, equipo, mecánico, código o artículo"
+                    >
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-auto">
+                <div class="small text-muted" id="materialLastUpdate">
+                    Cargando solicitudes...
+                </div>
+            </div>
+        </div>
+
+        <div
+            id="materialRequestsAlert"
+            class="alert d-none"
+            role="alert"
+        ></div>
+
+        <div id="materialRequestsContainer"></div>
+    </div>
+</section>
+
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body p-4">
 
@@ -974,4 +1278,1299 @@
 
     </div>
 </div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+(function () {
+    "use strict";
+
+    const MATERIAL_DATA_URL =
+        "{{ url_for('dashboard.manager_material_requests_data') }}";
+
+    const MATERIAL_VERSION_URL =
+        "{{ url_for('dashboard.manager_material_requests_version') }}";
+
+    const REVIEW_URL_TEMPLATE =
+        "{{ url_for('work_order_requests.review_and_send_request_action', request_id=0) }}";
+
+    const POLLING_INTERVAL_MS = 15000;
+
+    const state = {
+        requests: [],
+        dataEtag: "",
+        versionEtag: "",
+        drafts: new Map(),
+        searchTerm: "",
+        loadingData: false,
+        checkingVersion: false
+    };
+
+    const container =
+        document.getElementById("materialRequestsContainer");
+
+    const alertBox =
+        document.getElementById("materialRequestsAlert");
+
+    const searchInput =
+        document.getElementById("materialRequestSearch");
+
+    const reloadButton =
+        document.getElementById("reloadMaterialRequestsBtn");
+
+    const lastUpdate =
+        document.getElementById("materialLastUpdate");
+
+    function escapeHtml(value) {
+        const element = document.createElement("div");
+        element.textContent =
+            value == null
+                ? ""
+                : String(value);
+
+        return element.innerHTML;
+    }
+
+    function formatDate(value) {
+        if (!value) {
+            return "-";
+        }
+
+        const date = new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return "-";
+        }
+
+        return new Intl.DateTimeFormat(
+            "es-CR",
+            {
+                dateStyle: "short",
+                timeStyle: "short"
+            }
+        ).format(date);
+    }
+
+    function getReviewUrl(requestId) {
+        return REVIEW_URL_TEMPLATE.replace(
+            /\/0(?=\/?$)/,
+            "/" + String(requestId)
+        );
+    }
+
+    function showAlert(message, type) {
+        alertBox.className =
+            "alert alert-" + (type || "info");
+
+        alertBox.textContent = message;
+        alertBox.classList.remove("d-none");
+    }
+
+    function hideAlert() {
+        alertBox.textContent = "";
+        alertBox.classList.add("d-none");
+    }
+
+    function buildDraft(requestItem) {
+        const lines = {};
+
+        (requestItem.lines || []).forEach(function (line) {
+            const managerDecision =
+                line.manager_decision || "";
+
+            lines[String(line.id)] = {
+                decision:
+                    managerDecision === "APROBADA"
+                    || managerDecision === "RECHAZADA"
+                        ? managerDecision
+                        : "",
+
+                quantity: String(
+                    line.quantity_requested == null
+                        ? ""
+                        : line.quantity_requested
+                ),
+
+                reason:
+                    line.rejection_reason || ""
+            };
+        });
+
+        return {
+            lines: lines
+        };
+    }
+
+    function ensureDraft(requestItem) {
+        const requestKey =
+            String(requestItem.id);
+
+        if (!state.drafts.has(requestKey)) {
+            state.drafts.set(
+                requestKey,
+                buildDraft(requestItem)
+            );
+        }
+
+        return state.drafts.get(requestKey);
+    }
+
+    function saveDraftsFromDom() {
+        container
+            .querySelectorAll("[data-request-card]")
+            .forEach(function (requestCard) {
+                const requestKey =
+                    String(requestCard.dataset.requestId);
+
+                const draft =
+                    state.drafts.get(requestKey)
+                    || {
+                        lines: {}
+                    };
+
+                requestCard
+                    .querySelectorAll("[data-line-card]")
+                    .forEach(function (lineCard) {
+                        const lineKey =
+                            String(lineCard.dataset.lineId);
+
+                        const quantityInput =
+                            lineCard.querySelector(
+                                ".manager-approved-quantity"
+                            );
+
+                        const reasonInput =
+                            lineCard.querySelector(
+                                ".manager-rejection-reason"
+                            );
+
+                        draft.lines[lineKey] = {
+                            decision:
+                                lineCard.dataset.decision
+                                || "",
+
+                            quantity:
+                                quantityInput
+                                    ? quantityInput.value
+                                    : "",
+
+                            reason:
+                                reasonInput
+                                    ? reasonInput.value
+                                    : ""
+                        };
+                    });
+
+                state.drafts.set(
+                    requestKey,
+                    draft
+                );
+            });
+    }
+
+    function stockClass(
+        stock,
+        requested
+    ) {
+        const stockNumber =
+            Number(stock || 0);
+
+        const requestedNumber =
+            Number(requested || 0);
+
+        if (stockNumber <= 0) {
+            return "manager-stock-zero";
+        }
+
+        if (stockNumber < requestedNumber) {
+            return "manager-stock-low";
+        }
+
+        return "manager-stock-ok";
+    }
+
+    function filteredRequests() {
+        const term =
+            state.searchTerm
+                .trim()
+                .toLowerCase();
+
+        if (!term) {
+            return state.requests;
+        }
+
+        return state.requests.filter(
+            function (requestItem) {
+                const requestText = [
+                    requestItem.id,
+                    requestItem.work_order_number,
+                    requestItem.equipment,
+                    requestItem.mechanic_name
+                ]
+                    .join(" ")
+                    .toLowerCase();
+
+                if (requestText.includes(term)) {
+                    return true;
+                }
+
+                return (
+                    requestItem.lines || []
+                ).some(
+                    function (line) {
+                        return [
+                            line.article_code,
+                            line.article_name,
+                            line.notes
+                        ]
+                            .join(" ")
+                            .toLowerCase()
+                            .includes(term);
+                    }
+                );
+            }
+        );
+    }
+
+    function renderSkeleton() {
+        const skeletons = [];
+
+        for (let index = 0; index < 3; index += 1) {
+            skeletons.push(
+                '<div class="manager-skeleton-card">' +
+                    '<div class="manager-skeleton mb-3" style="width:35%;"></div>' +
+                    '<div class="manager-skeleton mb-2" style="width:72%;"></div>' +
+                    '<div class="manager-skeleton" style="width:52%;"></div>' +
+                '</div>'
+            );
+        }
+
+        container.innerHTML =
+            skeletons.join("");
+    }
+
+    function renderEmpty(searching) {
+        container.innerHTML =
+            '<div class="manager-empty">' +
+                '<div class="manager-empty-icon">' +
+                    '<i class="bi ' +
+                        (
+                            searching
+                                ? "bi-search"
+                                : "bi-check2-circle"
+                        ) +
+                    '"></i>' +
+                '</div>' +
+
+                '<div class="fw-bold text-dark">' +
+                    (
+                        searching
+                            ? "No hay coincidencias"
+                            : "No hay solicitudes OT pendientes"
+                    ) +
+                '</div>' +
+
+                '<div class="small mt-1">' +
+                    (
+                        searching
+                            ? "Pruebe con otro criterio de búsqueda."
+                            : "Las solicitudes nuevas aparecerán automáticamente."
+                    ) +
+                '</div>' +
+            '</div>';
+    }
+
+    function renderLine(line, draftLine) {
+        const decision =
+            draftLine.decision || "";
+
+        const step =
+            String(
+                line.unit_code || ""
+            ).toUpperCase() === "UND"
+                ? "1"
+                : "0.01";
+
+        const currentStockClass =
+            stockClass(
+                line.stock_available,
+                line.quantity_requested
+            );
+
+        return (
+            '<div ' +
+                'class="manager-line-card" ' +
+                'data-line-card ' +
+                'data-line-id="' + line.id + '" ' +
+                'data-decision="' + escapeHtml(decision) + '"' +
+            '>' +
+
+                '<div class="manager-line-grid">' +
+
+                    '<div class="manager-article-zone">' +
+                        '<div class="manager-line-code">' +
+                            escapeHtml(
+                                line.article_code
+                                || "SIN CÓDIGO"
+                            ) +
+                        '</div>' +
+
+                        '<div class="manager-line-name">' +
+                            escapeHtml(
+                                line.article_name
+                                || "Artículo no disponible"
+                            ) +
+                        '</div>' +
+
+                        (
+                            line.notes
+                                ? '<div class="small text-muted mt-1">' +
+                                    escapeHtml(line.notes) +
+                                  '</div>'
+                                : ""
+                        ) +
+                    '</div>' +
+
+                    '<div class="manager-number-box">' +
+                        '<span class="manager-number-label">' +
+                            'Solicitado' +
+                        '</span>' +
+
+                        '<span class="manager-number-value">' +
+                            escapeHtml(
+                                line.quantity_requested
+                            ) +
+                            ' ' +
+                            escapeHtml(
+                                line.unit_code || ""
+                            ) +
+                        '</span>' +
+                    '</div>' +
+
+                    '<div class="manager-number-box">' +
+                        '<span class="manager-number-label">' +
+                            'Stock' +
+                        '</span>' +
+
+                        '<span class="manager-number-value ' +
+                            currentStockClass +
+                        '">' +
+                            escapeHtml(
+                                line.stock_available
+                            ) +
+                        '</span>' +
+                    '</div>' +
+
+                    '<div class="manager-action-zone">' +
+
+                        '<div class="manager-decision-buttons">' +
+                            '<button ' +
+                                'type="button" ' +
+                                'class="btn btn-outline-success manager-decision-btn manager-approve-btn"' +
+                            '>' +
+                                '<i class="bi bi-check-lg me-1"></i>' +
+                                'Aprobar' +
+                            '</button>' +
+
+                            '<button ' +
+                                'type="button" ' +
+                                'class="btn btn-outline-danger manager-decision-btn manager-reject-btn"' +
+                            '>' +
+                                '<i class="bi bi-x-lg me-1"></i>' +
+                                'Rechazar' +
+                            '</button>' +
+                        '</div>' +
+
+                        '<div class="manager-decision-fields">' +
+
+                            '<div class="manager-quantity-wrap">' +
+                                '<label class="small text-muted fw-semibold mb-1">' +
+                                    'Cantidad aprobada' +
+                                '</label>' +
+
+                                '<input ' +
+                                    'type="number" ' +
+                                    'min="' + step + '" ' +
+                                    'step="' + step + '" ' +
+                                    'class="form-control manager-approved-quantity" ' +
+                                    'value="' + escapeHtml(draftLine.quantity) + '"' +
+                                '>' +
+                            '</div>' +
+
+                            '<div class="manager-reason-wrap">' +
+                                '<label class="small text-muted fw-semibold mb-1">' +
+                                    'Motivo rechazo' +
+                                '</label>' +
+
+                                '<input ' +
+                                    'type="text" ' +
+                                    'class="form-control manager-rejection-reason" ' +
+                                    'placeholder="Motivo opcional" ' +
+                                    'value="' + escapeHtml(draftLine.reason) + '"' +
+                                '>' +
+                            '</div>' +
+
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>'
+        );
+    }
+
+    function renderRequest(requestItem) {
+        const draft =
+            ensureDraft(requestItem);
+
+        const linesHtml =
+            (requestItem.lines || [])
+                .map(
+                    function (line) {
+                        const lineDraft =
+                            draft.lines[
+                                String(line.id)
+                            ] || {
+                                decision: "",
+                                quantity: String(
+                                    line.quantity_requested
+                                    || ""
+                                ),
+                                reason: ""
+                            };
+
+                        return renderLine(
+                            line,
+                            lineDraft
+                        );
+                    }
+                )
+                .join("");
+
+        return (
+            '<article ' +
+                'class="manager-request-card" ' +
+                'data-request-card ' +
+                'data-request-id="' + requestItem.id + '"' +
+            '>' +
+
+                '<div class="manager-request-header">' +
+
+                    '<div class="d-flex flex-column flex-lg-row justify-content-between gap-3">' +
+                        '<div>' +
+                            '<div class="d-flex flex-wrap gap-2 mb-2">' +
+                                '<span class="badge rounded-pill text-bg-primary">' +
+                                    'SOLICITUD OT' +
+                                '</span>' +
+
+                                '<span class="badge rounded-pill text-bg-warning text-dark">' +
+                                    'PENDIENTE JEFATURA' +
+                                '</span>' +
+
+                                '<span class="badge rounded-pill text-bg-light text-dark">' +
+                                    escapeHtml(requestItem.line_count) +
+                                    ' líneas' +
+                                '</span>' +
+                            '</div>' +
+
+                            '<div class="manager-request-title">' +
+                                'OT ' +
+                                escapeHtml(
+                                    requestItem.work_order_number
+                                ) +
+                                ' / ' +
+                                escapeHtml(
+                                    requestItem.equipment
+                                ) +
+                            '</div>' +
+                        '</div>' +
+
+                        '<div class="text-lg-end">' +
+                            '<div class="small text-muted">' +
+                                'Solicitud #' +
+                                escapeHtml(requestItem.id) +
+                            '</div>' +
+
+                            '<div class="small fw-semibold">' +
+                                escapeHtml(
+                                    formatDate(
+                                        requestItem.created_at
+                                    )
+                                ) +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+
+                    '<div class="manager-request-meta">' +
+
+                        '<div>' +
+                            '<div class="manager-meta-label">Mecánico</div>' +
+                            '<div class="manager-meta-value">' +
+                                escapeHtml(
+                                    requestItem.mechanic_name
+                                ) +
+                            '</div>' +
+                        '</div>' +
+
+                        '<div>' +
+                            '<div class="manager-meta-label">OT</div>' +
+                            '<div class="manager-meta-value">' +
+                                escapeHtml(
+                                    requestItem.work_order_number
+                                ) +
+                            '</div>' +
+                        '</div>' +
+
+                        '<div>' +
+                            '<div class="manager-meta-label">Equipo</div>' +
+                            '<div class="manager-meta-value">' +
+                                escapeHtml(
+                                    requestItem.equipment
+                                ) +
+                            '</div>' +
+                        '</div>' +
+
+                        '<div>' +
+                            '<div class="manager-meta-label">Progreso</div>' +
+                            '<div class="manager-meta-value manager-progress-text">' +
+                                '0 de ' +
+                                escapeHtml(requestItem.line_count) +
+                            '</div>' +
+                        '</div>' +
+
+                    '</div>' +
+
+                    '<div class="manager-progress mt-3">' +
+                        '<div class="manager-progress-bar"></div>' +
+                    '</div>' +
+
+                '</div>' +
+
+                '<div class="manager-lines">' +
+                    linesHtml +
+                '</div>' +
+
+                '<div class="manager-request-footer">' +
+                    '<div class="small">' +
+                        '<span class="text-success fw-bold manager-approved-count">' +
+                            '0 aprobadas' +
+                        '</span>' +
+
+                        '<span class="mx-1 text-muted">·</span>' +
+
+                        '<span class="text-danger fw-bold manager-rejected-count">' +
+                            '0 rechazadas' +
+                        '</span>' +
+
+                        '<span class="mx-1 text-muted">·</span>' +
+
+                        '<span class="text-muted fw-bold manager-pending-count">' +
+                            escapeHtml(requestItem.line_count) +
+                            ' pendientes' +
+                        '</span>' +
+                    '</div>' +
+
+                    '<button ' +
+                        'type="button" ' +
+                        'class="btn btn-primary manager-submit-btn manager-submit-review"' +
+                    '>' +
+                        '<i class="bi bi-send-check me-1"></i>' +
+                        'Guardar y enviar a bodega' +
+                    '</button>' +
+                '</div>' +
+
+            '</article>'
+        );
+    }
+
+    function updateProgress(requestCard) {
+        const lineCards =
+            Array.from(
+                requestCard.querySelectorAll(
+                    "[data-line-card]"
+                )
+            );
+
+        let approved = 0;
+        let rejected = 0;
+
+        lineCards.forEach(
+            function (lineCard) {
+                if (
+                    lineCard.dataset.decision
+                    === "APROBADA"
+                ) {
+                    approved += 1;
+                }
+
+                if (
+                    lineCard.dataset.decision
+                    === "RECHAZADA"
+                ) {
+                    rejected += 1;
+                }
+            }
+        );
+
+        const decided =
+            approved + rejected;
+
+        const pending =
+            lineCards.length - decided;
+
+        const percentage =
+            lineCards.length
+                ? Math.round(
+                    decided
+                    / lineCards.length
+                    * 100
+                )
+                : 0;
+
+        requestCard
+            .querySelector(
+                ".manager-progress-text"
+            )
+            .textContent =
+                decided +
+                " de " +
+                lineCards.length;
+
+        requestCard
+            .querySelector(
+                ".manager-progress-bar"
+            )
+            .style.width =
+                percentage + "%";
+
+        requestCard
+            .querySelector(
+                ".manager-approved-count"
+            )
+            .textContent =
+                approved +
+                (
+                    approved === 1
+                        ? " aprobada"
+                        : " aprobadas"
+                );
+
+        requestCard
+            .querySelector(
+                ".manager-rejected-count"
+            )
+            .textContent =
+                rejected +
+                (
+                    rejected === 1
+                        ? " rechazada"
+                        : " rechazadas"
+                );
+
+        requestCard
+            .querySelector(
+                ".manager-pending-count"
+            )
+            .textContent =
+                pending +
+                (
+                    pending === 1
+                        ? " pendiente"
+                        : " pendientes"
+                );
+
+        requestCard
+            .querySelector(
+                ".manager-submit-review"
+            )
+            .disabled =
+                pending > 0;
+    }
+
+    function bindRequest(requestCard) {
+        requestCard
+            .querySelectorAll("[data-line-card]")
+            .forEach(
+                function (lineCard) {
+                    const approveButton =
+                        lineCard.querySelector(
+                            ".manager-approve-btn"
+                        );
+
+                    const rejectButton =
+                        lineCard.querySelector(
+                            ".manager-reject-btn"
+                        );
+
+                    const quantityInput =
+                        lineCard.querySelector(
+                            ".manager-approved-quantity"
+                        );
+
+                    const reasonInput =
+                        lineCard.querySelector(
+                            ".manager-rejection-reason"
+                        );
+
+                    function persistDraft() {
+                        const requestKey =
+                            String(
+                                requestCard.dataset.requestId
+                            );
+
+                        const lineKey =
+                            String(
+                                lineCard.dataset.lineId
+                            );
+
+                        const draft =
+                            state.drafts.get(
+                                requestKey
+                            ) || {
+                                lines: {}
+                            };
+
+                        draft.lines[lineKey] = {
+                            decision:
+                                lineCard.dataset.decision
+                                || "",
+
+                            quantity:
+                                quantityInput.value,
+
+                            reason:
+                                reasonInput.value
+                        };
+
+                        state.drafts.set(
+                            requestKey,
+                            draft
+                        );
+                    }
+
+                    approveButton.addEventListener(
+                        "click",
+                        function () {
+                            lineCard.dataset.decision =
+                                "APROBADA";
+
+                            persistDraft();
+                            updateProgress(
+                                requestCard
+                            );
+                        }
+                    );
+
+                    rejectButton.addEventListener(
+                        "click",
+                        function () {
+                            lineCard.dataset.decision =
+                                "RECHAZADA";
+
+                            persistDraft();
+                            updateProgress(
+                                requestCard
+                            );
+
+                            window.setTimeout(
+                                function () {
+                                    reasonInput.focus();
+                                },
+                                80
+                            );
+                        }
+                    );
+
+                    quantityInput.addEventListener(
+                        "input",
+                        persistDraft
+                    );
+
+                    reasonInput.addEventListener(
+                        "input",
+                        persistDraft
+                    );
+                }
+            );
+
+        requestCard
+            .querySelector(
+                ".manager-submit-review"
+            )
+            .addEventListener(
+                "click",
+                function () {
+                    submitReview(
+                        requestCard
+                    );
+                }
+            );
+
+        updateProgress(
+            requestCard
+        );
+    }
+
+    function renderRequests() {
+        saveDraftsFromDom();
+
+        const requests =
+            filteredRequests();
+
+        if (!requests.length) {
+            renderEmpty(
+                Boolean(
+                    state.searchTerm
+                )
+            );
+            return;
+        }
+
+        container.innerHTML =
+            requests
+                .map(renderRequest)
+                .join("");
+
+        container
+            .querySelectorAll(
+                "[data-request-card]"
+            )
+            .forEach(bindRequest);
+    }
+
+    async function submitReview(requestCard) {
+        const requestId =
+            Number(
+                requestCard.dataset.requestId
+            );
+
+        const lineCards =
+            Array.from(
+                requestCard.querySelectorAll(
+                    "[data-line-card]"
+                )
+            );
+
+        const lines = [];
+        let errorMessage = "";
+
+        lineCards.forEach(
+            function (lineCard) {
+                if (errorMessage) {
+                    return;
+                }
+
+                const decision =
+                    lineCard.dataset.decision
+                    || "";
+
+                const quantity =
+                    lineCard
+                        .querySelector(
+                            ".manager-approved-quantity"
+                        )
+                        .value
+                        .trim();
+
+                const reason =
+                    lineCard
+                        .querySelector(
+                            ".manager-rejection-reason"
+                        )
+                        .value
+                        .trim();
+
+                if (!decision) {
+                    errorMessage =
+                        "Debe aprobar o rechazar todas las líneas.";
+
+                    return;
+                }
+
+                if (
+                    decision === "APROBADA"
+                ) {
+                    const numericQuantity =
+                        Number(quantity);
+
+                    if (
+                        !Number.isFinite(
+                            numericQuantity
+                        )
+                        || numericQuantity <= 0
+                    ) {
+                        errorMessage =
+                            "Las líneas aprobadas deben tener una cantidad mayor que cero.";
+
+                        return;
+                    }
+                }
+
+                lines.push({
+                    line_id:
+                        Number(
+                            lineCard.dataset.lineId
+                        ),
+
+                    decision:
+                        decision,
+
+                    quantity:
+                        decision === "APROBADA"
+                            ? quantity
+                            : "",
+
+                    reason:
+                        decision === "RECHAZADA"
+                            ? reason
+                            : ""
+                });
+            }
+        );
+
+        if (errorMessage) {
+            window.alert(
+                errorMessage
+            );
+            return;
+        }
+
+        const approvedCount =
+            lines.filter(
+                function (line) {
+                    return (
+                        line.decision
+                        === "APROBADA"
+                    );
+                }
+            ).length;
+
+        const confirmation =
+            approvedCount > 0
+                ? "¿Desea guardar las decisiones y enviar la solicitud a bodega?"
+                : "Todas las líneas están rechazadas. ¿Desea cancelar la solicitud?";
+
+        if (
+            !window.confirm(
+                confirmation
+            )
+        ) {
+            return;
+        }
+
+        const button =
+            requestCard.querySelector(
+                ".manager-submit-review"
+            );
+
+        const originalHtml =
+            button.innerHTML;
+
+        requestCard.classList.add(
+            "is-processing"
+        );
+
+        button.disabled = true;
+
+        button.innerHTML =
+            '<span class="spinner-border spinner-border-sm me-2"></span>' +
+            'Procesando...';
+
+        try {
+            const response =
+                await fetch(
+                    getReviewUrl(
+                        requestId
+                    ),
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+
+                            "Accept":
+                                "application/json"
+                        },
+
+                        body:
+                            JSON.stringify({
+                                lines: lines
+                            })
+                    }
+                );
+
+            const data =
+                await response.json();
+
+            if (
+                !response.ok
+                || !data.ok
+            ) {
+                throw new Error(
+                    data.error
+                    || "No fue posible procesar la solicitud."
+                );
+            }
+
+            state.requests =
+                state.requests.filter(
+                    function (item) {
+                        return (
+                            Number(item.id)
+                            !== requestId
+                        );
+                    }
+                );
+
+            state.drafts.delete(
+                String(requestId)
+            );
+
+            state.dataEtag = "";
+            state.versionEtag = "";
+
+            renderRequests();
+
+        } catch (error) {
+            console.error(error);
+
+            requestCard.classList.remove(
+                "is-processing"
+            );
+
+            button.disabled = false;
+            button.innerHTML =
+                originalHtml;
+
+            updateProgress(
+                requestCard
+            );
+
+            window.alert(
+                error.message
+            );
+        }
+    }
+
+    async function loadRequests(options) {
+        const settings =
+            options || {};
+
+        if (state.loadingData) {
+            return;
+        }
+
+        state.loadingData = true;
+
+        hideAlert();
+        saveDraftsFromDom();
+
+        if (
+            !settings.silent
+            && !state.requests.length
+        ) {
+            renderSkeleton();
+        }
+
+        try {
+            const headers = {
+                "Accept":
+                    "application/json"
+            };
+
+            if (
+                state.dataEtag
+                && !settings.force
+            ) {
+                headers[
+                    "If-None-Match"
+                ] = state.dataEtag;
+            }
+
+            const response =
+                await fetch(
+                    MATERIAL_DATA_URL,
+                    {
+                        headers: headers,
+                        cache: "no-store"
+                    }
+                );
+
+            if (
+                response.status === 304
+            ) {
+                lastUpdate.textContent =
+                    "Sin cambios · "
+                    + new Date()
+                        .toLocaleTimeString(
+                            "es-CR"
+                        );
+
+                return;
+            }
+
+            const data =
+                await response.json();
+
+            if (
+                !response.ok
+                || !data.ok
+            ) {
+                throw new Error(
+                    data.error
+                    || "No fue posible cargar las solicitudes."
+                );
+            }
+
+            state.dataEtag =
+                response.headers.get(
+                    "ETag"
+                ) || "";
+
+            state.requests =
+                Array.isArray(
+                    data.requests
+                )
+                    ? data.requests
+                    : [];
+
+            renderRequests();
+
+            lastUpdate.textContent =
+                "Actualizado "
+                + new Date()
+                    .toLocaleTimeString(
+                        "es-CR"
+                    );
+
+        } catch (error) {
+            console.error(error);
+
+            showAlert(
+                error.message,
+                "danger"
+            );
+
+            if (!state.requests.length) {
+                renderEmpty(false);
+            }
+
+        } finally {
+            state.loadingData = false;
+        }
+    }
+
+    async function checkVersion() {
+        if (
+            state.checkingVersion
+            || state.loadingData
+            || document.hidden
+        ) {
+            return;
+        }
+
+        state.checkingVersion = true;
+
+        try {
+            const headers = {
+                "Accept":
+                    "application/json"
+            };
+
+            if (state.versionEtag) {
+                headers[
+                    "If-None-Match"
+                ] = state.versionEtag;
+            }
+
+            const response =
+                await fetch(
+                    MATERIAL_VERSION_URL,
+                    {
+                        headers: headers,
+                        cache: "no-store"
+                    }
+                );
+
+            if (
+                response.status === 304
+            ) {
+                return;
+            }
+
+            const data =
+                await response.json();
+
+            if (
+                !response.ok
+                || !data.ok
+            ) {
+                return;
+            }
+
+            state.versionEtag =
+                response.headers.get(
+                    "ETag"
+                )
+                || data.version
+                || "";
+
+            await loadRequests({
+                silent: true,
+                force: true
+            });
+
+        } catch (error) {
+            console.error(
+                "Error verificando solicitudes:",
+                error
+            );
+
+        } finally {
+            state.checkingVersion = false;
+        }
+    }
+
+    searchInput.addEventListener(
+        "input",
+        function () {
+            state.searchTerm =
+                searchInput.value
+                || "";
+
+            renderRequests();
+        }
+    );
+
+    reloadButton.addEventListener(
+        "click",
+        function () {
+            state.dataEtag = "";
+            state.versionEtag = "";
+
+            loadRequests({
+                force: true
+            });
+        }
+    );
+
+    document.addEventListener(
+        "visibilitychange",
+        function () {
+            if (!document.hidden) {
+                checkVersion();
+            }
+        }
+    );
+
+    loadRequests({
+        force: true
+    });
+
+    window.setInterval(
+        checkVersion,
+        POLLING_INTERVAL_MS
+    );
+})();
+</script>
 {% endblock %}

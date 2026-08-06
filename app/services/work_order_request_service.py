@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
-
+from sqlalchemy.orm import joinedload
 from app.extensions import db
 from app.models.article import Article
 from app.models.work_order import WorkOrder
@@ -676,6 +676,527 @@ def send_request_to_warehouse(
         db.session.commit()
 
     return request_obj
+
+def review_request_and_send_to_warehouse(
+    *,
+    request_id: int,
+    decisions: list[dict],
+    performed_by_user_id: int,
+    active_site_id: int,
+    commit: bool = True,
+) -> dict:
+    """
+    Revisa todas las líneas de una solicitud de OT y finaliza
+    la revisión de jefatura en una sola transacción.
+
+    Cada elemento de decisions debe contener:
+
+        {
+            "line_id": 123,
+            "decision": "APROBADA" | "RECHAZADA",
+            "quantity": "5",
+            "reason": "Motivo opcional"
+        }
+
+    Comportamiento:
+    - APROBADA:
+        actualiza la cantidad solicitada con la cantidad aprobada.
+    - RECHAZADA:
+        marca la línea como rechazada y cancelada.
+    - Si hay al menos una aprobada:
+        envía la solicitud a bodega.
+    - Si todas son rechazadas:
+        cancela la solicitud y no la envía a bodega.
+    - Todo se confirma con un único commit.
+    """
+
+    if not request_id:
+        raise WorkOrderRequestServiceError(
+            "La solicitud no existe."
+        )
+
+    if not active_site_id:
+        raise WorkOrderRequestServiceError(
+            "No hay un predio activo seleccionado."
+        )
+
+    if not isinstance(decisions, list) or not decisions:
+        raise WorkOrderRequestServiceError(
+            "Debe indicar la decisión de las líneas."
+        )
+
+    try:
+        request_id = int(request_id)
+        active_site_id = int(active_site_id)
+        performed_by_user_id = int(
+            performed_by_user_id
+        )
+
+    except (TypeError, ValueError) as exc:
+        raise WorkOrderRequestServiceError(
+            "Los datos de la solicitud no son válidos."
+        ) from exc
+
+    # =====================================================
+    # BLOQUEAR SOLICITUD
+    # =====================================================
+    #
+    # Evita que dos personas revisen o envíen la misma
+    # solicitud al mismo tiempo.
+    # =====================================================
+
+    request_obj = (
+        db.session.query(
+            WorkOrderRequest
+        )
+        .join(
+            WorkOrder,
+            WorkOrder.id
+            == WorkOrderRequest.work_order_id,
+        )
+        .filter(
+            WorkOrderRequest.id == request_id,
+            db.or_(
+                WorkOrderRequest.review_site_id
+                == active_site_id,
+                db.and_(
+                    WorkOrderRequest.review_site_id.is_(
+                        None
+                    ),
+                    WorkOrder.site_id
+                    == active_site_id,
+                ),
+            ),
+        )
+        .with_for_update()
+        .first()
+    )
+
+    if not request_obj:
+        raise WorkOrderRequestServiceError(
+            "La solicitud no existe o no corresponde "
+            "al predio activo."
+        )
+
+    if request_obj.request_status != "ENVIADA":
+        raise WorkOrderRequestServiceError(
+            "Solo se pueden revisar solicitudes enviadas."
+        )
+
+    if request_obj.sent_to_warehouse_at:
+        raise WorkOrderRequestServiceError(
+            "La solicitud ya fue enviada a bodega."
+        )
+
+    # =====================================================
+    # CARGAR Y BLOQUEAR TODAS LAS LÍNEAS
+    # =====================================================
+
+    request_lines = (
+        WorkOrderRequestLine.query
+        .options(
+            joinedload(
+                WorkOrderRequestLine.article
+            ).joinedload(
+                Article.unit
+            ),
+        )
+        .filter(
+            WorkOrderRequestLine.work_order_request_id
+            == request_obj.id,
+        )
+        .order_by(
+            WorkOrderRequestLine.id.asc(),
+        )
+        .with_for_update()
+        .all()
+    )
+
+    if not request_lines:
+        raise WorkOrderRequestServiceError(
+            "La solicitud no tiene líneas."
+        )
+
+    lines_by_id = {
+        int(line.id): line
+        for line in request_lines
+    }
+
+    normalized_decisions = {}
+    duplicated_line_ids = set()
+
+    # =====================================================
+    # NORMALIZAR PAYLOAD
+    # =====================================================
+
+    for position, raw_decision in enumerate(
+        decisions,
+        start=1,
+    ):
+        if not isinstance(raw_decision, dict):
+            raise WorkOrderRequestServiceError(
+                f"La decisión #{position} no es válida."
+            )
+
+        raw_line_id = raw_decision.get(
+            "line_id"
+        )
+
+        try:
+            line_id = int(raw_line_id)
+
+        except (TypeError, ValueError) as exc:
+            raise WorkOrderRequestServiceError(
+                f"La línea indicada en la posición "
+                f"{position} no es válida."
+            ) from exc
+
+        if line_id in normalized_decisions:
+            duplicated_line_ids.add(line_id)
+
+        normalized_decisions[line_id] = (
+            raw_decision
+        )
+
+    if duplicated_line_ids:
+        duplicated_text = ", ".join(
+            str(line_id)
+            for line_id in sorted(
+                duplicated_line_ids
+            )
+        )
+
+        raise WorkOrderRequestServiceError(
+            "Se recibieron decisiones duplicadas para "
+            f"las líneas: {duplicated_text}."
+        )
+
+    unknown_line_ids = (
+        set(normalized_decisions.keys())
+        - set(lines_by_id.keys())
+    )
+
+    if unknown_line_ids:
+        unknown_text = ", ".join(
+            str(line_id)
+            for line_id in sorted(
+                unknown_line_ids
+            )
+        )
+
+        raise WorkOrderRequestServiceError(
+            "Las siguientes líneas no pertenecen a "
+            f"la solicitud: {unknown_text}."
+        )
+
+    now = datetime.now(UTC)
+
+    approved_count = 0
+    rejected_count = 0
+    audit_lines = []
+
+    # =====================================================
+    # APLICAR DECISIONES
+    # =====================================================
+
+    for line_id, raw_decision in (
+        normalized_decisions.items()
+    ):
+        line = lines_by_id[line_id]
+
+        decision = (
+            raw_decision.get("decision")
+            or ""
+        ).strip().upper()
+
+        if decision not in {
+            "APROBADA",
+            "RECHAZADA",
+        }:
+            raise WorkOrderRequestServiceError(
+                f"Debe aprobar o rechazar la línea "
+                f"{line.id}."
+            )
+
+        previous_quantity = Decimal(
+            str(line.quantity_requested or 0)
+        )
+
+        previous_review_status = (
+            line.manager_review_status
+            or "PENDIENTE"
+        )
+
+        previous_line_status = (
+            line.line_status
+            or "SOLICITADA"
+        )
+
+        if decision == "APROBADA":
+            raw_quantity = raw_decision.get(
+                "quantity"
+            )
+
+            if raw_quantity in {
+                None,
+                "",
+            }:
+                raw_quantity = (
+                    line.quantity_requested
+                )
+
+            try:
+                approved_quantity = _to_decimal(
+                    raw_quantity
+                )
+
+            except (
+                ValueError,
+                ArithmeticError,
+            ) as exc:
+                raise WorkOrderRequestServiceError(
+                    f"La cantidad aprobada de la línea "
+                    f"{line.id} no es válida."
+                ) from exc
+
+            unit_code = ""
+
+            if (
+                line.article
+                and line.article.unit
+                and line.article.unit.code
+            ):
+                unit_code = (
+                    line.article.unit.code
+                    or ""
+                ).strip().upper()
+
+            if (
+                unit_code == "UND"
+                and approved_quantity
+                != approved_quantity.to_integral_value()
+            ):
+                raise WorkOrderRequestServiceError(
+                    f"El artículo de la línea {line.id} "
+                    "usa unidad UND y solo admite "
+                    "cantidades enteras."
+                )
+
+            line.manager_review_status = (
+                "APROBADA"
+            )
+
+            line.manager_reviewed_by_user_id = (
+                performed_by_user_id
+            )
+
+            line.manager_reviewed_at = now
+            line.quantity_requested = (
+                approved_quantity
+            )
+
+            line.not_delivered_reason = None
+            line.cancel_reason = None
+            line.cancelled_by_user_id = None
+            line.cancelled_at = None
+
+            attended_quantity = Decimal(
+                str(line.quantity_attended or 0)
+            )
+
+            if (
+                attended_quantity
+                > approved_quantity
+            ):
+                line.quantity_attended = (
+                    approved_quantity
+                )
+
+                attended_quantity = (
+                    approved_quantity
+                )
+
+            if attended_quantity <= 0:
+                line.line_status = "SOLICITADA"
+
+            elif (
+                attended_quantity
+                < approved_quantity
+            ):
+                line.line_status = (
+                    "ATENDIDA_PARCIAL"
+                )
+
+            else:
+                line.line_status = "ENTREGADA"
+
+            approved_count += 1
+
+            audit_lines.append({
+                "line_id": line.id,
+                "article_id": line.article_id,
+                "decision": "APROBADA",
+                "previous_quantity": str(
+                    previous_quantity
+                ),
+                "approved_quantity": str(
+                    approved_quantity
+                ),
+                "previous_review_status": (
+                    previous_review_status
+                ),
+                "previous_line_status": (
+                    previous_line_status
+                ),
+                "new_line_status": (
+                    line.line_status
+                ),
+            })
+
+        else:
+            reason = (
+                raw_decision.get("reason")
+                or ""
+            ).strip()
+
+            line.manager_review_status = (
+                "RECHAZADA"
+            )
+
+            line.manager_reviewed_by_user_id = (
+                performed_by_user_id
+            )
+
+            line.manager_reviewed_at = now
+            line.line_status = "CANCELADA"
+
+            # Se guarda el motivo si el usuario lo indicó.
+            # No se obliga porque el flujo anterior tampoco
+            # lo requería para rechazar.
+            line.not_delivered_reason = (
+                reason or None
+            )
+
+            rejected_count += 1
+
+            audit_lines.append({
+                "line_id": line.id,
+                "article_id": line.article_id,
+                "decision": "RECHAZADA",
+                "reason": reason or None,
+                "previous_quantity": str(
+                    previous_quantity
+                ),
+                "previous_review_status": (
+                    previous_review_status
+                ),
+                "previous_line_status": (
+                    previous_line_status
+                ),
+                "new_line_status": (
+                    line.line_status
+                ),
+            })
+
+    # =====================================================
+    # VALIDAR QUE TODAS LAS LÍNEAS TENGAN DECISIÓN
+    # =====================================================
+
+    pending_line_ids = [
+        int(line.id)
+        for line in request_lines
+        if (
+            line.manager_review_status
+            or "PENDIENTE"
+        ) == "PENDIENTE"
+    ]
+
+    if pending_line_ids:
+        pending_text = ", ".join(
+            str(line_id)
+            for line_id in pending_line_ids
+        )
+
+        raise WorkOrderRequestServiceError(
+            "Debe aprobar o rechazar todas las líneas. "
+            f"Pendientes: {pending_text}."
+        )
+
+    # =====================================================
+    # FINALIZAR SOLICITUD
+    # =====================================================
+
+    sent_to_warehouse = approved_count > 0
+
+    request_obj.approved_by_user_id = (
+        performed_by_user_id
+    )
+
+    request_obj.approved_at = now
+
+    if sent_to_warehouse:
+        request_obj.request_status = "ENVIADA"
+
+        request_obj.sent_to_warehouse_by_user_id = (
+            performed_by_user_id
+        )
+
+        request_obj.sent_to_warehouse_at = now
+
+    else:
+        # Todas las líneas fueron rechazadas.
+        # La solicitud se cierra sin enviarla a bodega.
+        request_obj.request_status = "CANCELADA"
+
+        request_obj.sent_to_warehouse_by_user_id = (
+            None
+        )
+
+        request_obj.sent_to_warehouse_at = None
+
+    db.session.flush()
+
+    # Un único registro de auditoría para toda la operación.
+    # Esto es más liviano que generar un log y un flush
+    # independiente por cada línea.
+    log_action(
+        user_id=performed_by_user_id,
+        action=(
+            "REVIEW_AND_SEND_WORK_ORDER_REQUEST"
+        ),
+        table_name="work_order_requests",
+        record_id=str(request_obj.id),
+        details={
+            "request_id": request_obj.id,
+            "work_order_id": (
+                request_obj.work_order_id
+            ),
+            "approved_count": approved_count,
+            "rejected_count": rejected_count,
+            "sent_to_warehouse": (
+                sent_to_warehouse
+            ),
+            "request_status": (
+                request_obj.request_status
+            ),
+            "lines": audit_lines,
+        },
+        commit=False,
+    )
+
+    if commit:
+        db.session.commit()
+
+    return {
+        "request": request_obj,
+        "request_id": int(request_obj.id),
+        "approved_count": approved_count,
+        "rejected_count": rejected_count,
+        "sent_to_warehouse": sent_to_warehouse,
+        "request_status": (
+            request_obj.request_status
+        ),
+    }
 
 
 def attend_request_line(

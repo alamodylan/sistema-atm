@@ -120,6 +120,351 @@ def _stock_available_map(stock_keys):
         if (int(row.article_id), int(row.warehouse_id)) in clean_keys
     }
 
+def _get_manager_material_requests(
+    active_site_id: int,
+) -> dict:
+    """
+    Carga únicamente las solicitudes de artículos de OT
+    pendientes de revisión por Jefatura.
+
+    Características:
+    - consulta las solicitudes y relaciones en bloque;
+    - consulta el stock en bloque;
+    - no modifica objetos de base de datos;
+    - devuelve datos serializables para JSON;
+    - evita consultas dentro de ciclos.
+    """
+
+    active_site_id = int(active_site_id)
+
+    pending_requests = (
+        WorkOrderRequest.query
+        .options(
+            joinedload(
+                WorkOrderRequest.work_order
+            ),
+            joinedload(
+                WorkOrderRequest.mechanic
+            ),
+            selectinload(
+                WorkOrderRequest.lines
+            )
+            .joinedload(
+                WorkOrderRequestLine.article
+            )
+            .joinedload(
+                Article.unit
+            ),
+        )
+        .join(
+            WorkOrder,
+            WorkOrder.id
+            == WorkOrderRequest.work_order_id,
+        )
+        .filter(
+            db.or_(
+                WorkOrderRequest.review_site_id
+                == active_site_id,
+
+                db.and_(
+                    WorkOrderRequest.review_site_id.is_(
+                        None
+                    ),
+                    WorkOrder.site_id
+                    == active_site_id,
+                    WorkOrderRequest.sent_to_warehouse_at.is_(
+                        None
+                    ),
+                ),
+            ),
+            WorkOrderRequest.request_status
+            == "ENVIADA",
+            WorkOrderRequest.sent_to_warehouse_at.is_(
+                None
+            ),
+        )
+        .order_by(
+            WorkOrderRequest.created_at.desc(),
+            WorkOrderRequest.id.desc(),
+        )
+        .all()
+    )
+
+    stock_keys = set()
+
+    for request_obj in pending_requests:
+        work_order = request_obj.work_order
+
+        if not work_order:
+            continue
+
+        warehouse_id = work_order.warehouse_id
+
+        if not warehouse_id:
+            continue
+
+        for line in request_obj.lines:
+            if not line.article_id:
+                continue
+
+            stock_keys.add(
+                (
+                    int(line.article_id),
+                    int(warehouse_id),
+                )
+            )
+
+    stock_map = _stock_available_map(
+        stock_keys
+    )
+
+    request_items = []
+    total_lines = 0
+
+    for request_obj in pending_requests:
+        work_order = request_obj.work_order
+        mechanic = request_obj.mechanic
+
+        warehouse_id = (
+            work_order.warehouse_id
+            if work_order
+            else None
+        )
+
+        line_items = []
+
+        approved_count = 0
+        rejected_count = 0
+        pending_count = 0
+
+        for line in request_obj.lines:
+            article = line.article
+            unit = (
+                article.unit
+                if article
+                else None
+            )
+
+            review_status = (
+                line.manager_review_status
+                or "PENDIENTE"
+            ).strip().upper()
+
+            if review_status == "APROBADA":
+                approved_count += 1
+
+            elif review_status == "RECHAZADA":
+                rejected_count += 1
+
+            else:
+                review_status = "PENDIENTE"
+                pending_count += 1
+
+            stock_available = 0
+
+            if line.article_id and warehouse_id:
+                stock_available = (
+                    stock_map.get(
+                        (
+                            int(line.article_id),
+                            int(warehouse_id),
+                        ),
+                        0,
+                    )
+                    or 0
+                )
+
+            quantity_requested = (
+                line.quantity_requested
+                or 0
+            )
+
+            quantity_text = format(
+                quantity_requested,
+                "f",
+            )
+
+            if "." in quantity_text:
+                quantity_text = (
+                    quantity_text
+                    .rstrip("0")
+                    .rstrip(".")
+                )
+
+            stock_text = format(
+                stock_available,
+                "f",
+            )
+
+            if "." in stock_text:
+                stock_text = (
+                    stock_text
+                    .rstrip("0")
+                    .rstrip(".")
+                )
+
+            line_items.append(
+                {
+                    "id": int(line.id),
+
+                    "article_id": (
+                        int(line.article_id)
+                        if line.article_id
+                        else None
+                    ),
+
+                    "article_code": (
+                        (
+                            article.code
+                            or ""
+                        ).strip()
+                        if article
+                        else ""
+                    ),
+
+                    "article_name": (
+                        (
+                            article.name
+                            or ""
+                        ).strip()
+                        if article
+                        else "Artículo no disponible"
+                    ),
+
+                    "unit_code": (
+                        (
+                            unit.code
+                            or ""
+                        ).strip()
+                        if unit
+                        else ""
+                    ),
+
+                    "quantity_requested": (
+                        quantity_text
+                    ),
+
+                    "quantity_attended": str(
+                        line.quantity_attended
+                        or 0
+                    ),
+
+                    "stock_available": (
+                        stock_text
+                    ),
+
+                    "manager_decision": (
+                        review_status
+                    ),
+
+                    "notes": (
+                        line.notes
+                        or ""
+                    ),
+
+                    "rejection_reason": (
+                        line.not_delivered_reason
+                        or ""
+                    ),
+
+                    "line_status": (
+                        line.line_status
+                        or ""
+                    ),
+                }
+            )
+
+        total_lines += len(
+            line_items
+        )
+
+        request_items.append(
+            {
+                "id": int(request_obj.id),
+
+                "work_order_id": (
+                    int(work_order.id)
+                    if work_order
+                    else None
+                ),
+
+                "work_order_number": (
+                    str(work_order.number)
+                    if work_order
+                    and work_order.number is not None
+                    else "-"
+                ),
+
+                "equipment": (
+                    (
+                        work_order
+                        .equipment_code_snapshot
+                        or ""
+                    ).strip()
+                    if work_order
+                    else ""
+                ) or "Sin equipo",
+
+                "warehouse_id": (
+                    int(warehouse_id)
+                    if warehouse_id
+                    else None
+                ),
+
+                "mechanic_id": (
+                    int(mechanic.id)
+                    if mechanic
+                    else None
+                ),
+
+                "mechanic_name": (
+                    (
+                        mechanic.name
+                        or ""
+                    ).strip()
+                    if mechanic
+                    else "-"
+                ),
+
+                "created_at": (
+                    request_obj.created_at.isoformat()
+                    if request_obj.created_at
+                    else None
+                ),
+
+                "request_status": (
+                    request_obj.request_status
+                    or ""
+                ),
+
+                "line_count": len(
+                    line_items
+                ),
+
+                "approved_count": (
+                    approved_count
+                ),
+
+                "rejected_count": (
+                    rejected_count
+                ),
+
+                "pending_count": (
+                    pending_count
+                ),
+
+                "lines": line_items,
+            }
+        )
+
+    return {
+        "requests": request_items,
+        "request_count": len(
+            request_items
+        ),
+        "line_count": total_lines,
+    }
+
 
 def _apply_work_order_semaphore(work_orders):
     """
@@ -303,10 +648,14 @@ def dashboard_work_orders_partial():
         return ""
 
 
-@dashboard_bp.route("/dashboard/jefatura")
+@dashboard_bp.route(
+    "/dashboard/jefatura"
+)
 @login_required
 def manager_dashboard():
-    active_site_id = session.get("active_site_id")
+    active_site_id = session.get(
+        "active_site_id"
+    )
 
     if not active_site_id:
         return render_template(
@@ -315,41 +664,40 @@ def manager_dashboard():
         )
 
     try:
-        active_site_id = int(active_site_id)
+        active_site_id = int(
+            active_site_id
+        )
 
         # =====================================================
-        # 1. SOLICITUDES DE MATERIALES DE ÓRDENES DE TRABAJO
+        # 1. SOLICITUDES OT: SOLO CONTADORES LIVIANOS
         # =====================================================
         #
-        # Se precargan:
-        # - OT asociada.
-        # - Mecánico solicitante.
-        # - Líneas.
-        # - Artículo de cada línea.
-        # - Unidad del artículo.
+        # El nuevo manager.html ya no renderiza las solicitudes
+        # OT directamente desde Jinja.
         #
-        # Esto evita consultas adicionales desde el template al usar:
-        # line.article.code
-        # line.article.name
-        # line.article.unit
+        # Las solicitudes completas, sus artículos y el stock se
+        # cargan después mediante AJAX usando:
+        #
+        # /dashboard/jefatura/material-requests/data
+        #
+        # Aquí solamente calculamos:
+        # - cantidad de solicitudes pendientes;
+        # - cantidad de líneas dentro de esas solicitudes.
+        #
+        # Esto evita cargar:
+        # - WorkOrderRequest completos;
+        # - relaciones de OT;
+        # - mecánicos;
+        # - artículos;
+        # - unidades;
+        # - stock por artículo.
         # =====================================================
 
-        pending_requests = (
-            WorkOrderRequest.query
-            .options(
-                joinedload(
-                    WorkOrderRequest.work_order
-                ),
-                joinedload(
-                    WorkOrderRequest.mechanic
-                ),
-                selectinload(
-                    WorkOrderRequest.lines
-                ).joinedload(
-                    WorkOrderRequestLine.article
-                ).joinedload(
-                    Article.unit
-                ),
+        pending_request_ids_query = (
+            db.session.query(
+                WorkOrderRequest.id.label(
+                    "request_id"
+                )
             )
             .join(
                 WorkOrder,
@@ -360,164 +708,64 @@ def manager_dashboard():
                 db.or_(
                     WorkOrderRequest.review_site_id
                     == active_site_id,
+
                     db.and_(
                         WorkOrderRequest.review_site_id.is_(
                             None
                         ),
                         WorkOrder.site_id
                         == active_site_id,
-                        WorkOrderRequest.sent_to_warehouse_at.is_(
-                            None
-                        ),
                     ),
                 ),
+
                 WorkOrderRequest.request_status
                 == "ENVIADA",
+
                 WorkOrderRequest.sent_to_warehouse_at.is_(
                     None
                 ),
             )
-            .order_by(
-                WorkOrderRequest.created_at.desc(),
-                WorkOrderRequest.id.desc(),
-            )
-            .all()
         )
 
-        pending_stock_keys: set[
-            tuple[int, int]
-        ] = set()
-
-        for req in pending_requests:
-            work_order = req.work_order
-
-            if not work_order:
-                continue
-
-            warehouse_id = work_order.warehouse_id
-
-            if not warehouse_id:
-                continue
-
-            for line in req.lines:
-                if not line.article_id:
-                    continue
-
-                pending_stock_keys.add(
-                    (
-                        int(line.article_id),
-                        int(warehouse_id),
-                    )
-                )
-
-        pending_stock_map = _stock_available_map(
-            pending_stock_keys
+        pending_request_ids_subquery = (
+            pending_request_ids_query
+            .subquery()
         )
 
-        pending_requests_count = len(
-            pending_requests
+        pending_requests_count = (
+            db.session.query(
+                db.func.count()
+            )
+            .select_from(
+                pending_request_ids_subquery
+            )
+            .scalar()
+            or 0
         )
 
-        pending_lines_count = 0
-
-        for req in pending_requests:
-            work_order = req.work_order
-
-            req.work_order_number = (
-                work_order.number
-                if work_order
-                else "-"
-            )
-
-            req.equipment_code_snapshot = (
-                work_order.equipment_code_snapshot
-                if work_order
-                else "-"
-            )
-
-            req.requested_by_name = (
-                req.mechanic.name
-                if req.mechanic
-                else "-"
-            )
-
-            warehouse_id = (
-                work_order.warehouse_id
-                if work_order
-                else None
-            )
-
-            visible_lines = []
-            has_approved_lines = False
-            all_lines_decided = True
-
-            for line in req.lines:
-                stock_key = (
-                    line.article_id,
-                    warehouse_id,
+        pending_lines_count = (
+            db.session.query(
+                db.func.count(
+                    WorkOrderRequestLine.id
                 )
-
-                line.stock_available = (
-                    pending_stock_map.get(
-                        stock_key,
-                        0,
-                    )
-                    if (
-                        line.article_id
-                        and warehouse_id
-                    )
-                    else 0
-                )
-
-                review_status = (
-                    line.manager_review_status
-                    or "PENDIENTE"
-                )
-
-                if review_status == "RECHAZADA":
-                    line.manager_decision = (
-                        "RECHAZADA"
-                    )
-
-                elif review_status == "APROBADA":
-                    line.manager_decision = (
-                        "APROBADA"
-                    )
-                    has_approved_lines = True
-
-                else:
-                    line.manager_decision = (
-                        "PENDIENTE"
-                    )
-                    all_lines_decided = False
-
-                visible_lines.append(line)
-
-            req.visible_lines = visible_lines
-
-            pending_lines_count += len(
-                visible_lines
             )
-
-            req.send_to_warehouse_enabled = (
-                all_lines_decided
-                and has_approved_lines
+            .join(
+                pending_request_ids_subquery,
+                pending_request_ids_subquery
+                .c.request_id
+                == WorkOrderRequestLine
+                .work_order_request_id,
             )
+            .scalar()
+            or 0
+        )
+
+        # El template nuevo ya no utiliza esta lista.
+        # Se mantiene vacía para compatibilidad con el contexto.
+        pending_requests = []
 
         # =====================================================
         # 2. SOLICITUDES DE COMPRA
-        # =====================================================
-        #
-        # Antes solo se precargaban las líneas. El template usa:
-        # - req.site
-        # - req.warehouse
-        # - line.article
-        # - line.pending_article
-        # - line.unit
-        # - line.item_code
-        # - line.item_name
-        #
-        # Todas esas relaciones quedan cargadas de antemano.
         # =====================================================
 
         purchase_requests = (
@@ -552,17 +800,19 @@ def manager_dashboard():
                 db.or_(
                     PurchaseRequest.review_site_id
                     == active_site_id,
+
                     db.and_(
                         PurchaseRequest.review_site_id.is_(
                             None
                         ),
                         PurchaseRequest.site_id
                         == active_site_id,
-                        PurchaseRequest.sent_direct_to_procurement.is_(
-                            False
-                        ),
+                        PurchaseRequest
+                        .sent_direct_to_procurement
+                        .is_(False),
                     ),
                 ),
+
                 PurchaseRequest.status
                 == "ENVIADA",
             )
@@ -577,17 +827,16 @@ def manager_dashboard():
             tuple[int, int]
         ] = set()
 
-        for req in purchase_requests:
-            warehouse_id = req.warehouse_id
+        for purchase_request in purchase_requests:
+            warehouse_id = (
+                purchase_request.warehouse_id
+            )
 
             if not warehouse_id:
                 continue
 
-            for line in req.lines:
-                if (
-                    line.line_status
-                    == "CANCELADA"
-                ):
+            for line in purchase_request.lines:
+                if line.line_status == "CANCELADA":
                     continue
 
                 if not line.article_id:
@@ -600,8 +849,10 @@ def manager_dashboard():
                     )
                 )
 
-        purchase_stock_map = _stock_available_map(
-            purchase_stock_keys
+        purchase_stock_map = (
+            _stock_available_map(
+                purchase_stock_keys
+            )
         )
 
         purchase_requests_count = len(
@@ -610,15 +861,15 @@ def manager_dashboard():
 
         purchase_request_lines_count = 0
 
-        for req in purchase_requests:
-            warehouse_id = req.warehouse_id
+        for purchase_request in purchase_requests:
+            warehouse_id = (
+                purchase_request.warehouse_id
+            )
+
             visible_lines = []
 
-            for line in req.lines:
-                if (
-                    line.line_status
-                    == "CANCELADA"
-                ):
+            for line in purchase_request.lines:
+                if line.line_status == "CANCELADA":
                     continue
 
                 stock_key = (
@@ -638,9 +889,13 @@ def manager_dashboard():
                     else 0
                 )
 
-                visible_lines.append(line)
+                visible_lines.append(
+                    line
+                )
 
-            req.visible_lines = visible_lines
+            purchase_request.visible_lines = (
+                visible_lines
+            )
 
             purchase_request_lines_count += len(
                 visible_lines
@@ -648,16 +903,6 @@ def manager_dashboard():
 
         # =====================================================
         # 3. SOLICITUDES DE TRASLADO
-        # =====================================================
-        #
-        # El template utiliza:
-        # - req.requested_by_user
-        # - req.origin_warehouse
-        # - req.destination_warehouse
-        # - line.article
-        # - line.article.unit
-        #
-        # Estas relaciones se precargan para evitar consultas por línea.
         # =====================================================
 
         transfer_pending_requests = (
@@ -684,6 +929,7 @@ def manager_dashboard():
                 db.or_(
                     TransferRequest.review_site_id
                     == active_site_id,
+
                     db.and_(
                         TransferRequest.review_site_id.is_(
                             None
@@ -692,12 +938,14 @@ def manager_dashboard():
                         == active_site_id,
                     ),
                 ),
+
                 TransferRequest.status.in_(
                     [
                         "ENVIADA",
                         "APROBADA",
                     ]
                 ),
+
                 TransferRequest.sent_to_warehouse_at.is_(
                     None
                 ),
@@ -711,8 +959,10 @@ def manager_dashboard():
 
         transfer_lines_bulk = []
 
-        for req in transfer_pending_requests:
-            for line in req.lines:
+        for transfer_request in (
+            transfer_pending_requests
+        ):
+            for line in transfer_request.lines:
                 transfer_lines_bulk.append(
                     {
                         "line_id": line.id,
@@ -720,10 +970,12 @@ def manager_dashboard():
                             line.article_id
                         ),
                         "requesting_warehouse_id": (
-                            req.origin_warehouse_id
+                            transfer_request
+                            .origin_warehouse_id
                         ),
                         "supplying_warehouse_id": (
-                            req.destination_warehouse_id
+                            transfer_request
+                            .destination_warehouse_id
                         ),
                     }
                 )
@@ -742,7 +994,9 @@ def manager_dashboard():
 
         transfer_pending_lines_count = 0
 
-        for req in transfer_pending_requests:
+        for transfer_request in (
+            transfer_pending_requests
+        ):
             visible_lines = []
             stock_map = {}
 
@@ -750,11 +1004,11 @@ def manager_dashboard():
             all_lines_decided = True
 
             requested_by_user = (
-                req.requested_by_user
+                transfer_request.requested_by_user
             )
 
             if requested_by_user:
-                req.requested_by_name = (
+                transfer_request.requested_by_name = (
                     getattr(
                         requested_by_user,
                         "full_name",
@@ -768,9 +1022,11 @@ def manager_dashboard():
                     or "-"
                 )
             else:
-                req.requested_by_name = "-"
+                transfer_request.requested_by_name = (
+                    "-"
+                )
 
-            for line in req.lines:
+            for line in transfer_request.lines:
                 review_status = (
                     line.manager_review_status
                     or "PENDIENTE"
@@ -785,12 +1041,14 @@ def manager_dashboard():
                     line.manager_decision = (
                         "APROBADA"
                     )
+
                     has_approved_lines = True
 
                 else:
                     line.manager_decision = (
                         "PENDIENTE"
                     )
+
                     all_lines_decided = False
 
                 stock_map[line.id] = (
@@ -803,58 +1061,63 @@ def manager_dashboard():
                     )
                 )
 
-                visible_lines.append(line)
+                visible_lines.append(
+                    line
+                )
 
-            req.visible_lines = visible_lines
-            req.stock_map = stock_map
+            transfer_request.visible_lines = (
+                visible_lines
+            )
+
+            transfer_request.stock_map = (
+                stock_map
+            )
 
             transfer_pending_lines_count += len(
                 visible_lines
             )
 
-            req.finalize_review_enabled = (
-                req.status == "ENVIADA"
+            transfer_request.finalize_review_enabled = (
+                transfer_request.status
+                == "ENVIADA"
                 and all_lines_decided
             )
 
-            req.send_to_warehouse_enabled = (
-                req.status == "APROBADA"
+            transfer_request.send_to_warehouse_enabled = (
+                transfer_request.status
+                == "APROBADA"
                 and has_approved_lines
             )
 
         # =====================================================
         # 4. SOLICITUDES DE FINALIZACIÓN DE TRABAJOS
         # =====================================================
-        #
-        # El template utiliza:
-        # - task_line.work_order
-        # - task_line.repair_type
-        # - requested_by_mechanic
-        #
-        # Se cargan antes del render para eliminar consultas N+1.
-        # =====================================================
 
         task_finish_requests = (
             WorkOrderTaskLineFinishRequest.query
             .options(
                 joinedload(
-                    WorkOrderTaskLineFinishRequest.task_line
+                    WorkOrderTaskLineFinishRequest
+                    .task_line
                 ).joinedload(
                     WorkOrderTaskLine.work_order
                 ),
                 joinedload(
-                    WorkOrderTaskLineFinishRequest.task_line
+                    WorkOrderTaskLineFinishRequest
+                    .task_line
                 ).joinedload(
                     WorkOrderTaskLine.repair_type
                 ),
                 joinedload(
-                    WorkOrderTaskLineFinishRequest.requested_by_mechanic
+                    WorkOrderTaskLineFinishRequest
+                    .requested_by_mechanic
                 ),
             )
             .join(
                 WorkOrderTaskLine,
                 WorkOrderTaskLine.id
-                == WorkOrderTaskLineFinishRequest.task_line_id,
+                == WorkOrderTaskLineFinishRequest
+                .task_line_id,
             )
             .join(
                 WorkOrder,
@@ -864,12 +1127,17 @@ def manager_dashboard():
             .filter(
                 WorkOrder.site_id
                 == active_site_id,
+
                 WorkOrderTaskLineFinishRequest.status
                 == "PENDIENTE",
             )
             .order_by(
-                WorkOrderTaskLineFinishRequest.created_at.desc(),
-                WorkOrderTaskLineFinishRequest.id.desc(),
+                WorkOrderTaskLineFinishRequest
+                .created_at
+                .desc(),
+                WorkOrderTaskLineFinishRequest
+                .id
+                .desc(),
             )
             .all()
         )
@@ -878,8 +1146,10 @@ def manager_dashboard():
             task_finish_requests
         )
 
-        for task_req in task_finish_requests:
-            task_line = task_req.task_line
+        for task_request in task_finish_requests:
+            task_line = (
+                task_request.task_line
+            )
 
             seconds = (
                 int(
@@ -890,12 +1160,15 @@ def manager_dashboard():
                 else 0
             )
 
-            hours = seconds // 3600
+            hours = (
+                seconds // 3600
+            )
+
             minutes = (
                 seconds % 3600
             ) // 60
 
-            task_req.formatted_time = (
+            task_request.formatted_time = (
                 f"{hours}h {minutes}m"
             )
 
@@ -905,44 +1178,79 @@ def manager_dashboard():
 
         return render_template(
             "dashboard/manager.html",
-            title="Dashboard Jefatura",
+
+            title=(
+                "Dashboard Jefatura"
+            ),
+
             subtitle=(
                 "Revise y autorice solicitudes "
                 "antes de que lleguen a bodega."
             ),
+
             pending_requests=(
                 pending_requests
             ),
+
             pending_requests_count=(
-                pending_requests_count
+                int(
+                    pending_requests_count
+                )
             ),
+
             pending_lines_count=(
-                pending_lines_count
+                int(
+                    pending_lines_count
+                )
             ),
+
             transfer_pending_requests=(
                 transfer_pending_requests
             ),
+
             transfer_pending_requests_count=(
                 transfer_pending_requests_count
             ),
+
             transfer_pending_lines_count=(
                 transfer_pending_lines_count
             ),
+
             task_finish_requests=(
                 task_finish_requests
             ),
+
             task_finish_requests_count=(
                 task_finish_requests_count
             ),
+
             purchase_requests=(
                 purchase_requests
             ),
+
             purchase_requests_count=(
                 purchase_requests_count
             ),
+
             purchase_request_lines_count=(
                 purchase_request_lines_count
             ),
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ) as exc:
+        db.session.rollback()
+
+        print(
+            "[MANAGER DASHBOARD INVALID SITE ERROR] "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        return render_template(
+            "dashboard/manager.html",
+            **_empty_manager_context(),
         )
 
     except Exception as exc:
@@ -957,6 +1265,193 @@ def manager_dashboard():
             "dashboard/manager.html",
             **_empty_manager_context(),
         )
+
+
+@dashboard_bp.route(
+    "/dashboard/jefatura/material-requests/data",
+    methods=["GET"],
+)
+@login_required
+def manager_material_requests_data():
+    """
+    Devuelve las solicitudes OT pendientes para el nuevo
+    Dashboard Jefatura.
+
+    Este endpoint solo se consulta:
+    - al abrir la pantalla;
+    - cuando la versión indica que hubo cambios;
+    - después de una actualización manual.
+
+    No realiza polling constante sobre stock y relaciones.
+    """
+
+    active_site_id = session.get(
+        "active_site_id"
+    )
+
+    if not active_site_id:
+        return jsonify(
+            {
+                "ok": False,
+                "error": (
+                    "No hay predio activo seleccionado."
+                ),
+                "requests": [],
+                "request_count": 0,
+                "line_count": 0,
+            }
+        ), 400
+
+    try:
+        active_site_id = int(
+            active_site_id
+        )
+
+        result = (
+            _get_manager_material_requests(
+                active_site_id
+            )
+        )
+
+        signature_parts = []
+
+        for request_item in result[
+            "requests"
+        ]:
+            signature_parts.append(
+                "|".join(
+                    [
+                        str(
+                            request_item["id"]
+                        ),
+                        str(
+                            request_item[
+                                "request_status"
+                            ]
+                        ),
+                        str(
+                            request_item[
+                                "approved_count"
+                            ]
+                        ),
+                        str(
+                            request_item[
+                                "rejected_count"
+                            ]
+                        ),
+                        str(
+                            request_item[
+                                "pending_count"
+                            ]
+                        ),
+                    ]
+                )
+            )
+
+            for line in request_item[
+                "lines"
+            ]:
+                signature_parts.append(
+                    "|".join(
+                        [
+                            str(line["id"]),
+                            str(
+                                line[
+                                    "manager_decision"
+                                ]
+                            ),
+                            str(
+                                line[
+                                    "quantity_requested"
+                                ]
+                            ),
+                            str(
+                                line[
+                                    "stock_available"
+                                ]
+                            ),
+                        ]
+                    )
+                )
+
+        signature_source = "\n".join(
+            signature_parts
+        )
+
+        etag_value = hashlib.sha256(
+            signature_source.encode(
+                "utf-8"
+            )
+        ).hexdigest()
+
+        client_etag = (
+            request.headers.get(
+                "If-None-Match"
+            )
+            or ""
+        ).strip().strip('"')
+
+        if client_etag == etag_value:
+            response = make_response(
+                "",
+                304,
+            )
+
+            response.set_etag(
+                etag_value
+            )
+
+            response.headers[
+                "Cache-Control"
+            ] = "private, no-cache"
+
+            return response
+
+        response = jsonify(
+            {
+                "ok": True,
+                "requests": result[
+                    "requests"
+                ],
+                "request_count": result[
+                    "request_count"
+                ],
+                "line_count": result[
+                    "line_count"
+                ],
+            }
+        )
+
+        response.set_etag(
+            etag_value
+        )
+
+        response.headers[
+            "Cache-Control"
+        ] = "private, no-cache"
+
+        return response
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[MANAGER MATERIAL REQUESTS DATA ERROR] "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        return jsonify(
+            {
+                "ok": False,
+                "error": (
+                    "No fue posible cargar las "
+                    "solicitudes de artículos."
+                ),
+                "requests": [],
+                "request_count": 0,
+                "line_count": 0,
+            }
+        ), 500
 
 # =========================================================
 # MONITOR DE ARTÍCULOS POR ALISTAR
@@ -1252,5 +1747,197 @@ def warehouse_preparation_monitor_data():
                     "artículos pendientes."
                 ),
                 "items": [],
+            }
+        ), 500
+
+
+@dashboard_bp.route(
+    "/dashboard/jefatura/material-requests/version",
+    methods=["GET"],
+)
+@login_required
+def manager_material_requests_version():
+    """
+    Endpoint liviano para detectar solicitudes nuevas o retiradas.
+
+    Solo consulta:
+    - ID de la solicitud;
+    - fecha de actualización;
+    - cantidad de líneas.
+
+    No consulta stock ni carga relaciones ORM.
+    """
+
+    active_site_id = session.get(
+        "active_site_id"
+    )
+
+    if not active_site_id:
+        return jsonify(
+            {
+                "ok": False,
+                "error": (
+                    "No hay predio activo seleccionado."
+                ),
+            }
+        ), 400
+
+    try:
+        active_site_id = int(
+            active_site_id
+        )
+
+        rows = (
+            db.session.query(
+                WorkOrderRequest.id.label(
+                    "request_id"
+                ),
+                WorkOrderRequest.updated_at.label(
+                    "updated_at"
+                ),
+                db.func.count(
+                    WorkOrderRequestLine.id
+                ).label(
+                    "line_count"
+                ),
+            )
+            .join(
+                WorkOrder,
+                WorkOrder.id
+                == WorkOrderRequest.work_order_id,
+            )
+            .outerjoin(
+                WorkOrderRequestLine,
+                WorkOrderRequestLine
+                .work_order_request_id
+                == WorkOrderRequest.id,
+            )
+            .filter(
+                db.or_(
+                    WorkOrderRequest.review_site_id
+                    == active_site_id,
+
+                    db.and_(
+                        WorkOrderRequest.review_site_id.is_(
+                            None
+                        ),
+                        WorkOrder.site_id
+                        == active_site_id,
+                        WorkOrderRequest
+                        .sent_to_warehouse_at
+                        .is_(None),
+                    ),
+                ),
+                WorkOrderRequest.request_status
+                == "ENVIADA",
+                WorkOrderRequest.sent_to_warehouse_at
+                .is_(None),
+            )
+            .group_by(
+                WorkOrderRequest.id,
+                WorkOrderRequest.updated_at,
+            )
+            .order_by(
+                WorkOrderRequest.id.asc(),
+            )
+            .all()
+        )
+
+        signature_parts = []
+
+        total_lines = 0
+
+        for row in rows:
+            line_count = int(
+                row.line_count or 0
+            )
+
+            total_lines += line_count
+
+            updated_text = (
+                row.updated_at.isoformat()
+                if row.updated_at
+                else ""
+            )
+
+            signature_parts.append(
+                "|".join(
+                    [
+                        str(row.request_id),
+                        updated_text,
+                        str(line_count),
+                    ]
+                )
+            )
+
+        signature_source = "\n".join(
+            signature_parts
+        )
+
+        version = hashlib.sha256(
+            signature_source.encode(
+                "utf-8"
+            )
+        ).hexdigest()
+
+        client_etag = (
+            request.headers.get(
+                "If-None-Match"
+            )
+            or ""
+        ).strip().strip('"')
+
+        if client_etag == version:
+            response = make_response(
+                "",
+                304,
+            )
+
+            response.set_etag(
+                version
+            )
+
+            response.headers[
+                "Cache-Control"
+            ] = "private, no-cache"
+
+            return response
+
+        response = jsonify(
+            {
+                "ok": True,
+                "version": version,
+                "request_count": len(
+                    rows
+                ),
+                "line_count": total_lines,
+            }
+        )
+
+        response.set_etag(
+            version
+        )
+
+        response.headers[
+            "Cache-Control"
+        ] = "private, no-cache"
+
+        return response
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[MANAGER MATERIAL REQUESTS VERSION ERROR] "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        return jsonify(
+            {
+                "ok": False,
+                "error": (
+                    "No fue posible verificar "
+                    "las solicitudes nuevas."
+                ),
             }
         ), 500

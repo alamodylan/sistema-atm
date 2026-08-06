@@ -1,7 +1,15 @@
 # routes/work_order_requests.py
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, flash, redirect, request, url_for
+from flask import (
+    Blueprint,
+    flash,
+    jsonify,
+    redirect,
+    request,
+    session,
+    url_for,
+)
 from flask_login import current_user, login_required
 from app.models.work_order_request_line import WorkOrderRequestLine
 from app.models.inventory import WarehouseStock
@@ -28,6 +36,7 @@ from app.services.work_order_request_service import (
     undo_manager_decision,
     update_request_line_requested_quantity,
     void_request_line,
+    review_request_and_send_to_warehouse,
 )
 
 work_order_request_bp = Blueprint("work_order_requests", __name__)
@@ -124,6 +133,122 @@ def send_request_to_warehouse_action(request_id: int):
 
     return redirect(request.referrer or "/")
 
+
+# =========================================================
+# JEFATURA → REVISIÓN MASIVA Y ENVÍO A BODEGA
+# =========================================================
+
+@work_order_request_bp.route(
+    "/requests/<int:request_id>/review-and-send",
+    methods=["POST"],
+)
+@login_required
+def review_and_send_request_action(
+    request_id: int,
+):
+    """
+    Recibe todas las decisiones de una solicitud de OT
+    y las procesa en una única transacción.
+
+    Respuesta JSON para uso mediante AJAX.
+    """
+
+    active_site_id = session.get(
+        "active_site_id"
+    )
+
+    if not active_site_id:
+        return jsonify({
+            "ok": False,
+            "error": (
+                "No hay predio activo seleccionado."
+            ),
+        }), 400
+
+    data = request.get_json(
+        silent=True
+    ) or {}
+
+    decisions = data.get("lines")
+
+    if not isinstance(decisions, list):
+        return jsonify({
+            "ok": False,
+            "error": (
+                "Debe enviar la lista de decisiones."
+            ),
+        }), 400
+
+    try:
+        result = (
+            review_request_and_send_to_warehouse(
+                request_id=request_id,
+                decisions=decisions,
+                performed_by_user_id=(
+                    current_user.id
+                ),
+                active_site_id=int(
+                    active_site_id
+                ),
+                commit=True,
+            )
+        )
+
+        if result["sent_to_warehouse"]:
+            message = (
+                "Solicitud revisada y enviada "
+                "a bodega correctamente."
+            )
+        else:
+            message = (
+                "Todas las líneas fueron rechazadas. "
+                "La solicitud fue cancelada."
+            )
+
+        return jsonify({
+            "ok": True,
+            "message": message,
+            "request_id": (
+                result["request_id"]
+            ),
+            "approved_count": (
+                result["approved_count"]
+            ),
+            "rejected_count": (
+                result["rejected_count"]
+            ),
+            "sent_to_warehouse": (
+                result["sent_to_warehouse"]
+            ),
+            "request_status": (
+                result["request_status"]
+            ),
+        })
+
+    except WorkOrderRequestServiceError as exc:
+        db.session.rollback()
+
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 400
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[REVIEW AND SEND REQUEST ERROR] "
+            f"request_id={request_id} "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        return jsonify({
+            "ok": False,
+            "error": (
+                "No fue posible procesar "
+                "la solicitud."
+            ),
+        }), 500
 
 # =========================
 # CANCELAR LÍNEA
