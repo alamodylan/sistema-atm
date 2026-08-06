@@ -1353,9 +1353,16 @@
     }
 
     function getReviewUrl(requestId) {
+
+        const id = Number(requestId);
+
+        if (!Number.isInteger(id) || id <= 0) {
+            throw new Error("Solicitud inválida.");
+        }
+
         return REVIEW_URL_TEMPLATE.replace(
-            /\/0(?=\/?$)/,
-            "/" + String(requestId)
+            "/0/",
+            "/" + id + "/"
         );
     }
 
