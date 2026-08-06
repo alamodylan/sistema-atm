@@ -11,6 +11,7 @@ from app.models.work_order_request import WorkOrderRequest
 from app.models.work_order_request_line import WorkOrderRequestLine
 from app.services.audit_service import log_action
 from app.models.tool_loan import ToolLoan
+from app.models.unit import Unit
 from app.services.request_routing_service import resolve_request_routing
 from app.services.inventory_service import (
     InventoryServiceError,
@@ -792,15 +793,17 @@ def review_request_and_send_to_warehouse(
     # CARGAR Y BLOQUEAR TODAS LAS LÍNEAS
     # =====================================================
 
+    # =====================================================
+    # CARGAR Y BLOQUEAR ÚNICAMENTE LAS LÍNEAS
+    # =====================================================
+    #
+    # No se usa joinedload aquí porque genera LEFT OUTER JOIN
+    # y PostgreSQL no permite FOR UPDATE sobre el lado nullable
+    # de un outer join.
+    # =====================================================
+
     request_lines = (
         WorkOrderRequestLine.query
-        .options(
-            joinedload(
-                WorkOrderRequestLine.article
-            ).joinedload(
-                Article.unit
-            ),
-        )
         .filter(
             WorkOrderRequestLine.work_order_request_id
             == request_obj.id,
@@ -811,6 +814,50 @@ def review_request_and_send_to_warehouse(
         .with_for_update()
         .all()
     )
+
+    if not request_lines:
+        raise WorkOrderRequestServiceError(
+            "La solicitud no tiene líneas."
+        )
+
+    # =====================================================
+    # CARGAR LAS UNIDADES EN UNA CONSULTA SEPARADA
+    # =====================================================
+    #
+    # Solo necesitamos el código de unidad para validar UND.
+    # Se carga en bloque, sin N+1 y sin afectar el bloqueo.
+    # =====================================================
+
+    article_ids = {
+        int(line.article_id)
+        for line in request_lines
+        if line.article_id
+    }
+
+    article_unit_codes = {}
+
+    if article_ids:
+        article_unit_rows = (
+            db.session.query(
+                Article.id.label("article_id"),
+                Unit.code.label("unit_code"),
+            )
+            .outerjoin(
+                Unit,
+                Unit.id == Article.unit_id,
+            )
+            .filter(
+                Article.id.in_(article_ids)
+            )
+            .all()
+        )
+
+        article_unit_codes = {
+            int(row.article_id): (
+                row.unit_code or ""
+            ).strip().upper()
+            for row in article_unit_rows
+        }
 
     if not request_lines:
         raise WorkOrderRequestServiceError(
@@ -959,17 +1006,10 @@ def review_request_and_send_to_warehouse(
                     f"{line.id} no es válida."
                 ) from exc
 
-            unit_code = ""
-
-            if (
-                line.article
-                and line.article.unit
-                and line.article.unit.code
-            ):
-                unit_code = (
-                    line.article.unit.code
-                    or ""
-                ).strip().upper()
+            unit_code = article_unit_codes.get(
+                int(line.article_id),
+                "",
+            )
 
             if (
                 unit_code == "UND"
