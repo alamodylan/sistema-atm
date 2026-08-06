@@ -732,8 +732,7 @@
                                                             value="{{ (
                                                                 quotation.quoted_quantity
                                                                 if quotation.quoted_quantity is not none
-                                                                else line.quantity_requested
-                                                                else 0
+                                                                else (line.quantity_requested or 0)
                                                             ) }}"
                                                         >
                                                         <div class="form-text">
