@@ -1156,10 +1156,6 @@ def create_single_line_quotation(
             "La cantidad cotizada debe ser mayor que cero."
         )
 
-    if quoted_quantity > quantity_requested:
-        raise QuotationServiceError(
-            "La cantidad cotizada no puede superar la cantidad solicitada."
-        )
 
     payload = QuotationLinePayload(
         purchase_request_line_id=purchase_request_line_id,
@@ -3327,10 +3323,6 @@ def save_category_comparison_matrix(
                         f"La cantidad cotizada de la línea {line_index} debe ser mayor que cero."
                     )
 
-                if quoted_quantity > quantity_requested:
-                    raise QuotationServiceError(
-                        f"La cantidad cotizada de la línea {line_index} no puede superar la cantidad solicitada."
-                    )
 
                 discount_pct = (
                     _normalize_decimal(
