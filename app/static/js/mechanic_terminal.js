@@ -647,6 +647,7 @@ function renderWorkOrders() {
             }
 
             await loadMyTasks();
+            await loadConsumedItems();
 
             document.getElementById("selectedWorkOrderSection").scrollIntoView({
                 behavior: "smooth",
@@ -1094,6 +1095,110 @@ async function loadMyTasks() {
 
         container.appendChild(row);
     });
+}
+
+async function loadConsumedItems() {
+
+    if (
+        !selectedWorkOrder ||
+        !currentMechanic ||
+        !currentMechanic.mechanic_id
+    ) {
+        return;
+    }
+
+    const section =
+        document.getElementById(
+            "consumedItemsSection"
+        );
+
+    const container =
+        document.getElementById(
+            "consumedItemsList"
+        );
+
+    const empty =
+        document.getElementById(
+            "noConsumedItems"
+        );
+
+    container.innerHTML = "";
+
+    section.classList.remove("d-none");
+    empty.classList.add("d-none");
+
+    try {
+
+        const res = await fetch(
+            "/terminal/work-order/"
+            + selectedWorkOrder.id
+            + "/consumed-items/"
+            + currentMechanic.mechanic_id
+        );
+
+        const data =
+            await res.json();
+
+        if (!res.ok) {
+            empty.classList.remove("d-none");
+            return;
+        }
+
+        const items =
+            data.items || [];
+
+        if (!items.length) {
+            empty.classList.remove("d-none");
+            return;
+        }
+
+        items.forEach(function(item){
+
+            const row =
+                document.createElement("div");
+
+            row.className =
+                "border rounded-3 p-3 mb-2 bg-white";
+
+            row.innerHTML =
+
+                '<div class="d-flex justify-content-between align-items-center">' +
+
+                    '<div>' +
+
+                        '<div class="fw-semibold">' +
+                            item.code +
+                            " - " +
+                            item.name +
+                        '</div>' +
+
+                        '<div class="small text-muted">' +
+                            'Entregado por bodega' +
+                        '</div>' +
+
+                    '</div>' +
+
+                    '<span class="badge text-bg-success rounded-pill">' +
+                        item.quantity +
+                    '</span>' +
+
+                '</div>';
+
+            container.appendChild(row);
+
+        });
+
+    } catch (error) {
+
+        console.error(error);
+
+        empty.innerText =
+            "No fue posible cargar los artículos consumidos.";
+
+        empty.classList.remove("d-none");
+
+    }
+
 }
 
 async function requestFinishTask(

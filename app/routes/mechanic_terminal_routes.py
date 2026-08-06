@@ -840,6 +840,148 @@ def get_my_tasks(work_order_id, mechanic_id):
     return jsonify({"items": items})
 
 
+@terminal_bp.route(
+    "/work-order/<int:work_order_id>/consumed-items/<int:mechanic_id>"
+)
+@login_required
+def get_consumed_items(work_order_id, mechanic_id):
+    active_site_id = session.get("active_site_id")
+
+    if not active_site_id:
+        return jsonify({
+            "error": "No hay predio activo seleccionado"
+        }), 400
+
+    try:
+        active_site_id = int(active_site_id)
+        mechanic_id = int(mechanic_id)
+        work_order_id = int(work_order_id)
+
+    except (TypeError, ValueError):
+        return jsonify({
+            "error": "Datos de consulta inválidos"
+        }), 400
+
+    mechanic = (
+        Mechanic.query
+        .filter(
+            Mechanic.id == mechanic_id,
+            Mechanic.site_id == active_site_id,
+            Mechanic.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if not mechanic:
+        return jsonify({
+            "error": "Mecánico no encontrado"
+        }), 404
+
+    work_order = (
+        WorkOrder.query
+        .filter(
+            WorkOrder.id == work_order_id,
+            WorkOrder.site_id == active_site_id,
+        )
+        .first()
+    )
+
+    if not work_order:
+        return jsonify({
+            "error": "OT no encontrada"
+        }), 404
+
+    mechanic_has_assignment = (
+        db.session.query(
+            WorkOrderTaskLine.id
+        )
+        .filter(
+            WorkOrderTaskLine.work_order_id == work_order.id,
+            WorkOrderTaskLine.assigned_mechanic_id == mechanic.id,
+        )
+        .first()
+    )
+
+    if not mechanic_has_assignment:
+        return jsonify({
+            "error": "El mecánico no pertenece a esta OT"
+        }), 403
+
+    rows = (
+        db.session.query(
+            Article.id.label("article_id"),
+            Article.code.label("code"),
+            Article.name.label("name"),
+            db.func.sum(
+                WorkOrderLine.quantity
+            ).label("quantity"),
+        )
+        .join(
+            Article,
+            Article.id == WorkOrderLine.article_id,
+        )
+        .join(
+            WorkOrderRequestLine,
+            WorkOrderRequestLine.id
+            == WorkOrderLine.request_line_id,
+        )
+        .join(
+            WorkOrderRequest,
+            WorkOrderRequest.id
+            == WorkOrderRequestLine.work_order_request_id,
+        )
+        .filter(
+            WorkOrderLine.work_order_id == work_order.id,
+            WorkOrderLine.inventory_posted.is_(True),
+            WorkOrderLine.line_status == "ACTIVE",
+            WorkOrderRequest.mechanic_id == mechanic.id,
+        )
+        .group_by(
+            Article.id,
+            Article.code,
+            Article.name,
+        )
+        .order_by(
+            Article.code.asc(),
+            Article.name.asc(),
+        )
+        .all()
+    )
+
+    items = []
+
+    for row in rows:
+        quantity = row.quantity or 0
+
+        quantity_text = format(
+            quantity,
+            "f",
+        )
+
+        if "." in quantity_text:
+            quantity_text = quantity_text.rstrip(
+                "0"
+            ).rstrip(".")
+
+        items.append({
+            "article_id": int(row.article_id),
+            "code": (
+                row.code or ""
+            ).strip(),
+            "name": (
+                row.name or ""
+            ).strip(),
+            "quantity": quantity_text,
+        })
+
+    return jsonify({
+        "ok": True,
+        "work_order_id": work_order.id,
+        "work_order_number": work_order.number,
+        "mechanic_id": mechanic.id,
+        "items": items,
+    })
+
 @terminal_bp.route("/tasks/<int:task_id>/request-finish", methods=["POST"])
 @login_required
 def request_finish_task(task_id):
