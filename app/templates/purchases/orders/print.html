@@ -10,7 +10,7 @@
     <style>
         @page {
             size: A4 portrait;
-            margin: 8mm;
+            margin: 12mm;
         }
 
         * {
@@ -22,7 +22,7 @@
             color: #111;
             background: #fff;
             margin: 0;
-            font-size: 9px;
+            font-size: 12px;
         }
 
         .toolbar {
@@ -50,37 +50,37 @@
 
         .sheet {
             border: 1px solid #111;
-            padding: 8px;
+            padding: 14px;
             width: 100%;
         }
 
         .top-header {
             display: grid;
-            grid-template-columns: 115px 1fr 135px;
+            grid-template-columns: 150px 1fr 170px;
             align-items: center;
             border-bottom: 2px solid #111;
-            padding-bottom: 8px;
-            margin-bottom: 9px;
+            padding-bottom: 10px;
+            margin-bottom: 12px;
         }
 
         .logo img {
-            max-width: 100px;
-            max-height: 52px;
+            max-width: 125px;
+            max-height: 65px;
         }
 
         .company {
             text-align: center;
-            line-height: 1.3;
+            line-height: 1.35;
         }
 
         .company h1 {
             margin: 0;
-            font-size: 15px;
+            font-size: 17px;
             text-transform: uppercase;
         }
 
         .company .subtitle {
-            font-size: 9px;
+            font-size: 11px;
             margin-top: 2px;
         }
 
@@ -92,26 +92,25 @@
         .order-box .label {
             background: #efefef;
             border-bottom: 1px solid #111;
-            padding: 4px;
+            padding: 5px;
             font-weight: bold;
-            font-size: 8px;
             text-transform: uppercase;
+            font-size: 10px;
         }
 
         .order-box .number {
-            padding: 7px 4px;
-            font-size: 14px;
+            padding: 9px 5px;
+            font-size: 18px;
             font-weight: bold;
         }
 
         .section-title {
             background: #efefef;
             border: 1px solid #111;
-            padding: 4px 6px;
+            padding: 5px 7px;
             font-weight: bold;
-            font-size: 9px;
             text-transform: uppercase;
-            margin-top: 8px;
+            margin-top: 10px;
             margin-bottom: 0;
         }
 
@@ -125,9 +124,9 @@
 
         .info-row {
             display: grid;
-            grid-template-columns: 92px 1fr;
+            grid-template-columns: 110px 1fr;
             border-top: 1px solid #ddd;
-            min-height: 24px;
+            min-height: 28px;
         }
 
         .info-row:nth-child(1),
@@ -138,14 +137,14 @@
         .info-label {
             background: #f7f7f7;
             border-right: 1px solid #ddd;
-            padding: 5px;
+            padding: 7px;
             font-weight: bold;
-            font-size: 8px;
+            font-size: 11px;
         }
 
         .info-value {
-            padding: 5px;
-            font-size: 8px;
+            padding: 7px;
+            font-size: 11px;
         }
 
         table {
@@ -158,21 +157,20 @@
         th {
             background: #efefef;
             border: 1px solid #111;
-            padding: 3px 2px;
+            padding: 5px 3px;
             text-align: center;
-            font-size: 6.6px;
-            line-height: 1.1;
+            font-size: 9px;
+            line-height: 1.15;
             text-transform: uppercase;
             vertical-align: middle;
-            overflow-wrap: anywhere;
         }
 
         td {
             border: 1px solid #111;
-            padding: 3px 2px;
+            padding: 5px 4px;
             vertical-align: top;
-            font-size: 7px;
-            line-height: 1.15;
+            font-size: 9px;
+            line-height: 1.2;
             overflow-wrap: anywhere;
         }
 
@@ -189,39 +187,63 @@
         }
 
         .detail-description {
-            font-size: 6.8px;
-            line-height: 1.15;
+            font-size: 9px;
+            line-height: 1.2;
         }
 
         .detail-description small {
-            font-size: 6.3px;
+            font-size: 8px;
+        }
+
+        .amount-cell {
+            text-align: center;
+            line-height: 1.3;
+        }
+
+        .amount-cell .percentage {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        .amount-cell .amount {
+            display: block;
+            font-size: 8.5px;
+            white-space: nowrap;
+        }
+
+        .discount-amount {
+            color: #a61b1b;
+        }
+
+        .tax-amount {
+            color: #08783e;
         }
 
         .totals-wrapper {
             display: grid;
-            grid-template-columns: 1fr 205px;
-            gap: 7px;
-            margin-top: 7px;
+            grid-template-columns: 1fr 240px;
+            gap: 10px;
+            margin-top: 10px;
         }
 
         .notes-box {
             border: 1px solid #111;
-            min-height: 82px;
+            min-height: 100px;
         }
 
         .notes-title {
             background: #efefef;
             border-bottom: 1px solid #111;
-            padding: 4px 6px;
+            padding: 5px 7px;
             font-weight: bold;
-            font-size: 8px;
             text-transform: uppercase;
         }
 
         .notes-body {
-            padding: 6px;
+            padding: 8px;
             white-space: pre-wrap;
-            font-size: 8px;
+            font-size: 10px;
         }
 
         .totals-table {
@@ -229,8 +251,8 @@
         }
 
         .totals-table td {
-            padding: 4px;
-            font-size: 8px;
+            padding: 6px;
+            font-size: 10px;
         }
 
         .totals-table .label {
@@ -248,40 +270,40 @@
         }
 
         .total-final {
-            font-size: 10px !important;
+            font-size: 13px !important;
             font-weight: bold;
         }
 
         .approval-note {
-            margin-top: 8px;
+            margin-top: 12px;
             border: 1px solid #111;
-            padding: 6px;
-            font-size: 7.5px;
-            line-height: 1.35;
+            padding: 8px;
+            font-size: 10px;
+            line-height: 1.4;
         }
 
         .signatures {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 22px;
-            margin-top: 35px;
+            gap: 28px;
+            margin-top: 42px;
         }
 
         .signature-box {
             text-align: center;
-            font-size: 8px;
+            font-size: 11px;
         }
 
         .signature-line {
             border-top: 1px solid #111;
-            padding-top: 5px;
+            padding-top: 7px;
             font-weight: bold;
         }
 
         .footer {
-            margin-top: 12px;
+            margin-top: 18px;
             text-align: center;
-            font-size: 6.8px;
+            font-size: 9px;
             color: #555;
         }
 
@@ -290,11 +312,8 @@
                 display: none;
             }
 
-            html,
             body {
-                width: 100%;
                 margin: 0;
-                padding: 0;
             }
 
             .sheet {
@@ -565,51 +584,43 @@
             <thead>
                 <tr>
 
-                    <th style="width: 3%;">
+                    <th style="width: 4%;">
                         N.º
                     </th>
 
-                    <th style="width: 8%;">
+                    <th style="width: 9%;">
                         Código
                     </th>
 
-                    <th style="width: 21%;">
+                    <th style="width: 24%;">
                         Descripción
                     </th>
 
-                    <th style="width: 7%;">
-                        Cant.
+                    <th style="width: 8%;">
+                        Cantidad
                     </th>
 
-                    <th style="width: 7%;">
+                    <th style="width: 8%;">
                         Unidad
                     </th>
 
-                    <th style="width: 8%;">
+                    <th style="width: 10%;">
                         Precio<br>unit.
                     </th>
 
-                    <th style="width: 6%;">
-                        Desc.<br>%
+                    <th style="width: 9%;">
+                        Descuento
                     </th>
 
                     <th style="width: 9%;">
-                        Monto<br>desc.
+                        IVA
                     </th>
 
-                    <th style="width: 6%;">
-                        IVA<br>%
-                    </th>
-
-                    <th style="width: 8%;">
-                        Monto<br>IVA
-                    </th>
-
-                    <th style="width: 8%;">
+                    <th style="width: 10%;">
                         Subtotal
                     </th>
 
-                    <th style="width: 9%;">
+                    <th style="width: 10%;">
                         Total
                     </th>
 
@@ -754,43 +765,54 @@
                         </td>
 
 
-                        <td class="text-center">
-                            {{
-                                "{:,.2f}".format(
-                                    line.discount_pct
-                                    or 0
-                                )
-                            }}%
+                        <td class="amount-cell">
+
+                            <span class="percentage">
+                                {{
+                                    "{:,.2f}".format(
+                                        line.discount_pct
+                                        or 0
+                                    )
+                                }}%
+                            </span>
+
+                            <span
+                                class="amount discount-amount"
+                            >
+                                -
+                                {{
+                                    "{:,.2f}".format(
+                                        descuento_linea
+                                        or 0
+                                    )
+                                }}
+                            </span>
+
                         </td>
 
 
-                        <td class="text-right">
-                            {{
-                                "{:,.2f}".format(
-                                    descuento_linea
-                                    or 0
-                                )
-                            }}
-                        </td>
+                        <td class="amount-cell">
 
+                            <span class="percentage">
+                                {{
+                                    "{:,.2f}".format(
+                                        line.tax_pct
+                                        or 0
+                                    )
+                                }}%
+                            </span>
 
-                        <td class="text-center">
-                            {{
-                                "{:,.2f}".format(
-                                    line.tax_pct
-                                    or 0
-                                )
-                            }}%
-                        </td>
+                            <span
+                                class="amount tax-amount"
+                            >
+                                {{
+                                    "{:,.2f}".format(
+                                        iva_linea
+                                        or 0
+                                    )
+                                }}
+                            </span>
 
-
-                        <td class="text-right">
-                            {{
-                                "{:,.2f}".format(
-                                    iva_linea
-                                    or 0
-                                )
-                            }}
                         </td>
 
 
@@ -823,7 +845,7 @@
                     <tr>
 
                         <td
-                            colspan="12"
+                            colspan="10"
                             class="text-center"
                         >
                             No hay líneas registradas.
@@ -947,10 +969,12 @@
 
 
         <div class="approval-note">
-            Esta orden de compra queda sujeta a revisión y aprobación
-            interna. Para considerarse aprobada en el sistema, debe
-            imprimirse, firmarse físicamente y adjuntarse el PDF firmado
-            en el detalle de la orden.
+
+            Esta orden de compra queda sujeta a revisión y
+            aprobación interna. Para considerarse aprobada en el
+            sistema, debe imprimirse, firmarse físicamente y
+            adjuntarse el PDF firmado en el detalle de la orden.
+
         </div>
 
 
