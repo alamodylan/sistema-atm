@@ -31,7 +31,7 @@ class WorkOrder(db.Model):
 
     status = db.Column(db.String(20), nullable=False, default="EN_PROCESO", index=True)
     # Valores oficiales:
-    # EN_PROCESO, FINALIZADA, CERRADA
+    # EN_PROCESO, FINALIZADA, CERRADA, ANULADA
 
     site_id = db.Column(
         db.BigInteger,
@@ -81,6 +81,25 @@ class WorkOrder(db.Model):
     finalized_at = db.Column(db.DateTime(timezone=True), nullable=True)
     closed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
+    # NUEVO: datos de anulación
+    cancelled_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    cancelled_by_user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("atm.users.id"),
+        nullable=True,
+        index=True,
+    )
+
+    cancel_reason = db.Column(
+        db.Text,
+        nullable=True,
+    )
+
     site = db.relationship("Site", back_populates="work_orders")
     warehouse = db.relationship("Warehouse", back_populates="work_orders")
 
@@ -94,6 +113,11 @@ class WorkOrder(db.Model):
         "User",
         foreign_keys=[created_by_user_id],
         back_populates="created_work_orders",
+    )
+
+    cancelled_by_user = db.relationship(
+        "User",
+        foreign_keys=[cancelled_by_user_id],
     )
 
     equipment = db.relationship("Equipment", back_populates="work_orders")

@@ -323,3 +323,176 @@ def close_work_order(
         db.session.commit()
 
     return work_order
+
+def cancel_work_order(
+    *,
+    work_order_id: int,
+    performed_by_user_id: int,
+    reason: str,
+    commit: bool = True,
+) -> WorkOrder:
+    work_order = db.session.get(
+        WorkOrder,
+        work_order_id,
+    )
+
+    if not work_order:
+        raise WorkOrderServiceError(
+            "La OT no existe."
+        )
+
+    # =====================================================
+    # VALIDAR ESTADO
+    # =====================================================
+
+    if work_order.status == "ANULADA":
+        raise WorkOrderServiceError(
+            "La OT ya se encuentra anulada."
+        )
+
+    # =====================================================
+    # VALIDAR MOTIVO
+    # =====================================================
+
+    clean_reason = (
+        reason
+        or ""
+    ).strip()
+
+    if not clean_reason:
+        raise WorkOrderServiceError(
+            "Debe indicar el motivo de la anulación."
+        )
+
+    # =====================================================
+    # NO PERMITIR ANULAR SI TIENE ARTÍCULOS
+    # =====================================================
+
+    existing_article = (
+        db.session.query(
+            WorkOrderLine.id
+        )
+        .filter(
+            WorkOrderLine.work_order_id
+            == work_order.id,
+
+            WorkOrderLine.line_status
+            == "ACTIVE",
+        )
+        .limit(1)
+        .first()
+    )
+
+    if existing_article:
+        raise WorkOrderServiceError(
+            "No se puede anular la OT porque "
+            "tiene artículos agregados o consumidos."
+        )
+
+    # =====================================================
+    # NO PERMITIR SI HAY SOLICITUDES PENDIENTES
+    #
+    # La cabecera ABIERTA / ENVIADA bloquea.
+    # =====================================================
+
+    pending_request = (
+        db.session.query(
+            WorkOrderRequest.id
+        )
+        .filter(
+            WorkOrderRequest.work_order_id
+            == work_order.id,
+
+            WorkOrderRequest.request_status.in_(
+                (
+                    "ABIERTA",
+                    "ENVIADA",
+                )
+            ),
+        )
+        .limit(1)
+        .first()
+    )
+
+    if pending_request:
+        raise WorkOrderServiceError(
+            "No se puede anular la OT porque "
+            "tiene solicitudes de artículos pendientes."
+        )
+
+    # =====================================================
+    # VALIDACIÓN EXTRA A NIVEL DE LÍNEA
+    #
+    # Evita anular una OT si la cabecera quedó mal
+    # sincronizada pero alguna línea sigue pendiente.
+    # =====================================================
+
+    pending_request_line = (
+        db.session.query(
+            WorkOrderRequestLine.id
+        )
+        .join(
+            WorkOrderRequest,
+            WorkOrderRequest.id
+            == WorkOrderRequestLine.work_order_request_id,
+        )
+        .filter(
+            WorkOrderRequest.work_order_id
+            == work_order.id,
+
+            WorkOrderRequestLine.line_status.notin_(
+                (
+                    "ENTREGADA",
+                    "NO_ENTREGADA",
+                    "CANCELADA",
+                    "PRESTADA",
+                )
+            ),
+        )
+        .limit(1)
+        .first()
+    )
+
+    if pending_request_line:
+        raise WorkOrderServiceError(
+            "No se puede anular la OT porque "
+            "tiene líneas de solicitud pendientes."
+        )
+
+    # =====================================================
+    # ANULAR
+    # =====================================================
+
+    now = datetime.now(UTC)
+
+    previous_status = work_order.status
+
+    work_order.status = "ANULADA"
+    work_order.cancelled_at = now
+    work_order.cancelled_by_user_id = (
+        performed_by_user_id
+    )
+    work_order.cancel_reason = clean_reason
+
+    # =====================================================
+    # AUDITORÍA
+    # =====================================================
+
+    log_action(
+        user_id=performed_by_user_id,
+        action="CANCEL_WORK_ORDER",
+        table_name="work_orders",
+        record_id=str(work_order.id),
+        details={
+            "number": work_order.number,
+            "previous_status": previous_status,
+            "status": "ANULADA",
+            "reason": clean_reason,
+        },
+        commit=False,
+    )
+
+    if commit:
+        db.session.commit()
+
+    return work_order

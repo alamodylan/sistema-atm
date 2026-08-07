@@ -29,6 +29,7 @@ from flask import jsonify
 from app.models.equipment_type import EquipmentType
 from app.services.work_order_service import (
     WorkOrderServiceError,
+    cancel_work_order,
     close_work_order,
     create_work_order,
     finalize_work_order,
@@ -1321,6 +1322,59 @@ def close_work_order_action(work_order_id: int):
 
     return redirect(url_for("work_orders.get_work_order", work_order_id=work_order_id))
 
+# =========================================================
+# ANULAR OT
+# =========================================================
+@work_order_bp.route("/<int:work_order_id>/cancel", methods=["POST"])
+@login_required
+@permission_required("ot_anular")
+def cancel_work_order_action(work_order_id: int):
+    try:
+        reason = (
+            request.form.get("reason")
+            or ""
+        ).strip()
+
+        cancel_work_order(
+            work_order_id=work_order_id,
+            performed_by_user_id=current_user.id,
+            reason=reason,
+            commit=True,
+        )
+
+        flash(
+            "Orden de trabajo anulada correctamente.",
+            "success",
+        )
+
+    except WorkOrderServiceError as exc:
+        db.session.rollback()
+
+        flash(
+            str(exc),
+            "danger",
+        )
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            f"[CANCEL OT ERROR] "
+            f"work_order_id={work_order_id} "
+            f"error={exc}"
+        )
+
+        flash(
+            "Error interno al anular la OT.",
+            "danger",
+        )
+
+    return redirect(
+        url_for(
+            "work_orders.get_work_order",
+            work_order_id=work_order_id,
+        )
+    )
 
 # =========================================================
 # IMPRESIÓN OT
