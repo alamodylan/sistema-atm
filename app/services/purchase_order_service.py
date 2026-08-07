@@ -14,6 +14,12 @@ from app.models.purchase_order_line import PurchaseOrderLine
 from app.models.purchase_request import PurchaseRequest
 from app.models.purchase_request_line import PurchaseRequestLine
 from app.models.quotation_line import QuotationLine
+from app.models.article import Article
+from app.models.pending_article import PendingArticle
+from app.models.supplier import Supplier
+from app.models.site import Site
+from app.models.unit import Unit
+from app.models.warehouse import Warehouse
 
 
 class PurchaseOrderServiceError(Exception):
@@ -720,6 +726,571 @@ def create_purchase_order(
             "No fue posible generar la orden de compra."
         ) from exc
 
+
+def create_manual_purchase_order(
+    *,
+    supplier_id: int,
+    generated_by_user_id: int,
+    warehouse_id: int | None,
+    site_id: int | None,
+    currency_code: str,
+    payment_terms: str | None,
+    notes: str | None,
+    lines: list[dict],
+) -> PurchaseOrder:
+    """
+    Crea una orden de compra manual sin cotización ni solicitud.
+
+    No utiliza:
+    - PurchaseRequest
+    - PurchaseRequestLine
+    - QuotationLine
+    - PurchaseOrderCandidate
+
+    Cada línea debe contener:
+
+        {
+            "article_id": 1,
+            "pending_article_id": None,
+            "quantity": "5",
+            "unit_id": 1,
+            "unit_cost": "1200",
+            "discount_pct": "0",
+            "tax_pct": "13",
+            "notes": "Opcional"
+        }
+    """
+
+    if not generated_by_user_id:
+        raise PurchaseOrderServiceError(
+            "No se pudo identificar el usuario que genera la orden."
+        )
+
+    try:
+        supplier_id = int(supplier_id)
+
+    except (TypeError, ValueError) as exc:
+        raise PurchaseOrderServiceError(
+            "El proveedor seleccionado no es válido."
+        ) from exc
+
+    if supplier_id <= 0:
+        raise PurchaseOrderServiceError(
+            "Debe seleccionar un proveedor."
+        )
+
+    supplier = (
+        Supplier.query
+        .filter(
+            Supplier.id == supplier_id,
+            Supplier.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if not supplier:
+        raise PurchaseOrderServiceError(
+            "El proveedor seleccionado no existe o está inactivo."
+        )
+
+    normalized_site_id = None
+
+    if site_id not in {None, ""}:
+        try:
+            normalized_site_id = int(site_id)
+
+        except (TypeError, ValueError) as exc:
+            raise PurchaseOrderServiceError(
+                "El predio seleccionado no es válido."
+            ) from exc
+
+        site = (
+            Site.query
+            .filter(
+                Site.id == normalized_site_id,
+                Site.is_active.is_(True),
+            )
+            .first()
+        )
+
+        if not site:
+            raise PurchaseOrderServiceError(
+                "El predio seleccionado no existe o está inactivo."
+            )
+
+    normalized_warehouse_id = None
+
+    if warehouse_id not in {None, ""}:
+        try:
+            normalized_warehouse_id = int(
+                warehouse_id
+            )
+
+        except (TypeError, ValueError) as exc:
+            raise PurchaseOrderServiceError(
+                "La bodega seleccionada no es válida."
+            ) from exc
+
+        warehouse = (
+            Warehouse.query
+            .filter(
+                Warehouse.id
+                == normalized_warehouse_id,
+                Warehouse.is_active.is_(True),
+            )
+            .first()
+        )
+
+        if not warehouse:
+            raise PurchaseOrderServiceError(
+                "La bodega seleccionada no existe o está inactiva."
+            )
+
+        if (
+            normalized_site_id
+            and warehouse.site_id
+            and warehouse.site_id
+            != normalized_site_id
+        ):
+            raise PurchaseOrderServiceError(
+                "La bodega seleccionada no corresponde al predio indicado."
+            )
+
+    normalized_currency_code = (
+        currency_code
+        or "CRC"
+    ).strip().upper()
+
+    if normalized_currency_code not in {
+        "CRC",
+        "USD",
+        "EUR",
+    }:
+        raise PurchaseOrderServiceError(
+            "La moneda seleccionada no es válida."
+        )
+
+    normalized_payment_terms = (
+        payment_terms
+        or ""
+    ).strip() or None
+
+    normalized_notes = (
+        notes
+        or ""
+    ).strip() or None
+
+    if not isinstance(lines, list) or not lines:
+        raise PurchaseOrderServiceError(
+            "Debe agregar al menos una línea a la orden."
+        )
+
+    normalized_lines = []
+
+    article_ids = set()
+    pending_article_ids = set()
+    unit_ids = set()
+
+    for index, raw_line in enumerate(
+        lines,
+        start=1,
+    ):
+        if not isinstance(raw_line, dict):
+            raise PurchaseOrderServiceError(
+                f"La línea {index} no es válida."
+            )
+
+        article_id = raw_line.get(
+            "article_id"
+        )
+
+        pending_article_id = raw_line.get(
+            "pending_article_id"
+        )
+
+        selected_sources = sum(
+            [
+                bool(article_id),
+                bool(pending_article_id),
+            ]
+        )
+
+        if selected_sources != 1:
+            raise PurchaseOrderServiceError(
+                f"La línea {index} debe tener un artículo "
+                "existente o pendiente, pero no ambos."
+            )
+
+        normalized_article_id = None
+
+        if article_id:
+            try:
+                normalized_article_id = int(
+                    article_id
+                )
+
+            except (TypeError, ValueError) as exc:
+                raise PurchaseOrderServiceError(
+                    f"El artículo de la línea {index} no es válido."
+                ) from exc
+
+            article_ids.add(
+                normalized_article_id
+            )
+
+        normalized_pending_article_id = None
+
+        if pending_article_id:
+            try:
+                normalized_pending_article_id = int(
+                    pending_article_id
+                )
+
+            except (TypeError, ValueError) as exc:
+                raise PurchaseOrderServiceError(
+                    f"El artículo pendiente de la línea "
+                    f"{index} no es válido."
+                ) from exc
+
+            pending_article_ids.add(
+                normalized_pending_article_id
+            )
+
+        try:
+            quantity = _normalize_decimal(
+                raw_line.get("quantity"),
+                f"cantidad de la línea {index}",
+            )
+
+            unit_cost = _normalize_decimal(
+                raw_line.get("unit_cost"),
+                f"precio unitario de la línea {index}",
+            )
+
+            discount_pct = _normalize_decimal(
+                raw_line.get(
+                    "discount_pct",
+                    0,
+                ),
+                f"descuento de la línea {index}",
+            )
+
+            tax_pct = _normalize_decimal(
+                raw_line.get(
+                    "tax_pct",
+                    0,
+                ),
+                f"impuesto de la línea {index}",
+            )
+
+        except PurchaseOrderServiceError:
+            raise
+
+        if quantity <= 0:
+            raise PurchaseOrderServiceError(
+                f"La cantidad de la línea {index} "
+                "debe ser mayor que cero."
+            )
+
+        if unit_cost <= 0:
+            raise PurchaseOrderServiceError(
+                f"El precio unitario de la línea {index} "
+                "debe ser mayor que cero."
+            )
+
+        if (
+            discount_pct < 0
+            or discount_pct > 100
+        ):
+            raise PurchaseOrderServiceError(
+                f"El descuento de la línea {index} "
+                "debe estar entre 0 y 100."
+            )
+
+        if tax_pct < 0:
+            raise PurchaseOrderServiceError(
+                f"El impuesto de la línea {index} "
+                "no puede ser negativo."
+            )
+
+        unit_id = raw_line.get(
+            "unit_id"
+        )
+
+        normalized_unit_id = None
+
+        if unit_id not in {None, ""}:
+            try:
+                normalized_unit_id = int(
+                    unit_id
+                )
+
+            except (TypeError, ValueError) as exc:
+                raise PurchaseOrderServiceError(
+                    f"La unidad de la línea {index} "
+                    "no es válida."
+                ) from exc
+
+            unit_ids.add(
+                normalized_unit_id
+            )
+
+        line_subtotal = (
+            quantity * unit_cost
+        )
+
+        discount_amount = (
+            line_subtotal
+            * (
+                discount_pct
+                / Decimal("100")
+            )
+        )
+
+        taxable_base = (
+            line_subtotal
+            - discount_amount
+        )
+
+        tax_amount = (
+            taxable_base
+            * (
+                tax_pct
+                / Decimal("100")
+            )
+        )
+
+        line_total = (
+            taxable_base
+            + tax_amount
+        )
+
+        normalized_lines.append(
+            {
+                "article_id": (
+                    normalized_article_id
+                ),
+                "pending_article_id": (
+                    normalized_pending_article_id
+                ),
+                "quantity": quantity,
+                "unit_id": (
+                    normalized_unit_id
+                ),
+                "unit_cost": unit_cost,
+                "discount_pct": discount_pct,
+                "tax_pct": tax_pct,
+                "line_subtotal": (
+                    line_subtotal
+                ),
+                "line_total": (
+                    line_total
+                ),
+                "notes": (
+                    raw_line.get("notes")
+                    or ""
+                ).strip() or None,
+            }
+        )
+
+    existing_article_ids = set()
+
+    if article_ids:
+        existing_article_ids = {
+            row.id
+            for row in (
+                Article.query
+                .filter(
+                    Article.id.in_(
+                        article_ids
+                    ),
+                    Article.is_active.is_(True),
+                )
+                .all()
+            )
+        }
+
+        missing_article_ids = (
+            article_ids
+            - existing_article_ids
+        )
+
+        if missing_article_ids:
+            raise PurchaseOrderServiceError(
+                "Uno de los artículos seleccionados "
+                "no existe o está inactivo."
+            )
+
+    if pending_article_ids:
+        existing_pending_ids = {
+            row.id
+            for row in (
+                PendingArticle.query
+                .filter(
+                    PendingArticle.id.in_(
+                        pending_article_ids
+                    )
+                )
+                .all()
+            )
+        }
+
+        missing_pending_ids = (
+            pending_article_ids
+            - existing_pending_ids
+        )
+
+        if missing_pending_ids:
+            raise PurchaseOrderServiceError(
+                "Uno de los artículos pendientes "
+                "seleccionados no existe."
+            )
+
+    if unit_ids:
+        existing_unit_ids = {
+            row.id
+            for row in (
+                Unit.query
+                .filter(
+                    Unit.id.in_(
+                        unit_ids
+                    )
+                )
+                .all()
+            )
+        }
+
+        missing_unit_ids = (
+            unit_ids
+            - existing_unit_ids
+        )
+
+        if missing_unit_ids:
+            raise PurchaseOrderServiceError(
+                "Una de las unidades seleccionadas no existe."
+            )
+
+    try:
+        now = datetime.now(UTC)
+
+        purchase_order = PurchaseOrder(
+            number=_generate_purchase_order_number(),
+            purchase_request_id=None,
+            supplier_id=supplier_id,
+            site_id=normalized_site_id,
+            warehouse_id=(
+                normalized_warehouse_id
+            ),
+            generated_by_user_id=(
+                generated_by_user_id
+            ),
+            approval_status=(
+                "PENDIENTE_APROBACION"
+            ),
+            submitted_for_approval_at=now,
+            payment_terms=(
+                normalized_payment_terms
+            ),
+            currency_code=(
+                normalized_currency_code
+            ),
+            notes=normalized_notes,
+        )
+
+        db.session.add(
+            purchase_order
+        )
+
+        db.session.flush()
+
+        for line_data in normalized_lines:
+            purchase_order_line = (
+                PurchaseOrderLine(
+                    purchase_order_id=(
+                        purchase_order.id
+                    ),
+                    purchase_request_line_id=None,
+                    quotation_line_id=None,
+                    article_id=(
+                        line_data[
+                            "article_id"
+                        ]
+                    ),
+                    pending_article_id=(
+                        line_data[
+                            "pending_article_id"
+                        ]
+                    ),
+                    quantity_ordered=(
+                        line_data[
+                            "quantity"
+                        ]
+                    ),
+                    quantity_received=(
+                        Decimal("0")
+                    ),
+                    unit_id=(
+                        line_data[
+                            "unit_id"
+                        ]
+                    ),
+                    unit_cost=(
+                        line_data[
+                            "unit_cost"
+                        ]
+                    ),
+                    discount_pct=(
+                        line_data[
+                            "discount_pct"
+                        ]
+                    ),
+                    tax_pct=(
+                        line_data[
+                            "tax_pct"
+                        ]
+                    ),
+                    line_subtotal=(
+                        line_data[
+                            "line_subtotal"
+                        ]
+                    ),
+                    line_total=(
+                        line_data[
+                            "line_total"
+                        ]
+                    ),
+                    line_notes=(
+                        line_data[
+                            "notes"
+                        ]
+                    ),
+                )
+            )
+
+            db.session.add(
+                purchase_order_line
+            )
+
+        db.session.commit()
+
+        return purchase_order
+
+    except PurchaseOrderServiceError:
+        db.session.rollback()
+        raise
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[CREATE MANUAL PURCHASE ORDER ERROR] "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        raise PurchaseOrderServiceError(
+            "No fue posible crear la orden "
+            "de compra manual."
+        ) from exc
 
 def list_purchase_orders(
     *,

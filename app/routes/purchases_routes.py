@@ -71,6 +71,7 @@ from app.services.pending_article_service import (
 from app.services.purchase_order_service import (
     PurchaseOrderServiceError,
     create_purchase_order,
+    create_manual_purchase_order,
     get_purchase_order_or_404,
     list_purchase_orders,
     register_purchase_order_approval,
@@ -3793,14 +3794,587 @@ def create_order_quotation_groups_partial():
             ),
         }, 500
 
-@purchases_bp.route("/orders/create/manual", methods=["GET", "POST"])
+@purchases_bp.route(
+    "/orders/create/manual",
+    methods=["GET", "POST"],
+)
 @login_required
 def create_order_manual():
-    flash(
-        "Módulo manual pendiente de separar. Por ahora use la creación desde cotización.",
-        "warning",
+    """
+    Crea una orden de compra manual sin solicitud de compra,
+    cotización ni candidato de pre-OC.
+
+    La orden se crea directamente en:
+
+    - atm.purchase_orders
+    - atm.purchase_order_lines
+
+    El flujo normal desde cotización permanece intacto.
+    """
+
+    suppliers = (
+        Supplier.query
+        .filter(
+            Supplier.is_active.is_(True)
+        )
+        .order_by(
+            Supplier.commercial_name.asc(),
+            Supplier.legal_name.asc(),
+            Supplier.id.asc(),
+        )
+        .limit(500)
+        .all()
     )
-    return redirect(url_for("purchases.create_order"))
+
+    sites = (
+        Site.query
+        .filter(
+            Site.is_active.is_(True)
+        )
+        .order_by(
+            Site.name.asc(),
+            Site.id.asc(),
+        )
+        .all()
+    )
+
+    warehouses = (
+        Warehouse.query
+        .filter(
+            Warehouse.is_active.is_(True)
+        )
+        .order_by(
+            Warehouse.name.asc(),
+            Warehouse.id.asc(),
+        )
+        .all()
+    )
+
+    units = (
+        Unit.query
+        .order_by(
+            Unit.id.asc()
+        )
+        .all()
+    )
+
+    active_site_id = session.get(
+        "active_site_id"
+    )
+
+    submitted_header = {
+        "supplier_id": "",
+        "site_id": (
+            str(active_site_id)
+            if active_site_id
+            else ""
+        ),
+        "warehouse_id": "",
+        "currency_code": "CRC",
+        "payment_terms": "",
+        "notes": "",
+    }
+
+    submitted_lines = [
+        {
+            "article_id": "",
+            "article_search": "",
+            "pending_article_id": "",
+            "quantity": "",
+            "unit_id": "",
+            "unit_cost": "",
+            "discount_pct": "0",
+            "tax_pct": "13",
+            "notes": "",
+        }
+    ]
+
+    if request.method == "GET":
+        return render_template(
+            "purchases/orders/create_manual.html",
+            suppliers=suppliers,
+            sites=sites,
+            warehouses=warehouses,
+            units=units,
+            submitted_header=submitted_header,
+            submitted_lines=submitted_lines,
+        )
+
+    # =====================================================
+    # 1. RECIBIR ENCABEZADO
+    # =====================================================
+
+    supplier_id_raw = (
+        request.form.get("supplier_id")
+        or ""
+    ).strip()
+
+    site_id_raw = (
+        request.form.get("site_id")
+        or ""
+    ).strip()
+
+    warehouse_id_raw = (
+        request.form.get("warehouse_id")
+        or ""
+    ).strip()
+
+    currency_code = (
+        request.form.get("currency_code")
+        or "CRC"
+    ).strip().upper()
+
+    payment_terms = (
+        request.form.get("payment_terms")
+        or ""
+    ).strip()
+
+    notes = (
+        request.form.get("notes")
+        or ""
+    ).strip()
+
+    submitted_header = {
+        "supplier_id": supplier_id_raw,
+        "site_id": site_id_raw,
+        "warehouse_id": warehouse_id_raw,
+        "currency_code": currency_code,
+        "payment_terms": payment_terms,
+        "notes": notes,
+    }
+
+    # =====================================================
+    # 2. RECIBIR LÍNEAS
+    # =====================================================
+
+    article_ids = request.form.getlist(
+        "line_article_id[]"
+    )
+
+    article_searches = request.form.getlist(
+        "line_article_search[]"
+    )
+
+    pending_article_ids = request.form.getlist(
+        "line_pending_article_id[]"
+    )
+
+    quantities = request.form.getlist(
+        "line_quantity[]"
+    )
+
+    unit_ids = request.form.getlist(
+        "line_unit_id[]"
+    )
+
+    unit_costs = request.form.getlist(
+        "line_unit_cost[]"
+    )
+
+    discount_pcts = request.form.getlist(
+        "line_discount_pct[]"
+    )
+
+    tax_pcts = request.form.getlist(
+        "line_tax_pct[]"
+    )
+
+    line_notes_list = request.form.getlist(
+        "line_notes[]"
+    )
+
+    max_len = max(
+        [
+            len(article_ids),
+            len(article_searches),
+            len(pending_article_ids),
+            len(quantities),
+            len(unit_ids),
+            len(unit_costs),
+            len(discount_pcts),
+            len(tax_pcts),
+            len(line_notes_list),
+        ],
+        default=0,
+    )
+
+    submitted_lines = []
+
+    for index in range(max_len):
+        article_id_raw = (
+            article_ids[index].strip()
+            if index < len(article_ids)
+            else ""
+        )
+
+        article_search_raw = (
+            article_searches[index].strip()
+            if index < len(article_searches)
+            else ""
+        )
+
+        pending_article_id_raw = (
+            pending_article_ids[index].strip()
+            if index < len(pending_article_ids)
+            else ""
+        )
+
+        quantity_raw = (
+            quantities[index].strip()
+            if index < len(quantities)
+            else ""
+        )
+
+        unit_id_raw = (
+            unit_ids[index].strip()
+            if index < len(unit_ids)
+            else ""
+        )
+
+        unit_cost_raw = (
+            unit_costs[index].strip()
+            if index < len(unit_costs)
+            else ""
+        )
+
+        discount_pct_raw = (
+            discount_pcts[index].strip()
+            if index < len(discount_pcts)
+            else "0"
+        )
+
+        tax_pct_raw = (
+            tax_pcts[index].strip()
+            if index < len(tax_pcts)
+            else "13"
+        )
+
+        line_notes = (
+            line_notes_list[index].strip()
+            if index < len(line_notes_list)
+            else ""
+        )
+
+        row = {
+            "article_id": article_id_raw,
+            "article_search": article_search_raw,
+            "pending_article_id": pending_article_id_raw,
+            "quantity": quantity_raw,
+            "unit_id": unit_id_raw,
+            "unit_cost": unit_cost_raw,
+            "discount_pct": (
+                discount_pct_raw or "0"
+            ),
+            "tax_pct": (
+                tax_pct_raw or "0"
+            ),
+            "notes": line_notes,
+        }
+
+        # Ignorar únicamente filas totalmente vacías.
+        if not any(
+            [
+                article_id_raw,
+                article_search_raw,
+                pending_article_id_raw,
+                quantity_raw,
+                unit_id_raw,
+                unit_cost_raw,
+                line_notes,
+            ]
+        ):
+            continue
+
+        submitted_lines.append(
+            row
+        )
+
+    if not submitted_lines:
+        submitted_lines = [
+            {
+                "article_id": "",
+                "article_search": "",
+                "pending_article_id": "",
+                "quantity": "",
+                "unit_id": "",
+                "unit_cost": "",
+                "discount_pct": "0",
+                "tax_pct": "13",
+                "notes": "",
+            }
+        ]
+
+        flash(
+            "Debe agregar al menos un artículo a la orden.",
+            "danger",
+        )
+
+        return render_template(
+            "purchases/orders/create_manual.html",
+            suppliers=suppliers,
+            sites=sites,
+            warehouses=warehouses,
+            units=units,
+            submitted_header=submitted_header,
+            submitted_lines=submitted_lines,
+        )
+
+    # =====================================================
+    # 3. NORMALIZAR ENCABEZADO
+    # =====================================================
+
+    try:
+        supplier_id = (
+            int(supplier_id_raw)
+            if supplier_id_raw
+            else None
+        )
+
+        site_id = (
+            int(site_id_raw)
+            if site_id_raw
+            else None
+        )
+
+        warehouse_id = (
+            int(warehouse_id_raw)
+            if warehouse_id_raw
+            else None
+        )
+
+    except ValueError:
+        flash(
+            "El proveedor, predio o bodega seleccionado no es válido.",
+            "danger",
+        )
+
+        return render_template(
+            "purchases/orders/create_manual.html",
+            suppliers=suppliers,
+            sites=sites,
+            warehouses=warehouses,
+            units=units,
+            submitted_header=submitted_header,
+            submitted_lines=submitted_lines,
+        )
+
+    if not supplier_id:
+        flash(
+            "Debe seleccionar un proveedor.",
+            "danger",
+        )
+
+        return render_template(
+            "purchases/orders/create_manual.html",
+            suppliers=suppliers,
+            sites=sites,
+            warehouses=warehouses,
+            units=units,
+            submitted_header=submitted_header,
+            submitted_lines=submitted_lines,
+        )
+
+    if not warehouse_id:
+        flash(
+            "Debe seleccionar la bodega que recibirá la compra.",
+            "danger",
+        )
+
+        return render_template(
+            "purchases/orders/create_manual.html",
+            suppliers=suppliers,
+            sites=sites,
+            warehouses=warehouses,
+            units=units,
+            submitted_header=submitted_header,
+            submitted_lines=submitted_lines,
+        )
+
+    # =====================================================
+    # 4. CONSTRUIR PAYLOAD PARA EL SERVICIO
+    # =====================================================
+
+    lines = []
+
+    for index, row in enumerate(
+        submitted_lines,
+        start=1,
+    ):
+        try:
+            article_id = (
+                int(row["article_id"])
+                if row["article_id"]
+                else None
+            )
+
+            pending_article_id = (
+                int(row["pending_article_id"])
+                if row["pending_article_id"]
+                else None
+            )
+
+            unit_id = (
+                int(row["unit_id"])
+                if row["unit_id"]
+                else None
+            )
+
+        except ValueError:
+            flash(
+                f"Los datos del artículo en la línea {index} no son válidos.",
+                "danger",
+            )
+
+            return render_template(
+                "purchases/orders/create_manual.html",
+                suppliers=suppliers,
+                sites=sites,
+                warehouses=warehouses,
+                units=units,
+                submitted_header=submitted_header,
+                submitted_lines=submitted_lines,
+            )
+
+        if not article_id and not pending_article_id:
+            flash(
+                f"Debe seleccionar un artículo en la línea {index}.",
+                "danger",
+            )
+
+            return render_template(
+                "purchases/orders/create_manual.html",
+                suppliers=suppliers,
+                sites=sites,
+                warehouses=warehouses,
+                units=units,
+                submitted_header=submitted_header,
+                submitted_lines=submitted_lines,
+            )
+
+        if article_id and pending_article_id:
+            flash(
+                f"La línea {index} no puede contener un artículo "
+                "existente y uno pendiente al mismo tiempo.",
+                "danger",
+            )
+
+            return render_template(
+                "purchases/orders/create_manual.html",
+                suppliers=suppliers,
+                sites=sites,
+                warehouses=warehouses,
+                units=units,
+                submitted_header=submitted_header,
+                submitted_lines=submitted_lines,
+            )
+
+        lines.append(
+            {
+                "article_id": article_id,
+                "pending_article_id": (
+                    pending_article_id
+                ),
+                "quantity": row["quantity"],
+                "unit_id": unit_id,
+                "unit_cost": row["unit_cost"],
+                "discount_pct": (
+                    row["discount_pct"]
+                    or "0"
+                ),
+                "tax_pct": (
+                    row["tax_pct"]
+                    or "0"
+                ),
+                "notes": (
+                    row["notes"]
+                    or None
+                ),
+            }
+        )
+
+    # =====================================================
+    # 5. CREAR OC MANUAL
+    # =====================================================
+
+    try:
+        purchase_order = (
+            create_manual_purchase_order(
+                supplier_id=supplier_id,
+                generated_by_user_id=(
+                    current_user.id
+                ),
+                warehouse_id=warehouse_id,
+                site_id=site_id,
+                currency_code=currency_code,
+                payment_terms=(
+                    payment_terms
+                    or None
+                ),
+                notes=notes or None,
+                lines=lines,
+            )
+        )
+
+    except PurchaseOrderServiceError as exc:
+        db.session.rollback()
+
+        flash(
+            str(exc),
+            "danger",
+        )
+
+        flash(
+            "La orden no fue creada. "
+            "Los datos ingresados se conservaron.",
+            "warning",
+        )
+
+        return render_template(
+            "purchases/orders/create_manual.html",
+            suppliers=suppliers,
+            sites=sites,
+            warehouses=warehouses,
+            units=units,
+            submitted_header=submitted_header,
+            submitted_lines=submitted_lines,
+        )
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print(
+            "[CREATE MANUAL PURCHASE ORDER ROUTE ERROR] "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        flash(
+            "Ocurrió un error inesperado al crear "
+            "la orden de compra manual.",
+            "danger",
+        )
+
+        return render_template(
+            "purchases/orders/create_manual.html",
+            suppliers=suppliers,
+            sites=sites,
+            warehouses=warehouses,
+            units=units,
+            submitted_header=submitted_header,
+            submitted_lines=submitted_lines,
+        )
+
+    flash(
+        "Orden de compra manual creada correctamente "
+        "y enviada a aprobación.",
+        "success",
+    )
+
+    return redirect(
+        url_for(
+            "purchases.order_print",
+            order_id=purchase_order.id,
+        )
+    )
 
 @purchases_bp.route("/orders/<int:order_id>")
 @login_required

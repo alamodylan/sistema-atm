@@ -1,0 +1,1063 @@
+{% extends 'base.html' %}
+
+{% block title %}Nueva OC manual | Sistema de Bodega{% endblock %}
+
+{% block extra_css %}
+<style>
+    .manual-order-page {
+        max-width: 1450px;
+        margin: 0 auto;
+    }
+
+    .manual-order-hero {
+        border-radius: 1.35rem;
+        padding: 1.3rem;
+        color: #fff;
+        background: linear-gradient(135deg, #003b7a, #0d6efd);
+        box-shadow: 0 14px 34px rgba(0, 59, 122, .18);
+    }
+
+    .manual-card {
+        border: 1px solid #e4e9f0;
+        border-radius: 1.15rem;
+        background: #fff;
+        box-shadow: 0 9px 25px rgba(24, 34, 52, .06);
+    }
+
+    .manual-card-header {
+        padding: 1.1rem 1.2rem;
+        border-bottom: 1px solid #e4e9f0;
+    }
+
+    .manual-card-body {
+        padding: 1.2rem;
+    }
+
+    .manual-card .form-control,
+    .manual-card .form-select {
+        min-height: 44px;
+        border-radius: .8rem;
+        border-color: #dfe5ed;
+    }
+
+    .manual-line {
+        position: relative;
+        border: 1px solid #dfe5ed;
+        border-radius: 1rem;
+        padding: 1rem;
+        margin-bottom: .9rem;
+        background: #fbfcfe;
+    }
+
+    .manual-line-number {
+        width: 36px;
+        height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: .8rem;
+        background: #eaf2fb;
+        color: #003b7a;
+        font-weight: 800;
+    }
+
+    .article-search-wrap {
+        position: relative;
+    }
+
+    .article-results {
+        position: absolute;
+        z-index: 1050;
+        left: 0;
+        right: 0;
+        top: calc(100% + 4px);
+        max-height: 280px;
+        overflow-y: auto;
+        border: 1px solid #dfe5ed;
+        border-radius: .8rem;
+        background: #fff;
+        box-shadow: 0 12px 30px rgba(24, 34, 52, .14);
+    }
+
+    .article-result {
+        width: 100%;
+        border: 0;
+        border-bottom: 1px solid #edf0f4;
+        background: #fff;
+        padding: .8rem .9rem;
+        text-align: left;
+    }
+
+    .article-result:hover {
+        background: #f2f7fd;
+    }
+
+    .stock-box,
+    .line-total-box {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        padding: .65rem .75rem;
+        border: 1px solid #dfe5ed;
+        border-radius: .8rem;
+        background: #fff;
+    }
+
+    .summary-card {
+        position: sticky;
+        top: 1rem;
+    }
+
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: .6rem 0;
+        border-bottom: 1px solid #edf0f4;
+    }
+
+    .summary-total {
+        color: #003b7a;
+        font-size: 1.35rem;
+        font-weight: 850;
+    }
+
+    .submit-bar {
+        position: sticky;
+        bottom: 0;
+        z-index: 20;
+        padding: 1rem;
+        border-top: 1px solid #e4e9f0;
+        background: rgba(255, 255, 255, .96);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 -10px 24px rgba(24, 34, 52, .08);
+    }
+
+    @media (max-width: 991.98px) {
+        .summary-card {
+            position: static;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .manual-order-hero,
+        .manual-card-header,
+        .manual-card-body {
+            padding: 1rem;
+        }
+
+        .submit-bar .btn {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="manual-order-page">
+
+    <section class="manual-order-hero mb-4">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+            <div>
+                <div class="small text-uppercase fw-bold text-white-50 mb-1">
+                    Órdenes de compra
+                </div>
+                <h1 class="h3 fw-bold mb-1">Nueva OC manual</h1>
+                <p class="mb-0 text-white-50">
+                    Cree una orden sin solicitud ni cotización previa.
+                </p>
+            </div>
+
+            <a href="{{ url_for('purchases.list_orders') }}"
+               class="btn btn-light rounded-3 fw-semibold">
+                <i class="bi bi-arrow-left me-1"></i>
+                Volver a órdenes
+            </a>
+        </div>
+    </section>
+
+    <form method="POST"
+          action="{{ url_for('purchases.create_order_manual') }}"
+          id="manualOrderForm"
+          novalidate>
+
+        <div class="row g-4">
+            <div class="col-12 col-xl-9">
+
+                <section class="manual-card mb-4">
+                    <div class="manual-card-header">
+                        <div class="small text-primary text-uppercase fw-bold mb-1">
+                            Encabezado
+                        </div>
+                        <h2 class="h5 fw-bold mb-1">Datos generales</h2>
+                        <div class="small text-muted">
+                            Complete proveedor, predio, bodega y condiciones de pago.
+                        </div>
+                    </div>
+
+                    <div class="manual-card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-lg-6">
+                                <label for="supplier_id" class="form-label fw-semibold">
+                                    Proveedor <span class="text-danger">*</span>
+                                </label>
+                                <select id="supplier_id"
+                                        name="supplier_id"
+                                        class="form-select"
+                                        required>
+                                    <option value="">Seleccione un proveedor</option>
+                                    {% for supplier in suppliers %}
+                                        {% set supplier_label = supplier.commercial_name or supplier.legal_name or ('Proveedor #' ~ supplier.id) %}
+                                        <option value="{{ supplier.id }}"
+                                                {% if submitted_header.supplier_id|string == supplier.id|string %}selected{% endif %}>
+                                            {{ supplier_label }}
+                                            {% if supplier.tax_id %} · {{ supplier.tax_id }}{% endif %}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-6 col-lg-3">
+                                <label for="site_id" class="form-label fw-semibold">Predio</label>
+                                <select id="site_id" name="site_id" class="form-select">
+                                    <option value="">Sin predio</option>
+                                    {% for site in sites %}
+                                        <option value="{{ site.id }}"
+                                                {% if submitted_header.site_id|string == site.id|string %}selected{% endif %}>
+                                            {{ site.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-6 col-lg-3">
+                                <label for="warehouse_id" class="form-label fw-semibold">
+                                    Bodega receptora <span class="text-danger">*</span>
+                                </label>
+                                <select id="warehouse_id"
+                                        name="warehouse_id"
+                                        class="form-select"
+                                        required>
+                                    <option value="">Seleccione una bodega</option>
+                                    {% for warehouse in warehouses %}
+                                        <option value="{{ warehouse.id }}"
+                                                data-site-id="{{ warehouse.site_id if warehouse.site_id else '' }}"
+                                                {% if submitted_header.warehouse_id|string == warehouse.id|string %}selected{% endif %}>
+                                            {{ warehouse.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label for="currency_code" class="form-label fw-semibold">
+                                    Moneda <span class="text-danger">*</span>
+                                </label>
+                                {% set selected_currency = submitted_header.currency_code or 'CRC' %}
+                                <select id="currency_code"
+                                        name="currency_code"
+                                        class="form-select"
+                                        required>
+                                    <option value="CRC" {% if selected_currency == 'CRC' %}selected{% endif %}>CRC · Colones</option>
+                                    <option value="USD" {% if selected_currency == 'USD' %}selected{% endif %}>USD · Dólares</option>
+                                    <option value="EUR" {% if selected_currency == 'EUR' %}selected{% endif %}>EUR · Euros</option>
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-8">
+                                <label for="payment_terms" class="form-label fw-semibold">
+                                    Condiciones de pago
+                                </label>
+                                <input type="text"
+                                       id="payment_terms"
+                                       name="payment_terms"
+                                       class="form-control"
+                                       value="{{ submitted_header.payment_terms or '' }}"
+                                       placeholder="Ej.: Crédito 30 días"
+                                       maxlength="100">
+                            </div>
+
+                            <div class="col-12">
+                                <label for="notes" class="form-label fw-semibold">
+                                    Notas generales
+                                </label>
+                                <textarea id="notes"
+                                          name="notes"
+                                          class="form-control"
+                                          rows="3"
+                                          placeholder="Observaciones generales de la orden">{{ submitted_header.notes or '' }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="manual-card mb-4">
+                    <div class="manual-card-header">
+                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                            <div>
+                                <div class="small text-primary text-uppercase fw-bold mb-1">Detalle</div>
+                                <h2 class="h5 fw-bold mb-1">Artículos de la orden</h2>
+                                <div class="small text-muted">
+                                    Busque un artículo y complete cantidad, precio, descuento e impuesto.
+                                </div>
+                            </div>
+
+                            <button type="button"
+                                    class="btn btn-outline-primary rounded-3"
+                                    id="addLineBtn">
+                                <i class="bi bi-plus-lg me-1"></i>
+                                Agregar línea
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="manual-card-body">
+                        <div id="linesContainer">
+                            {% for line in submitted_lines %}
+                            <article class="manual-line" data-order-line>
+                                <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="manual-line-number" data-line-number>{{ loop.index }}</span>
+                                        <div>
+                                            <div class="fw-bold">Línea de compra</div>
+                                            <div class="small text-muted">Seleccione un artículo del catálogo.</div>
+                                        </div>
+                                    </div>
+
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-danger rounded-3 remove-line-btn"
+                                            title="Eliminar línea">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+
+                                <input type="hidden"
+                                       name="line_article_id[]"
+                                       class="article-id-input"
+                                       value="{{ line.article_id or '' }}">
+
+                                <input type="hidden"
+                                       name="line_pending_article_id[]"
+                                       value="{{ line.pending_article_id or '' }}">
+
+                                <div class="row g-3">
+                                    <div class="col-12 col-lg-6">
+                                        <label class="form-label fw-semibold">
+                                            Artículo <span class="text-danger">*</span>
+                                        </label>
+                                        <div class="article-search-wrap">
+                                            <input type="search"
+                                                   name="line_article_search[]"
+                                                   class="form-control article-search-input"
+                                                   value="{{ line.article_search or '' }}"
+                                                   placeholder="Buscar por código o nombre"
+                                                   autocomplete="off">
+                                            <div class="article-results d-none"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12 col-md-6 col-lg-2">
+                                        <label class="form-label fw-semibold">
+                                            Cantidad <span class="text-danger">*</span>
+                                        </label>
+                                        <input type="number"
+                                               name="line_quantity[]"
+                                               class="form-control quantity-input"
+                                               value="{{ line.quantity or '' }}"
+                                               min="0.01"
+                                               step="0.01"
+                                               inputmode="decimal"
+                                               required>
+                                    </div>
+
+                                    <div class="col-12 col-md-6 col-lg-2">
+                                        <label class="form-label fw-semibold">Unidad</label>
+                                        <select name="line_unit_id[]"
+                                                class="form-select unit-select">
+                                            <option value="">Sin unidad</option>
+                                            {% for unit in units %}
+                                                <option value="{{ unit.id }}"
+                                                        {% if line.unit_id|string == unit.id|string %}selected{% endif %}>
+                                                    {{ unit.code or unit.name }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+
+                                    <div class="col-12 col-lg-2">
+                                        <label class="form-label fw-semibold">Stock actual</label>
+                                        <div class="stock-box" data-stock-label>
+                                            Seleccione artículo
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label fw-semibold">
+                                            Precio unitario <span class="text-danger">*</span>
+                                        </label>
+                                        <input type="number"
+                                               name="line_unit_cost[]"
+                                               class="form-control unit-cost-input"
+                                               value="{{ line.unit_cost or '' }}"
+                                               min="0.0001"
+                                               step="0.0001"
+                                               inputmode="decimal"
+                                               required>
+                                    </div>
+
+                                    <div class="col-6 col-md-2">
+                                        <label class="form-label fw-semibold">Descuento %</label>
+                                        <input type="number"
+                                               name="line_discount_pct[]"
+                                               class="form-control discount-input"
+                                               value="{{ line.discount_pct if line.discount_pct is not none else '0' }}"
+                                               min="0"
+                                               max="100"
+                                               step="0.01"
+                                               inputmode="decimal">
+                                    </div>
+
+                                    <div class="col-6 col-md-2">
+                                        <label class="form-label fw-semibold">Impuesto %</label>
+                                        <input type="number"
+                                               name="line_tax_pct[]"
+                                               class="form-control tax-input"
+                                               value="{{ line.tax_pct if line.tax_pct is not none else '13' }}"
+                                               min="0"
+                                               step="0.01"
+                                               inputmode="decimal">
+                                    </div>
+
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label fw-semibold">Total de línea</label>
+                                        <div class="line-total-box justify-content-between">
+                                            <span data-currency-symbol>₡</span>
+                                            <strong data-line-total>0.00</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="form-label fw-semibold">Notas de la línea</label>
+                                        <input type="text"
+                                               name="line_notes[]"
+                                               class="form-control"
+                                               value="{{ line.notes or '' }}"
+                                               placeholder="Marca, referencia u observación">
+                                    </div>
+                                </div>
+                            </article>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="col-12 col-xl-3">
+                <aside class="manual-card summary-card">
+                    <div class="manual-card-header">
+                        <div class="small text-primary text-uppercase fw-bold mb-1">Resumen</div>
+                        <h2 class="h5 fw-bold mb-0">Totales de la OC</h2>
+                    </div>
+
+                    <div class="manual-card-body">
+                        <div class="summary-row">
+                            <span class="text-muted">Líneas</span>
+                            <strong id="summaryLineCount">0</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span class="text-muted">Subtotal</span>
+                            <strong><span data-summary-currency>₡</span> <span id="summarySubtotal">0.00</span></strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span class="text-muted">Descuento</span>
+                            <strong class="text-danger">- <span data-summary-currency>₡</span> <span id="summaryDiscount">0.00</span></strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span class="text-muted">Impuesto</span>
+                            <strong><span data-summary-currency>₡</span> <span id="summaryTax">0.00</span></strong>
+                        </div>
+
+                        <div class="pt-3">
+                            <div class="small text-muted">Total general</div>
+                            <div class="summary-total">
+                                <span data-summary-currency>₡</span>
+                                <span id="summaryGrandTotal">0.00</span>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info border-0 rounded-3 small mt-3 mb-0">
+                            La orden se creará como <strong>PENDIENTE DE APROBACIÓN</strong>.
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </div>
+
+        <div class="submit-bar rounded-4">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                <div class="small text-muted">
+                    Revise proveedor, bodega, artículos y precios antes de continuar.
+                </div>
+
+                <div class="d-flex flex-column flex-sm-row gap-2">
+                    <a href="{{ url_for('purchases.list_orders') }}"
+                       class="btn btn-outline-secondary">
+                        Cancelar
+                    </a>
+
+                    <button type="submit"
+                            class="btn btn-primary fw-bold"
+                            id="submitOrderBtn">
+                        <i class="bi bi-send-check me-1"></i>
+                        Crear OC y enviar a aprobación
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<template id="lineTemplate">
+    <article class="manual-line" data-order-line>
+        <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+            <div class="d-flex align-items-center gap-2">
+                <span class="manual-line-number" data-line-number>1</span>
+                <div>
+                    <div class="fw-bold">Línea de compra</div>
+                    <div class="small text-muted">Seleccione un artículo del catálogo.</div>
+                </div>
+            </div>
+
+            <button type="button"
+                    class="btn btn-sm btn-outline-danger rounded-3 remove-line-btn"
+                    title="Eliminar línea">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+
+        <input type="hidden" name="line_article_id[]" class="article-id-input" value="">
+        <input type="hidden" name="line_pending_article_id[]" value="">
+
+        <div class="row g-3">
+            <div class="col-12 col-lg-6">
+                <label class="form-label fw-semibold">Artículo <span class="text-danger">*</span></label>
+                <div class="article-search-wrap">
+                    <input type="search"
+                           name="line_article_search[]"
+                           class="form-control article-search-input"
+                           placeholder="Buscar por código o nombre"
+                           autocomplete="off">
+                    <div class="article-results d-none"></div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-2">
+                <label class="form-label fw-semibold">Cantidad <span class="text-danger">*</span></label>
+                <input type="number"
+                       name="line_quantity[]"
+                       class="form-control quantity-input"
+                       min="0.01"
+                       step="0.01"
+                       inputmode="decimal"
+                       required>
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-2">
+                <label class="form-label fw-semibold">Unidad</label>
+                <select name="line_unit_id[]" class="form-select unit-select">
+                    <option value="">Sin unidad</option>
+                    {% for unit in units %}
+                        <option value="{{ unit.id }}">{{ unit.code or unit.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-12 col-lg-2">
+                <label class="form-label fw-semibold">Stock actual</label>
+                <div class="stock-box" data-stock-label>Seleccione artículo</div>
+            </div>
+
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-semibold">Precio unitario <span class="text-danger">*</span></label>
+                <input type="number"
+                       name="line_unit_cost[]"
+                       class="form-control unit-cost-input"
+                       min="0.0001"
+                       step="0.0001"
+                       inputmode="decimal"
+                       required>
+            </div>
+
+            <div class="col-6 col-md-2">
+                <label class="form-label fw-semibold">Descuento %</label>
+                <input type="number"
+                       name="line_discount_pct[]"
+                       class="form-control discount-input"
+                       value="0"
+                       min="0"
+                       max="100"
+                       step="0.01">
+            </div>
+
+            <div class="col-6 col-md-2">
+                <label class="form-label fw-semibold">Impuesto %</label>
+                <input type="number"
+                       name="line_tax_pct[]"
+                       class="form-control tax-input"
+                       value="13"
+                       min="0"
+                       step="0.01">
+            </div>
+
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-semibold">Total de línea</label>
+                <div class="line-total-box justify-content-between">
+                    <span data-currency-symbol>₡</span>
+                    <strong data-line-total>0.00</strong>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label fw-semibold">Notas de la línea</label>
+                <input type="text"
+                       name="line_notes[]"
+                       class="form-control"
+                       placeholder="Marca, referencia u observación">
+            </div>
+        </div>
+    </article>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    "use strict";
+
+    const ARTICLE_SEARCH_URL =
+        "{{ url_for('purchases.search_request_articles') }}";
+
+    const form = document.getElementById("manualOrderForm");
+    const linesContainer = document.getElementById("linesContainer");
+    const addLineButton = document.getElementById("addLineBtn");
+    const lineTemplate = document.getElementById("lineTemplate");
+    const siteSelect = document.getElementById("site_id");
+    const warehouseSelect = document.getElementById("warehouse_id");
+    const currencySelect = document.getElementById("currency_code");
+    const submitButton = document.getElementById("submitOrderBtn");
+
+    const summaryLineCount = document.getElementById("summaryLineCount");
+    const summarySubtotal = document.getElementById("summarySubtotal");
+    const summaryDiscount = document.getElementById("summaryDiscount");
+    const summaryTax = document.getElementById("summaryTax");
+    const summaryGrandTotal = document.getElementById("summaryGrandTotal");
+
+    const searchTimers = new WeakMap();
+
+    function numberValue(value) {
+        const number = Number.parseFloat(
+            String(value || "").replace(",", ".")
+        );
+
+        return Number.isFinite(number) ? number : 0;
+    }
+
+    function escapeHtml(value) {
+        const element = document.createElement("div");
+        element.textContent = value == null ? "" : String(value);
+        return element.innerHTML;
+    }
+
+    function currencySymbol() {
+        if (currencySelect.value === "USD") {
+            return "$";
+        }
+
+        if (currencySelect.value === "EUR") {
+            return "€";
+        }
+
+        return "₡";
+    }
+
+    function formatMoney(value) {
+        return new Intl.NumberFormat("es-CR", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(Number.isFinite(value) ? value : 0);
+    }
+
+    function updateCurrencySymbols() {
+        const symbol = currencySymbol();
+
+        document.querySelectorAll("[data-currency-symbol]")
+            .forEach(function (element) {
+                element.textContent = symbol;
+            });
+
+        document.querySelectorAll("[data-summary-currency]")
+            .forEach(function (element) {
+                element.textContent = symbol;
+            });
+    }
+
+    function calculateLine(lineCard) {
+        const quantity = numberValue(
+            lineCard.querySelector(".quantity-input").value
+        );
+
+        const unitCost = numberValue(
+            lineCard.querySelector(".unit-cost-input").value
+        );
+
+        const discountPct = numberValue(
+            lineCard.querySelector(".discount-input").value
+        );
+
+        const taxPct = numberValue(
+            lineCard.querySelector(".tax-input").value
+        );
+
+        const subtotal = quantity * unitCost;
+        const discount = subtotal * (discountPct / 100);
+        const taxableBase = subtotal - discount;
+        const tax = taxableBase * (taxPct / 100);
+        const total = taxableBase + tax;
+
+        return {
+            subtotal: subtotal,
+            discount: discount,
+            tax: tax,
+            total: total
+        };
+    }
+
+    function updateTotals() {
+        let subtotal = 0;
+        let discount = 0;
+        let tax = 0;
+        let total = 0;
+
+        const lineCards = linesContainer.querySelectorAll("[data-order-line]");
+
+        lineCards.forEach(function (lineCard) {
+            const amounts = calculateLine(lineCard);
+
+            subtotal += amounts.subtotal;
+            discount += amounts.discount;
+            tax += amounts.tax;
+            total += amounts.total;
+
+            lineCard.querySelector("[data-line-total]").textContent =
+                formatMoney(amounts.total);
+        });
+
+        summaryLineCount.textContent = String(lineCards.length);
+        summarySubtotal.textContent = formatMoney(subtotal);
+        summaryDiscount.textContent = formatMoney(discount);
+        summaryTax.textContent = formatMoney(tax);
+        summaryGrandTotal.textContent = formatMoney(total);
+
+        updateCurrencySymbols();
+    }
+
+    function updateLineNumbers() {
+        linesContainer.querySelectorAll("[data-order-line]")
+            .forEach(function (lineCard, index) {
+                lineCard.querySelector("[data-line-number]").textContent =
+                    String(index + 1);
+            });
+
+        updateTotals();
+    }
+
+    function closeResults(lineCard) {
+        const results = lineCard.querySelector(".article-results");
+        results.innerHTML = "";
+        results.classList.add("d-none");
+    }
+
+    function clearArticle(lineCard) {
+        lineCard.querySelector(".article-id-input").value = "";
+        lineCard.querySelector("[data-stock-label]").textContent =
+            "Seleccione artículo";
+    }
+
+    function selectArticle(lineCard, item) {
+        lineCard.querySelector(".article-id-input").value = String(item.id);
+
+        lineCard.querySelector(".article-search-input").value =
+            ((item.code || "") + " - " + (item.name || "")).trim();
+
+        if (item.unit_id) {
+            lineCard.querySelector(".unit-select").value = String(item.unit_id);
+        }
+
+        lineCard.querySelector("[data-stock-label]").textContent =
+            "Disponible: " + String(item.available_quantity || "0");
+
+        closeResults(lineCard);
+    }
+
+    function renderResults(lineCard, items) {
+        const results = lineCard.querySelector(".article-results");
+        results.innerHTML = "";
+
+        if (!items.length) {
+            results.innerHTML =
+                '<div class="p-3 small text-muted">No se encontraron artículos.</div>';
+            results.classList.remove("d-none");
+            return;
+        }
+
+        items.forEach(function (item) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "article-result";
+
+            button.innerHTML =
+                '<div class="fw-semibold">' +
+                    escapeHtml((item.code || "") + " - " + (item.name || "")) +
+                '</div>' +
+                '<div class="small text-muted mt-1">' +
+                    'Unidad: ' + escapeHtml(item.unit_name || "-") +
+                    ' · Disponible: ' + escapeHtml(item.available_quantity || "0") +
+                '</div>';
+
+            button.addEventListener("click", function () {
+                selectArticle(lineCard, item);
+            });
+
+            results.appendChild(button);
+        });
+
+        results.classList.remove("d-none");
+    }
+
+    async function searchArticles(lineCard, term) {
+        const warehouseId = warehouseSelect.value;
+        const results = lineCard.querySelector(".article-results");
+
+        if (!warehouseId) {
+            results.innerHTML =
+                '<div class="p-3 small text-muted">Seleccione primero una bodega.</div>';
+            results.classList.remove("d-none");
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                ARTICLE_SEARCH_URL +
+                "?q=" + encodeURIComponent(term) +
+                "&warehouse_id=" + encodeURIComponent(warehouseId),
+                {
+                    headers: {
+                        "Accept": "application/json"
+                    }
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error("No fue posible buscar artículos.");
+            }
+
+            renderResults(lineCard, data.items || []);
+
+        } catch (error) {
+            console.error(error);
+            renderResults(lineCard, []);
+        }
+    }
+
+    function bindLine(lineCard) {
+        const searchInput = lineCard.querySelector(".article-search-input");
+        const removeButton = lineCard.querySelector(".remove-line-btn");
+
+        searchInput.addEventListener("input", function () {
+            clearArticle(lineCard);
+
+            const term = searchInput.value.trim();
+            const existingTimer = searchTimers.get(searchInput);
+
+            if (existingTimer) {
+                clearTimeout(existingTimer);
+            }
+
+            if (term.length < 2) {
+                closeResults(lineCard);
+                return;
+            }
+
+            const timer = window.setTimeout(function () {
+                searchArticles(lineCard, term);
+            }, 320);
+
+            searchTimers.set(searchInput, timer);
+        });
+
+        removeButton.addEventListener("click", function () {
+            const totalLines =
+                linesContainer.querySelectorAll("[data-order-line]").length;
+
+            if (totalLines <= 1) {
+                window.alert("La orden debe conservar al menos una línea.");
+                return;
+            }
+
+            lineCard.remove();
+            updateLineNumbers();
+        });
+
+        lineCard.querySelectorAll(
+            ".quantity-input, .unit-cost-input, .discount-input, .tax-input"
+        ).forEach(function (input) {
+            input.addEventListener("input", updateTotals);
+        });
+    }
+
+    function addLine() {
+        const fragment = lineTemplate.content.cloneNode(true);
+        linesContainer.appendChild(fragment);
+
+        const newLine = linesContainer.lastElementChild;
+        bindLine(newLine);
+        updateLineNumbers();
+
+        newLine.querySelector(".article-search-input").focus();
+        newLine.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+        });
+    }
+
+    function filterWarehouses() {
+        const siteId = siteSelect.value;
+        const currentWarehouseId = warehouseSelect.value;
+        let currentStillVisible = false;
+
+        Array.from(warehouseSelect.options).forEach(function (option) {
+            if (!option.value) {
+                option.hidden = false;
+                return;
+            }
+
+            const optionSiteId = option.dataset.siteId || "";
+            const visible = !siteId || !optionSiteId || optionSiteId === siteId;
+
+            option.hidden = !visible;
+
+            if (visible && option.value === currentWarehouseId) {
+                currentStillVisible = true;
+            }
+        });
+
+        if (currentWarehouseId && !currentStillVisible) {
+            warehouseSelect.value = "";
+        }
+    }
+
+    function validateForm() {
+        if (!document.getElementById("supplier_id").value) {
+            window.alert("Debe seleccionar un proveedor.");
+            return false;
+        }
+
+        if (!warehouseSelect.value) {
+            window.alert("Debe seleccionar la bodega receptora.");
+            return false;
+        }
+
+        const lineCards = Array.from(
+            linesContainer.querySelectorAll("[data-order-line]")
+        );
+
+        for (let index = 0; index < lineCards.length; index += 1) {
+            const lineCard = lineCards[index];
+            const articleId = lineCard.querySelector(".article-id-input").value;
+            const quantity = numberValue(
+                lineCard.querySelector(".quantity-input").value
+            );
+            const unitCost = numberValue(
+                lineCard.querySelector(".unit-cost-input").value
+            );
+
+            if (!articleId) {
+                window.alert(
+                    "Debe seleccionar un artículo válido en la línea " +
+                    (index + 1) + "."
+                );
+                return false;
+            }
+
+            if (quantity <= 0) {
+                window.alert(
+                    "La cantidad de la línea " +
+                    (index + 1) +
+                    " debe ser mayor que cero."
+                );
+                return false;
+            }
+
+            if (unitCost <= 0) {
+                window.alert(
+                    "El precio unitario de la línea " +
+                    (index + 1) +
+                    " debe ser mayor que cero."
+                );
+                return false;
+            }
+        }
+
+        return window.confirm(
+            "¿Desea crear esta orden de compra y enviarla a aprobación?"
+        );
+    }
+
+    linesContainer.querySelectorAll("[data-order-line]")
+        .forEach(bindLine);
+
+    addLineButton.addEventListener("click", addLine);
+
+    siteSelect.addEventListener("change", filterWarehouses);
+
+    warehouseSelect.addEventListener("change", function () {
+        linesContainer.querySelectorAll("[data-order-line]")
+            .forEach(function (lineCard) {
+                clearArticle(lineCard);
+                lineCard.querySelector(".article-search-input").value = "";
+            });
+    });
+
+    currencySelect.addEventListener("change", updateTotals);
+
+    document.addEventListener("click", function (event) {
+        linesContainer.querySelectorAll("[data-order-line]")
+            .forEach(function (lineCard) {
+                if (!lineCard.contains(event.target)) {
+                    closeResults(lineCard);
+                }
+            });
+    });
+
+    form.addEventListener("submit", function (event) {
+        if (!validateForm()) {
+            event.preventDefault();
+            return;
+        }
+
+        submitButton.disabled = true;
+        submitButton.innerHTML =
+            '<span class="spinner-border spinner-border-sm me-2"></span>' +
+            'Creando orden...';
+    });
+
+    filterWarehouses();
+    updateLineNumbers();
+})();
+</script>
+{% endblock %}
