@@ -1,481 +1,2972 @@
 {% extends "base.html" %}
 
 {% block content %}
-{% set approved_doc = none %}
+
+{# ============================================================
+   LOCALIZAR ÚLTIMO PDF APROBADO
+   Usamos namespace para evitar problemas de scope de Jinja.
+   ============================================================ #}
+
+{% set approval_ns = namespace(approved_doc=none) %}
+
 {% if purchase_order.approvals %}
     {% for approval in purchase_order.approvals %}
-        {% if approval.status == "APROBADA" and approval.approved_pdf_data %}
-            {% set approved_doc = approval %}
+        {% if
+            approval.status == "APROBADA"
+            and approval.approved_pdf_data
+        %}
+            {% set approval_ns.approved_doc = approval %}
         {% endif %}
     {% endfor %}
 {% endif %}
 
-<div class="container-fluid py-4">
-    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
-        <div>
-            <h2 class="fw-bold mb-1">Detalle de orden de compra</h2>
-            <p class="text-muted mb-0">{{ purchase_order.number }}</p>
-        </div>
+{% set approved_doc = approval_ns.approved_doc %}
 
-        <div class="d-flex flex-wrap gap-2">
-            <a href="{{ url_for('purchases.list_orders') }}" class="btn btn-light rounded-3">
-                <i class="bi bi-arrow-left me-2"></i>Volver
-            </a>
 
-            <a href="{{ url_for('purchases.order_print', order_id=purchase_order.id) }}"
-               target="_blank"
-               class="btn btn-outline-dark rounded-3">
-                <i class="bi bi-printer me-2"></i>Imprimir / PDF
-            </a>
-
-            {% if approved_doc %}
-                <a href="{{ url_for('purchases.view_approved_pdf', order_id=purchase_order.id) }}"
-                   target="_blank"
-                   class="btn btn-outline-success rounded-3">
-                    <i class="bi bi-file-earmark-pdf me-2"></i>Ver PDF aprobado
-                </a>
-            {% endif %}
-
-            {% if purchase_order.approval_status in ['APROBADA', 'RECIBIDA_PARCIAL'] %}
-                <a href="{{ url_for('purchases.create_entry') }}" class="btn btn-dark rounded-3">
-                    <i class="bi bi-box-arrow-in-down me-2"></i>Registrar entrada
-                </a>
-            {% endif %}
-        </div>
-    </div>
-
-    <div class="row g-4">
-        <div class="col-12 col-xl-4">
-            <div class="card border-0 shadow-sm rounded-4">
-                <div class="card-body p-4">
-                    <h5 class="fw-bold mb-3">Encabezado</h5>
-
-                    <dl class="row mb-0">
-                        <dt class="col-5 text-muted">Número</dt>
-                        <dd class="col-7 fw-semibold">{{ purchase_order.number }}</dd>
-
-                        <dt class="col-5 text-muted">Proveedor</dt>
-                        <dd class="col-7">
-                            {{ purchase_order.supplier.commercial_name if purchase_order.supplier else '-' }}
-                        </dd>
-
-                        <dt class="col-5 text-muted">Solicitud</dt>
-                        <dd class="col-7">
-                            {{ purchase_order.purchase_request.number if purchase_order.purchase_request else '-' }}
-                        </dd>
-
-                        <dt class="col-5 text-muted">Estado</dt>
-                        <dd class="col-7">
-                            {% if purchase_order.approval_status == 'APROBADA' %}
-                                <span class="badge text-bg-success">APROBADA</span>
-                            {% elif purchase_order.approval_status == 'PENDIENTE_APROBACION' %}
-                                <span class="badge text-bg-warning">PENDIENTE APROBACIÓN</span>
-                            {% elif purchase_order.approval_status in ['RECHAZADA', 'ANULADA'] %}
-                                <span class="badge text-bg-danger">{{ purchase_order.approval_status }}</span>
-                            {% elif purchase_order.approval_status in ['RECIBIDA_PARCIAL', 'RECIBIDA_TOTAL'] %}
-                                <span class="badge text-bg-info">{{ purchase_order.approval_status }}</span>
-                            {% else %}
-                                <span class="badge text-bg-secondary">{{ purchase_order.approval_status }}</span>
-                            {% endif %}
-                        </dd>
-
-                        <dt class="col-5 text-muted">Moneda</dt>
-                        <dd class="col-7">{{ purchase_order.currency_code }}</dd>
-
-                        <dt class="col-5 text-muted">Pago</dt>
-                        <dd class="col-7">{{ purchase_order.payment_terms or '-' }}</dd>
-
-                        <dt class="col-5 text-muted">Predio sugerido</dt>
-                        <dd class="col-7">
-                            {{ purchase_order.site.name if purchase_order.site else 'No definido' }}
-                        </dd>
-
-                        <dt class="col-5 text-muted">Bodega sugerida</dt>
-                        <dd class="col-7">
-                            {{ purchase_order.warehouse.name if purchase_order.warehouse else 'No definida' }}
-                        </dd>
-
-                        <dt class="col-5 text-muted">Creado por</dt>
-                        <dd class="col-7">
-                            {% if purchase_order.generated_by_user %}
-                                {{ purchase_order.generated_by_user.full_name or purchase_order.generated_by_user.username }}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </dd>
-
-                        <dt class="col-5 text-muted">Fecha creación</dt>
-                        <dd class="col-7">{{ purchase_order.created_at|cr_datetime }}</dd>
-
-                        <dt class="col-5 text-muted">Enviada aprobación</dt>
-                        <dd class="col-7">{{ purchase_order.submitted_for_approval_at|cr_datetime }}</dd>
-
-                        <dt class="col-5 text-muted">Aprobada</dt>
-                        <dd class="col-7">{{ purchase_order.approved_at|cr_datetime }}</dd>
-                    </dl>
-
-                    {% if purchase_order.notes %}
-                        <hr>
-                        <h6 class="fw-bold">Notas</h6>
-                        <p class="mb-0 text-muted">{{ purchase_order.notes }}</p>
-                    {% endif %}
-                </div>
-            </div>
-
-            {% if purchase_order.approval_status == 'PENDIENTE_APROBACION' %}
-                <div class="card border-0 shadow-sm rounded-4 mt-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-2">Subir OC firmada</h5>
-                        <p class="text-muted small mb-3">
-                            La orden pasará a <strong>APROBADA</strong> al adjuntar el PDF firmado.
-                        </p>
-
-                        <form method="post"
-                              action="{{ url_for('purchases.upload_approved_pdf', order_id=purchase_order.id) }}"
-                              enctype="multipart/form-data">
-                            <div class="mb-3">
-                                <label class="form-label small text-muted">PDF aprobado</label>
-                                <input type="file" name="file" accept=".pdf" class="form-control" required>
-                            </div>
-
-                            <button type="submit" class="btn btn-success w-100 rounded-3">
-                                <i class="bi bi-file-earmark-check me-2"></i>Subir y aprobar OC
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            {% endif %}
-
-            {% if approved_doc %}
-                <div class="card border-0 shadow-sm rounded-4 mt-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-2">Documento aprobado</h5>
-                        <p class="text-muted small mb-3">
-                            {{ approved_doc.approved_pdf_original_name or 'PDF aprobado' }}
-                        </p>
-
-                        <a href="{{ url_for('purchases.view_approved_pdf', order_id=purchase_order.id) }}"
-                           target="_blank"
-                           class="btn btn-outline-success w-100 rounded-3">
-                            <i class="bi bi-file-earmark-pdf me-2"></i>Ver PDF aprobado
-                        </a>
-
-                        <div class="small text-muted mt-3">
-                            Subido por:
-                            {{ approved_doc.approved_by_user.full_name if approved_doc.approved_by_user and approved_doc.approved_by_user.full_name else approved_doc.approved_by_user.username if approved_doc.approved_by_user else 'Sin usuario' }}
-                            <br>
-                            Fecha: {{ approved_doc.approved_pdf_uploaded_at|cr_datetime }}
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
-
-            {% if purchase_order.approvals %}
-                <div class="card border-0 shadow-sm rounded-4 mt-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3">Historial de aprobación</h5>
-
-                        <div class="d-flex flex-column gap-3">
-                            {% for item in purchase_order.approvals %}
-                                <div class="border rounded-3 p-3">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <div class="fw-semibold">{{ item.status }}</div>
-                                        <small class="text-muted">{{ item.created_at|cr_datetime }}</small>
-                                    </div>
-
-                                    <div class="text-muted small mb-1">
-                                        {{ item.approved_by_user.full_name if item.approved_by_user and item.approved_by_user.full_name else item.approved_by_user.username if item.approved_by_user else 'Sin usuario' }}
-                                    </div>
-
-                                    <div class="small text-muted">{{ item.reason or 'Sin observación' }}</div>
-
-                                    {% if item.approved_pdf_data %}
-                                        <div class="mt-2">
-                                            <a href="{{ url_for('purchases.view_approved_pdf', order_id=purchase_order.id) }}"
-                                               target="_blank"
-                                               class="small text-success text-decoration-none">
-                                                <i class="bi bi-file-earmark-pdf me-1"></i>Ver PDF firmado
-                                            </a>
-                                        </div>
-                                    {% endif %}
-                                </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
-        </div>
-
-        <div class="col-12 col-xl-8">
-            <div class="card border-0 shadow-sm rounded-4">
-                <div class="card-body p-0">
-                    <div class="p-4 border-bottom">
-                        <h5 class="fw-bold mb-1">Líneas de orden</h5>
-                        <p class="text-muted mb-0">
-                            Artículos, cantidades y costos incluidos en esta orden.
-                        </p>
-                    </div>
-
-                    {% if purchase_order.lines %}
-                        <div class="table-responsive">
-                            <table class="table align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th class="ps-4">Artículo</th>
-                                        <th>Código</th>
-                                        <th>Cant. ordenada</th>
-                                        <th>Cant. recibida</th>
-                                        <th>Unidad</th>
-                                        <th>Costo unitario</th>
-                                        <th>Desc %</th>
-                                        <th>Subtotal</th>
-                                        <th>IVA %</th>
-                                        <th>Total</th>
-                                        <th class="pe-4">Ajuste</th>
-                                    </tr>
-                                </thead>
-
-                                <tbody>
-                                    {% for line in purchase_order.lines %}
-                                        <tr>
-                                            <td class="ps-4 fw-semibold">
-                                                {{ line.item_name }}
-                                            </td>
-
-                                            <td>
-                                                {{ line.item_code or '-' }}
-                                            </td>
-
-                                            <td colspan="9">
-                                                {% if purchase_order.approval_status == 'APROBADA'
-                                                      and line.quantity_received == 0 %}
-                                                    <form method="post"
-                                                          action="{{ url_for('purchases.adjust_purchase_order_line', line_id=line.id) }}">
-                                                {% endif %}
-
-                                                <div class="row g-2 align-items-center">
-                                                    <div class="col-md-2">
-                                                        {% if purchase_order.approval_status == 'APROBADA'
-                                                              and line.quantity_received == 0 %}
-                                                            <input type="number"
-                                                                   step="0.0001"
-                                                                   min="0.0001"
-                                                                   max="{{ line.quantity_ordered }}"
-                                                                   name="quantity_ordered"
-                                                                   value="{{ line.quantity_ordered }}"
-                                                                   class="form-control form-control-sm po-quantity"
-                                                                   data-tax="{{ line.tax_pct }}"
-                                                                   data-discount="{{ line.discount_pct }}"
-                                                                   data-line="{{ line.id }}">
-                                                        {% else %}
-                                                            <div class="small text-muted">Cantidad</div>
-                                                            <div>{{ "{:,.2f}".format(line.quantity_ordered or 0) }}</div>
-                                                        {% endif %}
-                                                    </div>
-
-                                                    <div class="col-md-1">
-                                                        <div class="small text-muted">Recibido</div>
-                                                        <div>
-                                                            {{ "{:,.2f}".format(line.quantity_received or 0) }}
-                                                        </div>
-
-                                                        {% if line.is_fully_received %}
-                                                            <div><small class="text-success">Completada</small></div>
-                                                        {% elif line.pending_quantity > 0 %}
-                                                            <div><small class="text-muted">Pendiente: {{ "{:,.2f}".format(line.pending_quantity or 0) }}</small></div>
-                                                        {% endif %}
-                                                    </div>
-
-                                                    <div class="col-md-1">
-                                                        <div class="small text-muted">Unidad</div>
-                                                        <div>{{ line.unit.name if line.unit else '-' }}</div>
-                                                    </div>
-
-                                                    <div class="col-md-2">
-                                                        {% if purchase_order.approval_status == 'APROBADA'
-                                                              and line.quantity_received == 0 %}
-                                                            <input type="number"
-                                                                   step="0.0001"
-                                                                   min="0.0001"
-                                                                   max="{{ line.unit_cost }}"
-                                                                   name="unit_cost"
-                                                                   value="{{ line.unit_cost }}"
-                                                                   class="form-control form-control-sm po-unit-cost"
-                                                                   data-tax="{{ line.tax_pct }}"
-                                                                   data-discount="{{ line.discount_pct }}"
-                                                                   data-line="{{ line.id }}">
-                                                        {% else %}
-                                                            <div class="small text-muted">Costo unitario</div>
-                                                            <div>{{ "{:,.2f}".format(line.unit_cost or 0) }}</div>
-                                                        {% endif %}
-                                                    </div>
-
-                                                    <div class="col-md-1">
-                                                        <div class="small text-muted">Desc.</div>
-                                                        <div>{{ "{:,.2f}".format(line.discount_pct or 0) }}%</div>
-                                                    </div>
-
-                                                    <div class="col-md-1 po-subtotal-{{ line.id }}">
-                                                        <div class="small text-muted">Subtotal</div>
-                                                        <div>{{ "{:,.2f}".format(line.line_subtotal or 0) }}</div>
-                                                    </div>
-
-                                                    <div class="col-md-1">
-                                                        <div class="small text-muted">IVA</div>
-                                                        <div>{{ "{:,.2f}".format(line.tax_pct or 0) }}%</div>
-                                                    </div>
-
-                                                    <div class="col-md-2 po-total-{{ line.id }}">
-                                                        <div class="small text-muted">Total</div>
-                                                        <div class="fw-semibold">
-                                                            {{ "{:,.2f}".format(line.line_total or 0) }}
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="col-md-1">
-                                                        {% if purchase_order.approval_status == 'APROBADA'
-                                                              and line.quantity_received == 0 %}
-                                                            <button type="submit"
-                                                                    class="btn btn-sm btn-outline-dark w-100">
-                                                                Ajustar
-                                                            </button>
-                                                        {% else %}
-                                                            <span class="text-muted small">
-                                                                {{ line.line_notes or '-' }}
-                                                            </span>
-                                                        {% endif %}
-                                                    </div>
-                                                </div>
-
-                                                {% if purchase_order.approval_status == 'APROBADA'
-                                                      and line.quantity_received == 0 %}
-                                                    </form>
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    {% else %}
-                        <div class="p-5 text-center">
-                            <i class="bi bi-list-ul fs-1 text-muted"></i>
-                            <h6 class="fw-bold mt-3">No hay líneas registradas</h6>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            {% if approved_doc %}
-                <div class="card border-0 shadow-sm rounded-4 mt-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3">Vista previa del PDF aprobado</h5>
-
-                        <iframe src="{{ url_for('purchases.view_approved_pdf', order_id=purchase_order.id) }}"
-                                style="width: 100%; height: 720px; border: 1px solid #dee2e6; border-radius: 12px;"
-                                title="PDF aprobado">
-                        </iframe>
-                    </div>
-                </div>
-            {% endif %}
-
-            {% if purchase_order.inventory_entries %}
-                <div class="card border-0 shadow-sm rounded-4 mt-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3">Entradas relacionadas</h5>
-
-                        <div class="d-flex flex-column gap-2">
-                            {% for item in purchase_order.inventory_entries %}
-                                <a href="{{ url_for('purchases.entry_detail', entry_id=item.id) }}"
-                                   class="text-decoration-none border rounded-3 p-3 d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <div class="fw-semibold text-dark">{{ item.number }}</div>
-                                        <small class="text-muted">
-                                            Factura: {{ item.invoice_number }} |
-                                            {{ item.created_at|cr_datetime }}
-                                        </small>
-                                    </div>
-                                    <i class="bi bi-arrow-right text-dark"></i>
-                                </a>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-    function calculateLine(lineId) {
-        const qtyInput = document.querySelector(
-            `.po-quantity[data-line="${lineId}"]`
-        );
-
-        const unitInput = document.querySelector(
-            `.po-unit-cost[data-line="${lineId}"]`
-        );
-
-        if (!qtyInput || !unitInput) {
-            return;
-        }
-
-        const qty = parseFloat(qtyInput.value || 0);
-        const unit = parseFloat(unitInput.value || 0);
-        const taxPct = parseFloat(qtyInput.dataset.tax || 0);
-        const discountPct = parseFloat(qtyInput.dataset.discount || 0);
-
-        const subtotal = qty * unit;
-        const discountAmount = subtotal * (discountPct / 100);
-        const taxableBase = subtotal - discountAmount;
-        const taxAmount = taxableBase * (taxPct / 100);
-        const total = taxableBase + taxAmount;
-
-        const subtotalCell = document.querySelector(`.po-subtotal-${lineId}`);
-        const totalCell = document.querySelector(`.po-total-${lineId}`);
-
-        if (subtotalCell) {
-            const subtotalValue = subtotal.toLocaleString("es-CR", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            });
-
-            const subtotalInner = subtotalCell.querySelector("div:last-child");
-            if (subtotalInner) {
-                subtotalInner.textContent = subtotalValue;
-            } else {
-                subtotalCell.textContent = subtotalValue;
-            }
-        }
-
-        if (totalCell) {
-            const totalValue = total.toLocaleString("es-CR", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            });
-
-            const totalInner = totalCell.querySelector("div:last-child");
-            if (totalInner) {
-                totalInner.textContent = totalValue;
-            } else {
-                totalCell.textContent = totalValue;
-            }
-        }
+<style>
+    .po-page {
+        max-width: 1800px;
+        margin: 0 auto;
     }
 
-    document.querySelectorAll(".po-quantity").forEach(input => {
-        input.addEventListener("input", () => {
-            calculateLine(input.dataset.line);
-        });
-    });
+    .po-header-card {
+        background: linear-gradient(
+            135deg,
+            #ffffff 0%,
+            #f8fafc 100%
+        );
+        border: 1px solid #e9ecef;
+        border-radius: 1.2rem;
+    }
 
-    document.querySelectorAll(".po-unit-cost").forEach(input => {
-        input.addEventListener("input", () => {
-            calculateLine(input.dataset.line);
-        });
-    });
-});
+    .po-main-card {
+        border: 0;
+        border-radius: 1.2rem;
+        overflow: hidden;
+    }
+
+    .po-status-badge {
+        font-size: .75rem;
+        padding: .45rem .7rem;
+        border-radius: 50rem;
+    }
+
+    .po-lines-toolbar {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .po-edit-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+    }
+
+    .po-table {
+        min-width: 1180px;
+    }
+
+    .po-table th {
+        font-size: .76rem;
+        text-transform: uppercase;
+        letter-spacing: .02em;
+        color: #667085;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    .po-table td {
+        vertical-align: middle;
+    }
+
+    .po-item-name {
+        min-width: 240px;
+        max-width: 360px;
+    }
+
+    .po-view-value {
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .po-edit-field {
+        display: none;
+    }
+
+    .po-editing .po-view-field {
+        display: none !important;
+    }
+
+    .po-editing .po-edit-field {
+        display: block;
+    }
+
+    .po-editing .po-edit-only {
+        display: inline-flex !important;
+    }
+
+    .po-editing .po-view-only {
+        display: none !important;
+    }
+
+    .po-edit-only {
+        display: none !important;
+    }
+
+    .po-number-input {
+        min-width: 120px;
+    }
+
+    .po-limit-box {
+        min-width: 180px;
+        padding: .55rem .65rem;
+        border-radius: .75rem;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+    }
+
+    .po-limit-label {
+        font-size: .68rem;
+        text-transform: uppercase;
+        color: #98a2b3;
+        font-weight: 700;
+        letter-spacing: .03em;
+    }
+
+    .po-limit-value {
+        font-size: .78rem;
+        color: #475467;
+        font-weight: 600;
+    }
+
+    .po-calculated-value {
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .po-line-valid {
+        background: rgba(25, 135, 84, .04);
+    }
+
+    .po-line-invalid {
+        background: rgba(220, 53, 69, .06);
+    }
+
+    .po-validation-message {
+        display: none;
+        margin-top: .35rem;
+        font-size: .72rem;
+        color: #dc3545;
+        font-weight: 600;
+    }
+
+    .po-line-invalid .po-validation-message {
+        display: block;
+    }
+
+    .po-summary-card {
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        border-radius: 1rem;
+        padding: 1rem;
+    }
+
+    .po-summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: .35rem 0;
+    }
+
+    .po-summary-total {
+        border-top: 1px solid #dee2e6;
+        margin-top: .35rem;
+        padding-top: .65rem;
+        font-size: 1.05rem;
+        font-weight: 800;
+    }
+
+    .po-edit-notice {
+        display: none;
+    }
+
+    .po-editing .po-edit-notice {
+        display: block;
+    }
+
+    .po-mobile-line {
+        display: none;
+    }
+
+    @media (max-width: 767.98px) {
+        .po-desktop-table {
+            display: none;
+        }
+
+        .po-mobile-line {
+            display: block;
+        }
+
+        .po-mobile-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 1rem;
+            padding: 1rem;
+            margin-bottom: .8rem;
+            background: #fff;
+        }
+
+        .po-mobile-data {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: .8rem;
+        }
+
+        .po-mobile-label {
+            font-size: .7rem;
+            color: #98a2b3;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .po-mobile-value {
+            font-size: .9rem;
+            font-weight: 600;
+            margin-top: .15rem;
+        }
+
+        .po-edit-actions .btn {
+            flex: 1 1 auto;
+        }
+    }
+</style>
+
+
+<div
+    class="container-fluid py-4 po-page"
+    id="purchaseOrderPage"
+>
+
+    <!-- =====================================================
+         ENCABEZADO GENERAL
+         ===================================================== -->
+
+    <div
+        class="d-flex flex-column flex-lg-row
+               justify-content-between align-items-lg-center
+               gap-3 mb-4"
+    >
+
+        <div>
+
+            <div
+                class="d-flex flex-wrap align-items-center gap-2 mb-1"
+            >
+
+                <h2 class="fw-bold mb-0">
+                    Detalle de orden de compra
+                </h2>
+
+                {% if purchase_order.approval_status == "APROBADA" %}
+
+                    <span class="badge text-bg-success po-status-badge">
+                        APROBADA
+                    </span>
+
+                {% elif
+                    purchase_order.approval_status
+                    == "PENDIENTE_APROBACION"
+                %}
+
+                    <span class="badge text-bg-warning po-status-badge">
+                        PENDIENTE APROBACIÓN
+                    </span>
+
+                {% elif
+                    purchase_order.approval_status
+                    in ["RECHAZADA", "ANULADA"]
+                %}
+
+                    <span class="badge text-bg-danger po-status-badge">
+                        {{ purchase_order.approval_status }}
+                    </span>
+
+                {% elif
+                    purchase_order.approval_status
+                    in ["RECIBIDA_PARCIAL", "RECIBIDA_TOTAL"]
+                %}
+
+                    <span class="badge text-bg-info po-status-badge">
+                        {{
+                            purchase_order.approval_status
+                            | replace("_", " ")
+                        }}
+                    </span>
+
+                {% else %}
+
+                    <span class="badge text-bg-secondary po-status-badge">
+                        {{ purchase_order.approval_status }}
+                    </span>
+
+                {% endif %}
+
+            </div>
+
+            <p class="text-muted mb-0">
+                {{ purchase_order.number }}
+            </p>
+
+        </div>
+
+
+        <div class="d-flex flex-wrap gap-2">
+
+            <a
+                href="{{ url_for('purchases.list_orders') }}"
+                class="btn btn-light rounded-3"
+            >
+                <i class="bi bi-arrow-left me-2"></i>
+                Volver
+            </a>
+
+
+            <a
+                href="{{
+                    url_for(
+                        'purchases.order_print',
+                        order_id=purchase_order.id
+                    )
+                }}"
+                target="_blank"
+                class="btn btn-outline-dark rounded-3"
+            >
+                <i class="bi bi-printer me-2"></i>
+                Imprimir / PDF
+            </a>
+
+
+            {% if approved_doc %}
+
+                <a
+                    href="{{
+                        url_for(
+                            'purchases.view_approved_pdf',
+                            order_id=purchase_order.id
+                        )
+                    }}"
+                    target="_blank"
+                    class="btn btn-outline-success rounded-3"
+                >
+                    <i class="bi bi-file-earmark-pdf me-2"></i>
+                    Ver PDF aprobado
+                </a>
+
+            {% endif %}
+
+
+            {% if
+                purchase_order.approval_status
+                in ["APROBADA", "RECIBIDA_PARCIAL"]
+            %}
+
+                <a
+                    href="{{ url_for('purchases.create_entry') }}"
+                    class="btn btn-dark rounded-3"
+                >
+                    <i class="bi bi-box-arrow-in-down me-2"></i>
+                    Registrar entrada
+                </a>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         CUERPO
+         ===================================================== -->
+
+    <div class="row g-4">
+
+        <!-- =================================================
+             COLUMNA IZQUIERDA
+             ================================================= -->
+
+        <div class="col-12 col-xl-4">
+
+            <div class="card shadow-sm po-header-card">
+
+                <div class="card-body p-4">
+
+                    <h5 class="fw-bold mb-3">
+                        Encabezado
+                    </h5>
+
+
+                    <dl class="row mb-0">
+
+                        <dt class="col-5 text-muted">
+                            Número
+                        </dt>
+
+                        <dd class="col-7 fw-semibold">
+                            {{ purchase_order.number }}
+                        </dd>
+
+
+                        <dt class="col-5 text-muted">
+                            Proveedor
+                        </dt>
+
+                        <dd class="col-7">
+                            {{
+                                purchase_order.supplier.commercial_name
+                                if purchase_order.supplier
+                                else "-"
+                            }}
+                        </dd>
+
+
+                        <dt class="col-5 text-muted">
+                            Solicitud
+                        </dt>
+
+                        <dd class="col-7">
+
+                            {% if purchase_order.purchase_request %}
+
+                                {{
+                                    purchase_order.purchase_request.number
+                                }}
+
+                            {% else %}
+
+                                -
+
+                            {% endif %}
+
+                        </dd>
+
+
+                        <dt class="col-5 text-muted">
+                            Estado
+                        </dt>
+
+                        <dd class="col-7">
+
+                            {{
+                                purchase_order.approval_status
+                                | replace("_", " ")
+                            }}
+
+                        </dd>
+
+
+                        <dt class="col-5 text-muted">
+                            Moneda
+                        </dt>
+
+                        <dd class="col-7">
+                            {{
+                                purchase_order.currency_code
+                                or "CRC"
+                            }}
+                        </dd>
+
+
+                        <dt class="col-5 text-muted">
+                            Pago
+                        </dt>
+
+                        <dd class="col-7">
+                            {{
+                                purchase_order.payment_terms
+                                or "-"
+                            }}
+                        </dd>
+
+
+                        <dt class="col-5 text-muted">
+                            Predio sugerido
+                        </dt>
+
+                        <dd class="col-7">
+
+                            {{
+                                purchase_order.site.name
+                                if purchase_order.site
+                                else "No definido"
+                            }}
+
+                        </dd>
+
+
+                        <dt class="col-5 text-muted">
+                            Bodega sugerida
+                        </dt>
+
+                        <dd class="col-7">
+
+                            {{
+                                purchase_order.warehouse.name
+                                if purchase_order.warehouse
+                                else "No definida"
+                            }}
+
+                        </dd>
+
+
+                        <dt class="col-5 text-muted">
+                            Creado por
+                        </dt>
+
+                        <dd class="col-7">
+
+                            {% if purchase_order.generated_by_user %}
+
+                                {{
+                                    purchase_order
+                                    .generated_by_user
+                                    .full_name
+                                    or
+                                    purchase_order
+                                    .generated_by_user
+                                    .username
+                                }}
+
+                            {% else %}
+
+                                -
+
+                            {% endif %}
+
+                        </dd>
+
+
+                        <dt class="col-5 text-muted">
+                            Fecha creación
+                        </dt>
+
+                        <dd class="col-7">
+                            {{
+                                cr_datetime(
+                                    purchase_order.created_at
+                                )
+                            }}
+                        </dd>
+
+
+                        <dt class="col-5 text-muted">
+                            Enviada aprobación
+                        </dt>
+
+                        <dd class="col-7">
+                            {{
+                                cr_datetime(
+                                    purchase_order
+                                    .submitted_for_approval_at
+                                )
+                            }}
+                        </dd>
+
+
+                        <dt class="col-5 text-muted">
+                            Aprobada
+                        </dt>
+
+                        <dd class="col-7">
+                            {{
+                                cr_datetime(
+                                    purchase_order.approved_at
+                                )
+                            }}
+                        </dd>
+
+                    </dl>
+
+
+                    {% if purchase_order.notes %}
+
+                        <hr>
+
+                        <h6 class="fw-bold">
+                            Notas
+                        </h6>
+
+                        <p class="mb-0 text-muted">
+                            {{ purchase_order.notes }}
+                        </p>
+
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+
+            <!-- =============================================
+                 SUBIR PDF APROBADO
+                 ============================================= -->
+
+            {% if
+                purchase_order.approval_status
+                == "PENDIENTE_APROBACION"
+            %}
+
+                <div
+                    class="card border-0 shadow-sm
+                           rounded-4 mt-4"
+                >
+
+                    <div class="card-body p-4">
+
+                        <h5 class="fw-bold mb-2">
+                            Subir OC firmada
+                        </h5>
+
+                        <p class="text-muted small mb-3">
+                            La orden pasará a
+                            <strong>APROBADA</strong>
+                            al adjuntar el PDF firmado.
+                        </p>
+
+
+                        <form
+                            method="post"
+                            action="{{
+                                url_for(
+                                    'purchases.upload_approved_pdf',
+                                    order_id=purchase_order.id
+                                )
+                            }}"
+                            enctype="multipart/form-data"
+                        >
+
+                            <div class="mb-3">
+
+                                <label
+                                    class="form-label
+                                           small text-muted"
+                                >
+                                    PDF aprobado
+                                </label>
+
+                                <input
+                                    type="file"
+                                    name="file"
+                                    accept=".pdf"
+                                    class="form-control"
+                                    required
+                                >
+
+                            </div>
+
+
+                            <button
+                                type="submit"
+                                class="btn btn-success
+                                       w-100 rounded-3"
+                            >
+                                <i
+                                    class="bi
+                                           bi-file-earmark-check
+                                           me-2"
+                                ></i>
+
+                                Subir y aprobar OC
+                            </button>
+
+                        </form>
+
+                    </div>
+
+                </div>
+
+            {% endif %}
+
+
+            <!-- =============================================
+                 DOCUMENTO APROBADO
+                 ============================================= -->
+
+            {% if approved_doc %}
+
+                <div
+                    class="card border-0 shadow-sm
+                           rounded-4 mt-4"
+                >
+
+                    <div class="card-body p-4">
+
+                        <h5 class="fw-bold mb-2">
+                            Documento aprobado
+                        </h5>
+
+                        <p class="text-muted small mb-3">
+                            {{
+                                approved_doc
+                                .approved_pdf_original_name
+                                or "PDF aprobado"
+                            }}
+                        </p>
+
+
+                        <a
+                            href="{{
+                                url_for(
+                                    'purchases.view_approved_pdf',
+                                    order_id=purchase_order.id
+                                )
+                            }}"
+                            target="_blank"
+                            class="btn btn-outline-success
+                                   w-100 rounded-3"
+                        >
+                            <i
+                                class="bi
+                                       bi-file-earmark-pdf
+                                       me-2"
+                            ></i>
+
+                            Ver PDF aprobado
+                        </a>
+
+
+                        <div class="small text-muted mt-3">
+
+                            Subido por:
+
+                            {% if approved_doc.approved_by_user %}
+
+                                {{
+                                    approved_doc
+                                    .approved_by_user
+                                    .full_name
+                                    or
+                                    approved_doc
+                                    .approved_by_user
+                                    .username
+                                }}
+
+                            {% else %}
+
+                                Sin usuario
+
+                            {% endif %}
+
+                            <br>
+
+                            Fecha:
+
+                            {{
+                                cr_datetime(
+                                    approved_doc
+                                    .approved_pdf_uploaded_at
+                                )
+                            }}
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            {% endif %}
+
+
+            <!-- =============================================
+                 HISTORIAL
+                 ============================================= -->
+
+            {% if purchase_order.approvals %}
+
+                <div
+                    class="card border-0 shadow-sm
+                           rounded-4 mt-4"
+                >
+
+                    <div class="card-body p-4">
+
+                        <h5 class="fw-bold mb-3">
+                            Historial de aprobación
+                        </h5>
+
+
+                        <div class="d-flex flex-column gap-3">
+
+                            {% for item in purchase_order.approvals %}
+
+                                <div
+                                    class="border rounded-3 p-3"
+                                >
+
+                                    <div
+                                        class="d-flex
+                                               justify-content-between
+                                               align-items-center
+                                               mb-1"
+                                    >
+
+                                        <div class="fw-semibold">
+                                            {{ item.status }}
+                                        </div>
+
+                                        <small class="text-muted">
+                                            {{
+                                                cr_datetime(
+                                                    item.created_at
+                                                )
+                                            }}
+                                        </small>
+
+                                    </div>
+
+
+                                    <div
+                                        class="text-muted
+                                               small mb-1"
+                                    >
+
+                                        {% if item.approved_by_user %}
+
+                                            {{
+                                                item
+                                                .approved_by_user
+                                                .full_name
+                                                or
+                                                item
+                                                .approved_by_user
+                                                .username
+                                            }}
+
+                                        {% else %}
+
+                                            Sin usuario
+
+                                        {% endif %}
+
+                                    </div>
+
+
+                                    <div class="small text-muted">
+                                        {{
+                                            item.reason
+                                            or "Sin observación"
+                                        }}
+                                    </div>
+
+
+                                    {% if item.approved_pdf_data %}
+
+                                        <div class="mt-2">
+
+                                            <a
+                                                href="{{
+                                                    url_for(
+                                                        'purchases.view_approved_pdf',
+                                                        order_id=purchase_order.id
+                                                    )
+                                                }}"
+                                                target="_blank"
+                                                class="small
+                                                       text-success
+                                                       text-decoration-none"
+                                            >
+                                                <i
+                                                    class="bi
+                                                           bi-file-earmark-pdf
+                                                           me-1"
+                                                ></i>
+
+                                                Ver PDF firmado
+                                            </a>
+
+                                        </div>
+
+                                    {% endif %}
+
+                                </div>
+
+                            {% endfor %}
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            {% endif %}
+
+        </div>
+
+
+        <!-- =================================================
+             COLUMNA DERECHA
+             ================================================= -->
+
+        <div class="col-12 col-xl-8">
+
+            <form
+                id="purchaseOrderAdjustmentForm"
+                method="post"
+                action="{{
+                    url_for(
+                        'purchases.adjust_purchase_order',
+                        order_id=purchase_order.id
+                    )
+                }}"
+            >
+
+                <div
+                    class="card shadow-sm po-main-card"
+                >
+
+                    <div class="card-body p-0">
+
+                        <!-- =================================
+                             TOOLBAR
+                             ================================= -->
+
+                        <div class="p-4 border-bottom">
+
+                            <div
+                                class="po-lines-toolbar
+                                       flex-lg-row
+                                       justify-content-between
+                                       align-items-lg-center"
+                            >
+
+                                <div>
+
+                                    <h5 class="fw-bold mb-1">
+                                        Líneas de orden
+                                    </h5>
+
+                                    <p class="text-muted mb-0">
+                                        Artículos, cantidades y costos
+                                        incluidos en esta orden.
+                                    </p>
+
+                                </div>
+
+
+                                {% if
+                                    purchase_order.approval_status
+                                    == "APROBADA"
+                                    and purchase_order.lines
+                                %}
+
+                                    <div class="po-edit-actions">
+
+                                        <button
+                                            type="button"
+                                            id="editPurchaseOrderBtn"
+                                            class="btn
+                                                   btn-outline-primary
+                                                   rounded-3
+                                                   po-view-only"
+                                        >
+                                            <i
+                                                class="bi
+                                                       bi-pencil-square
+                                                       me-2"
+                                            ></i>
+                                            Editar OC
+                                        </button>
+
+
+                                        <button
+                                            type="button"
+                                            id="cancelPurchaseOrderEditBtn"
+                                            class="btn
+                                                   btn-light
+                                                   rounded-3
+                                                   po-edit-only"
+                                        >
+                                            <i
+                                                class="bi
+                                                       bi-x-lg
+                                                       me-2"
+                                            ></i>
+                                            Cancelar
+                                        </button>
+
+
+                                        <button
+                                            type="submit"
+                                            id="savePurchaseOrderBtn"
+                                            class="btn
+                                                   btn-success
+                                                   rounded-3
+                                                   po-edit-only"
+                                        >
+                                            <i
+                                                class="bi
+                                                       bi-check2-circle
+                                                       me-2"
+                                            ></i>
+                                            Guardar cambios
+                                        </button>
+
+                                    </div>
+
+                                {% endif %}
+
+                            </div>
+
+
+                            <div
+                                class="alert alert-primary
+                                       border-0 rounded-3
+                                       mt-3 mb-0
+                                       po-edit-notice"
+                            >
+                                <div class="fw-semibold mb-1">
+                                    Modo edición
+                                </div>
+
+                                <div class="small">
+                                    Puede aumentar o disminuir la
+                                    cantidad, pero el
+                                    <strong>precio unitario</strong>
+                                    no puede superar el aprobado y el
+                                    <strong>total de la línea</strong>
+                                    tampoco puede superar el monto
+                                    autorizado por Gerencia.
+                                </div>
+                            </div>
+
+                        </div>
+
+
+                        {% if purchase_order.lines %}
+
+                            <!-- =============================
+                                 TABLA PC
+                                 ============================= -->
+
+                            <div
+                                class="table-responsive
+                                       po-desktop-table"
+                            >
+
+                                <table
+                                    class="table
+                                           align-middle
+                                           mb-0
+                                           po-table"
+                                >
+
+                                    <thead class="table-light">
+
+                                        <tr>
+
+                                            <th class="ps-4">
+                                                Artículo
+                                            </th>
+
+                                            <th>
+                                                Código
+                                            </th>
+
+                                            <th>
+                                                Cantidad
+                                            </th>
+
+                                            <th>
+                                                Recibido
+                                            </th>
+
+                                            <th>
+                                                Unidad
+                                            </th>
+
+                                            <th>
+                                                Precio unit.
+                                            </th>
+
+                                            <th>
+                                                Desc.
+                                            </th>
+
+                                            <th>
+                                                IVA
+                                            </th>
+
+                                            <th>
+                                                Subtotal
+                                            </th>
+
+                                            <th>
+                                                Total
+                                            </th>
+
+                                            <th class="pe-4">
+                                                Límites aprobados
+                                            </th>
+
+                                        </tr>
+
+                                    </thead>
+
+
+                                    <tbody>
+
+                                        {% for line in purchase_order.lines %}
+
+                                            <tr
+                                                data-po-line-row
+                                                data-line-id="{{ line.id }}"
+                                            >
+
+                                                <input
+                                                    type="hidden"
+                                                    name="line_id[]"
+                                                    value="{{ line.id }}"
+                                                >
+
+
+                                                <!-- ARTÍCULO -->
+
+                                                <td
+                                                    class="ps-4
+                                                           po-item-name"
+                                                >
+
+                                                    <div class="fw-semibold">
+                                                        {{ line.item_name }}
+                                                    </div>
+
+                                                    {% if line.line_notes %}
+
+                                                        <small
+                                                            class="text-muted"
+                                                        >
+                                                            {{
+                                                                line.line_notes
+                                                            }}
+                                                        </small>
+
+                                                    {% endif %}
+
+                                                </td>
+
+
+                                                <!-- CÓDIGO -->
+
+                                                <td>
+                                                    {{
+                                                        line.item_code
+                                                        or "-"
+                                                    }}
+                                                </td>
+
+
+                                                <!-- CANTIDAD -->
+
+                                                <td>
+
+                                                    <div
+                                                        class="po-view-field
+                                                               po-view-value"
+                                                        data-view-quantity
+                                                    >
+                                                        {{
+                                                            "{:,.2f}".format(
+                                                                line.quantity_ordered
+                                                                or 0
+                                                            )
+                                                        }}
+                                                    </div>
+
+
+                                                    <div
+                                                        class="po-edit-field"
+                                                    >
+
+                                                        <input
+                                                            type="number"
+                                                            name="quantity_ordered[]"
+                                                            value="{{
+                                                                line.quantity_ordered
+                                                            }}"
+                                                            min="{{
+                                                                line.quantity_received
+                                                                or 0
+                                                            }}"
+                                                            step="0.01"
+                                                            class="form-control
+                                                                   form-control-sm
+                                                                   po-number-input
+                                                                   po-quantity"
+                                                            data-line="{{
+                                                                line.id
+                                                            }}"
+                                                            data-original="{{
+                                                                line.quantity_ordered
+                                                            }}"
+                                                            disabled
+                                                            required
+                                                        >
+
+                                                    </div>
+
+                                                </td>
+
+
+                                                <!-- RECIBIDO -->
+
+                                                <td>
+
+                                                    <div class="fw-semibold">
+                                                        {{
+                                                            "{:,.2f}".format(
+                                                                line.quantity_received
+                                                                or 0
+                                                            )
+                                                        }}
+                                                    </div>
+
+
+                                                    {% if line.is_fully_received %}
+
+                                                        <small
+                                                            class="text-success"
+                                                        >
+                                                            Completada
+                                                        </small>
+
+                                                    {% elif
+                                                        line.pending_quantity
+                                                        > 0
+                                                    %}
+
+                                                        <small
+                                                            class="text-muted"
+                                                        >
+                                                            Pendiente:
+                                                            {{
+                                                                "{:,.2f}".format(
+                                                                    line.pending_quantity
+                                                                    or 0
+                                                                )
+                                                            }}
+                                                        </small>
+
+                                                    {% endif %}
+
+                                                </td>
+
+
+                                                <!-- UNIDAD -->
+
+                                                <td>
+                                                    {{
+                                                        line.unit.name
+                                                        if line.unit
+                                                        else "-"
+                                                    }}
+                                                </td>
+
+
+                                                <!-- PRECIO -->
+
+                                                <td>
+
+                                                    <div
+                                                        class="po-view-field
+                                                               po-view-value"
+                                                        data-view-unit-cost
+                                                    >
+                                                        {{
+                                                            "{:,.2f}".format(
+                                                                line.unit_cost
+                                                                or 0
+                                                            )
+                                                        }}
+                                                    </div>
+
+
+                                                    <div
+                                                        class="po-edit-field"
+                                                    >
+
+                                                        <input
+                                                            type="number"
+                                                            name="unit_cost[]"
+                                                            value="{{
+                                                                line.unit_cost
+                                                            }}"
+                                                            min="0.0001"
+                                                            max="{{
+                                                                line.approved_unit_cost
+                                                                or line.unit_cost
+                                                            }}"
+                                                            step="0.0001"
+                                                            class="form-control
+                                                                   form-control-sm
+                                                                   po-number-input
+                                                                   po-unit-cost"
+                                                            data-line="{{
+                                                                line.id
+                                                            }}"
+                                                            data-original="{{
+                                                                line.unit_cost
+                                                            }}"
+                                                            data-approved="{{
+                                                                line.approved_unit_cost
+                                                                or line.unit_cost
+                                                            }}"
+                                                            disabled
+                                                            required
+                                                        >
+
+                                                    </div>
+
+                                                </td>
+
+
+                                                <!-- DESCUENTO -->
+
+                                                <td>
+                                                    {{
+                                                        "{:,.2f}".format(
+                                                            line.discount_pct
+                                                            or 0
+                                                        )
+                                                    }}%
+                                                </td>
+
+
+                                                <!-- IVA -->
+
+                                                <td>
+                                                    {{
+                                                        "{:,.2f}".format(
+                                                            line.tax_pct
+                                                            or 0
+                                                        )
+                                                    }}%
+                                                </td>
+
+
+                                                <!-- SUBTOTAL -->
+
+                                                <td
+                                                    class="fw-semibold"
+                                                    data-line-subtotal
+                                                >
+                                                    {{
+                                                        "{:,.2f}".format(
+                                                            line.line_subtotal
+                                                            or 0
+                                                        )
+                                                    }}
+                                                </td>
+
+
+                                                <!-- TOTAL -->
+
+                                                <td>
+
+                                                    <div
+                                                        class="fw-bold"
+                                                        data-line-total
+                                                    >
+                                                        {{
+                                                            "{:,.2f}".format(
+                                                                line.line_total
+                                                                or 0
+                                                            )
+                                                        }}
+                                                    </div>
+
+
+                                                    <div
+                                                        class="po-validation-message"
+                                                        data-validation-message
+                                                    >
+                                                    </div>
+
+                                                </td>
+
+
+                                                <!-- APROBADO -->
+
+                                                <td class="pe-4">
+
+                                                    <div
+                                                        class="po-limit-box"
+                                                    >
+
+                                                        <div
+                                                            class="po-limit-label"
+                                                        >
+                                                            Precio máximo
+                                                        </div>
+
+                                                        <div
+                                                            class="po-limit-value mb-2"
+                                                        >
+                                                            {{
+                                                                "{:,.2f}".format(
+                                                                    line.approved_unit_cost
+                                                                    or line.unit_cost
+                                                                    or 0
+                                                                )
+                                                            }}
+                                                        </div>
+
+
+                                                        <div
+                                                            class="po-limit-label"
+                                                        >
+                                                            Total máximo
+                                                        </div>
+
+                                                        <div
+                                                            class="po-limit-value"
+                                                        >
+                                                            {{
+                                                                "{:,.2f}".format(
+                                                                    line.approved_line_total
+                                                                    or line.line_total
+                                                                    or 0
+                                                                )
+                                                            }}
+                                                        </div>
+
+
+                                                        <div
+                                                            class="po-limit-label
+                                                                   mt-2"
+                                                        >
+                                                            Cant. original
+                                                        </div>
+
+                                                        <div
+                                                            class="po-limit-value"
+                                                        >
+                                                            {{
+                                                                "{:,.2f}".format(
+                                                                    line.approved_quantity
+                                                                    or line.quantity_ordered
+                                                                    or 0
+                                                                )
+                                                            }}
+                                                        </div>
+
+                                                    </div>
+
+
+                                                    <div
+                                                        class="d-none"
+                                                        data-approved-total="{{
+                                                            line.approved_line_total
+                                                            or line.line_total
+                                                            or 0
+                                                        }}"
+                                                        data-approved-unit="{{
+                                                            line.approved_unit_cost
+                                                            or line.unit_cost
+                                                            or 0
+                                                        }}"
+                                                        data-discount="{{
+                                                            line.discount_pct
+                                                            or 0
+                                                        }}"
+                                                        data-tax="{{
+                                                            line.tax_pct
+                                                            or 0
+                                                        }}"
+                                                        data-received="{{
+                                                            line.quantity_received
+                                                            or 0
+                                                        }}"
+                                                    ></div>
+
+                                                </td>
+
+                                            </tr>
+
+                                        {% endfor %}
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+
+
+                            <!-- =============================
+                                 MÓVIL
+                                 ============================= -->
+
+                            <div class="p-3 po-mobile-line">
+
+                                {% for line in purchase_order.lines %}
+
+                                    <div
+                                        class="po-mobile-card"
+                                        data-po-mobile-line
+                                        data-line-id="{{ line.id }}"
+                                    >
+
+                                        <div
+                                            class="d-flex
+                                                   justify-content-between
+                                                   align-items-start
+                                                   gap-2 mb-3"
+                                        >
+
+                                            <div>
+
+                                                <div class="fw-bold">
+                                                    {{ line.item_name }}
+                                                </div>
+
+                                                <small class="text-muted">
+                                                    {{
+                                                        line.item_code
+                                                        or "-"
+                                                    }}
+                                                </small>
+
+                                            </div>
+
+
+                                            {% if line.is_fully_received %}
+
+                                                <span
+                                                    class="badge
+                                                           text-bg-success"
+                                                >
+                                                    Recibida
+                                                </span>
+
+                                            {% endif %}
+
+                                        </div>
+
+
+                                        <div class="po-mobile-data">
+
+                                            <div>
+
+                                                <div
+                                                    class="po-mobile-label"
+                                                >
+                                                    Cantidad
+                                                </div>
+
+                                                <div
+                                                    class="po-mobile-value
+                                                           po-view-field"
+                                                >
+                                                    {{
+                                                        "{:,.2f}".format(
+                                                            line.quantity_ordered
+                                                            or 0
+                                                        )
+                                                    }}
+                                                </div>
+
+
+                                                <div
+                                                    class="po-edit-field"
+                                                >
+
+                                                    <input
+                                                        type="number"
+                                                        value="{{
+                                                            line.quantity_ordered
+                                                        }}"
+                                                        min="{{
+                                                            line.quantity_received
+                                                            or 0
+                                                        }}"
+                                                        step="0.01"
+                                                        class="form-control
+                                                               form-control-sm
+                                                               po-mobile-quantity"
+                                                        data-line="{{
+                                                            line.id
+                                                        }}"
+                                                        disabled
+                                                    >
+
+                                                </div>
+
+                                            </div>
+
+
+                                            <div>
+
+                                                <div
+                                                    class="po-mobile-label"
+                                                >
+                                                    Precio unit.
+                                                </div>
+
+                                                <div
+                                                    class="po-mobile-value
+                                                           po-view-field"
+                                                >
+                                                    {{
+                                                        "{:,.2f}".format(
+                                                            line.unit_cost
+                                                            or 0
+                                                        )
+                                                    }}
+                                                </div>
+
+
+                                                <div
+                                                    class="po-edit-field"
+                                                >
+
+                                                    <input
+                                                        type="number"
+                                                        value="{{
+                                                            line.unit_cost
+                                                        }}"
+                                                        min="0.0001"
+                                                        max="{{
+                                                            line.approved_unit_cost
+                                                            or line.unit_cost
+                                                        }}"
+                                                        step="0.0001"
+                                                        class="form-control
+                                                               form-control-sm
+                                                               po-mobile-unit-cost"
+                                                        data-line="{{
+                                                            line.id
+                                                        }}"
+                                                        disabled
+                                                    >
+
+                                                </div>
+
+                                            </div>
+
+
+                                            <div>
+
+                                                <div
+                                                    class="po-mobile-label"
+                                                >
+                                                    Recibido
+                                                </div>
+
+                                                <div class="po-mobile-value">
+                                                    {{
+                                                        "{:,.2f}".format(
+                                                            line.quantity_received
+                                                            or 0
+                                                        )
+                                                    }}
+                                                </div>
+
+                                            </div>
+
+
+                                            <div>
+
+                                                <div
+                                                    class="po-mobile-label"
+                                                >
+                                                    Unidad
+                                                </div>
+
+                                                <div class="po-mobile-value">
+                                                    {{
+                                                        line.unit.name
+                                                        if line.unit
+                                                        else "-"
+                                                    }}
+                                                </div>
+
+                                            </div>
+
+
+                                            <div>
+
+                                                <div
+                                                    class="po-mobile-label"
+                                                >
+                                                    Descuento
+                                                </div>
+
+                                                <div class="po-mobile-value">
+                                                    {{
+                                                        "{:,.2f}".format(
+                                                            line.discount_pct
+                                                            or 0
+                                                        )
+                                                    }}%
+                                                </div>
+
+                                            </div>
+
+
+                                            <div>
+
+                                                <div
+                                                    class="po-mobile-label"
+                                                >
+                                                    IVA
+                                                </div>
+
+                                                <div class="po-mobile-value">
+                                                    {{
+                                                        "{:,.2f}".format(
+                                                            line.tax_pct
+                                                            or 0
+                                                        )
+                                                    }}%
+                                                </div>
+
+                                            </div>
+
+
+                                            <div>
+
+                                                <div
+                                                    class="po-mobile-label"
+                                                >
+                                                    Total actual
+                                                </div>
+
+                                                <div
+                                                    class="po-mobile-value
+                                                           fw-bold"
+                                                    data-mobile-total
+                                                >
+                                                    {{
+                                                        "{:,.2f}".format(
+                                                            line.line_total
+                                                            or 0
+                                                        )
+                                                    }}
+                                                </div>
+
+                                            </div>
+
+
+                                            <div>
+
+                                                <div
+                                                    class="po-mobile-label"
+                                                >
+                                                    Total aprobado máx.
+                                                </div>
+
+                                                <div class="po-mobile-value">
+                                                    {{
+                                                        "{:,.2f}".format(
+                                                            line.approved_line_total
+                                                            or line.line_total
+                                                            or 0
+                                                        )
+                                                    }}
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+
+
+                                        <div
+                                            class="po-validation-message
+                                                   mt-2"
+                                            data-mobile-validation
+                                        >
+                                        </div>
+
+
+                                        <div
+                                            class="d-none"
+                                            data-mobile-approved-total="{{
+                                                line.approved_line_total
+                                                or line.line_total
+                                                or 0
+                                            }}"
+                                            data-mobile-approved-unit="{{
+                                                line.approved_unit_cost
+                                                or line.unit_cost
+                                                or 0
+                                            }}"
+                                            data-mobile-discount="{{
+                                                line.discount_pct
+                                                or 0
+                                            }}"
+                                            data-mobile-tax="{{
+                                                line.tax_pct
+                                                or 0
+                                            }}"
+                                            data-mobile-received="{{
+                                                line.quantity_received
+                                                or 0
+                                            }}"
+                                        ></div>
+
+                                    </div>
+
+                                {% endfor %}
+
+                            </div>
+
+
+                            <!-- =============================
+                                 RESUMEN
+                                 ============================= -->
+
+                            <div
+                                class="p-4 border-top
+                                       d-flex justify-content-end"
+                            >
+
+                                <div
+                                    class="po-summary-card"
+                                    style="min-width: 280px;"
+                                >
+
+                                    <div class="po-summary-row">
+
+                                        <span class="text-muted">
+                                            Subtotal
+                                        </span>
+
+                                        <strong id="poSummarySubtotal">
+                                            0.00
+                                        </strong>
+
+                                    </div>
+
+
+                                    <div class="po-summary-row">
+
+                                        <span class="text-muted">
+                                            Descuento
+                                        </span>
+
+                                        <strong
+                                            class="text-danger"
+                                            id="poSummaryDiscount"
+                                        >
+                                            0.00
+                                        </strong>
+
+                                    </div>
+
+
+                                    <div class="po-summary-row">
+
+                                        <span class="text-muted">
+                                            IVA
+                                        </span>
+
+                                        <strong id="poSummaryTax">
+                                            0.00
+                                        </strong>
+
+                                    </div>
+
+
+                                    <div
+                                        class="po-summary-row
+                                               po-summary-total"
+                                    >
+
+                                        <span>
+                                            Total
+                                        </span>
+
+                                        <span id="poSummaryTotal">
+                                            0.00
+                                        </span>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        {% else %}
+
+                            <div class="p-5 text-center">
+
+                                <i
+                                    class="bi bi-list-ul
+                                           fs-1 text-muted"
+                                ></i>
+
+                                <h6 class="fw-bold mt-3">
+                                    No hay líneas registradas
+                                </h6>
+
+                            </div>
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+            </form>
+
+
+            <!-- =================================================
+                 PDF APROBADO
+                 ================================================= -->
+
+            {% if approved_doc %}
+
+                <div
+                    class="card border-0 shadow-sm
+                           rounded-4 mt-4"
+                >
+
+                    <div class="card-body p-4">
+
+                        <h5 class="fw-bold mb-3">
+                            Vista previa del PDF aprobado
+                        </h5>
+
+
+                        <iframe
+                            src="{{
+                                url_for(
+                                    'purchases.view_approved_pdf',
+                                    order_id=purchase_order.id
+                                )
+                            }}"
+                            style="
+                                width: 100%;
+                                height: 720px;
+                                border: 1px solid #dee2e6;
+                                border-radius: 12px;
+                            "
+                            title="PDF aprobado"
+                        >
+                        </iframe>
+
+                    </div>
+
+                </div>
+
+            {% endif %}
+
+
+            <!-- =================================================
+                 ENTRADAS RELACIONADAS
+                 ================================================= -->
+
+            {% if purchase_order.inventory_entries %}
+
+                <div
+                    class="card border-0 shadow-sm
+                           rounded-4 mt-4"
+                >
+
+                    <div class="card-body p-4">
+
+                        <h5 class="fw-bold mb-3">
+                            Entradas relacionadas
+                        </h5>
+
+
+                        <div class="d-flex flex-column gap-2">
+
+                            {% for item in purchase_order.inventory_entries %}
+
+                                <a
+                                    href="{{
+                                        url_for(
+                                            'purchases.entry_detail',
+                                            entry_id=item.id
+                                        )
+                                    }}"
+                                    class="text-decoration-none
+                                           border rounded-3 p-3
+                                           d-flex
+                                           justify-content-between
+                                           align-items-center"
+                                >
+
+                                    <div>
+
+                                        <div class="fw-semibold text-dark">
+                                            {{ item.number }}
+                                        </div>
+
+                                        <small class="text-muted">
+                                            Factura:
+                                            {{ item.invoice_number }}
+                                            |
+                                            {{
+                                                cr_datetime(
+                                                    item.created_at
+                                                )
+                                            }}
+                                        </small>
+
+                                    </div>
+
+
+                                    <i
+                                        class="bi
+                                               bi-arrow-right
+                                               text-dark"
+                                    ></i>
+
+                                </a>
+
+                            {% endfor %}
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+
+        "use strict";
+
+        const page =
+            document.getElementById(
+                "purchaseOrderPage"
+            );
+
+        const form =
+            document.getElementById(
+                "purchaseOrderAdjustmentForm"
+            );
+
+        const editButton =
+            document.getElementById(
+                "editPurchaseOrderBtn"
+            );
+
+        const cancelButton =
+            document.getElementById(
+                "cancelPurchaseOrderEditBtn"
+            );
+
+        const saveButton =
+            document.getElementById(
+                "savePurchaseOrderBtn"
+            );
+
+
+        function numberValue(value) {
+
+            const parsed =
+                Number.parseFloat(
+                    String(value || "")
+                        .replace(",", ".")
+                );
+
+            return Number.isFinite(parsed)
+                ? parsed
+                : 0;
+        }
+
+
+        function formatNumber(value) {
+
+            return Number(value || 0)
+                .toLocaleString(
+                    "es-CR",
+                    {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    }
+                );
+        }
+
+
+        function calculateAmounts(
+            quantity,
+            unitCost,
+            discountPct,
+            taxPct
+        ) {
+
+            const subtotal =
+                quantity * unitCost;
+
+            const discountAmount =
+                subtotal
+                * (
+                    discountPct
+                    / 100
+                );
+
+            const taxableBase =
+                subtotal
+                - discountAmount;
+
+            const taxAmount =
+                taxableBase
+                * (
+                    taxPct
+                    / 100
+                );
+
+            const total =
+                taxableBase
+                + taxAmount;
+
+            return {
+                subtotal,
+                discountAmount,
+                taxableBase,
+                taxAmount,
+                total
+            };
+        }
+
+
+        function getDesktopRow(lineId) {
+
+            return document.querySelector(
+                '[data-po-line-row]'
+                + '[data-line-id="'
+                + lineId
+                + '"]'
+            );
+        }
+
+
+        function getMobileRow(lineId) {
+
+            return document.querySelector(
+                '[data-po-mobile-line]'
+                + '[data-line-id="'
+                + lineId
+                + '"]'
+            );
+        }
+
+
+        function syncMobileFromDesktop(
+            lineId
+        ) {
+
+            const desktopRow =
+                getDesktopRow(lineId);
+
+            const mobileRow =
+                getMobileRow(lineId);
+
+            if (
+                !desktopRow
+                || !mobileRow
+            ) {
+                return;
+            }
+
+            const quantity =
+                desktopRow.querySelector(
+                    ".po-quantity"
+                );
+
+            const unitCost =
+                desktopRow.querySelector(
+                    ".po-unit-cost"
+                );
+
+            const mobileQuantity =
+                mobileRow.querySelector(
+                    ".po-mobile-quantity"
+                );
+
+            const mobileUnitCost =
+                mobileRow.querySelector(
+                    ".po-mobile-unit-cost"
+                );
+
+            if (
+                quantity
+                && mobileQuantity
+            ) {
+                mobileQuantity.value =
+                    quantity.value;
+            }
+
+            if (
+                unitCost
+                && mobileUnitCost
+            ) {
+                mobileUnitCost.value =
+                    unitCost.value;
+            }
+        }
+
+
+        function syncDesktopFromMobile(
+            lineId
+        ) {
+
+            const desktopRow =
+                getDesktopRow(lineId);
+
+            const mobileRow =
+                getMobileRow(lineId);
+
+            if (
+                !desktopRow
+                || !mobileRow
+            ) {
+                return;
+            }
+
+            const quantity =
+                desktopRow.querySelector(
+                    ".po-quantity"
+                );
+
+            const unitCost =
+                desktopRow.querySelector(
+                    ".po-unit-cost"
+                );
+
+            const mobileQuantity =
+                mobileRow.querySelector(
+                    ".po-mobile-quantity"
+                );
+
+            const mobileUnitCost =
+                mobileRow.querySelector(
+                    ".po-mobile-unit-cost"
+                );
+
+            if (
+                quantity
+                && mobileQuantity
+            ) {
+                quantity.value =
+                    mobileQuantity.value;
+            }
+
+            if (
+                unitCost
+                && mobileUnitCost
+            ) {
+                unitCost.value =
+                    mobileUnitCost.value;
+            }
+        }
+
+
+        function validateAndCalculateLine(
+            lineId
+        ) {
+
+            const row =
+                getDesktopRow(lineId);
+
+            if (!row) {
+                return true;
+            }
+
+            const quantityInput =
+                row.querySelector(
+                    ".po-quantity"
+                );
+
+            const unitCostInput =
+                row.querySelector(
+                    ".po-unit-cost"
+                );
+
+            const limits =
+                row.querySelector(
+                    "[data-approved-total]"
+                );
+
+            if (
+                !quantityInput
+                || !unitCostInput
+                || !limits
+            ) {
+                return true;
+            }
+
+            const quantity =
+                numberValue(
+                    quantityInput.value
+                );
+
+            const unitCost =
+                numberValue(
+                    unitCostInput.value
+                );
+
+            const approvedUnitCost =
+                numberValue(
+                    limits.dataset
+                        .approvedUnit
+                );
+
+            const approvedTotal =
+                numberValue(
+                    limits.dataset
+                        .approvedTotal
+                );
+
+            const discountPct =
+                numberValue(
+                    limits.dataset
+                        .discount
+                );
+
+            const taxPct =
+                numberValue(
+                    limits.dataset
+                        .tax
+                );
+
+            const received =
+                numberValue(
+                    limits.dataset
+                        .received
+                );
+
+            const amounts =
+                calculateAmounts(
+                    quantity,
+                    unitCost,
+                    discountPct,
+                    taxPct
+                );
+
+
+            const subtotalElement =
+                row.querySelector(
+                    "[data-line-subtotal]"
+                );
+
+            const totalElement =
+                row.querySelector(
+                    "[data-line-total]"
+                );
+
+            const validationElement =
+                row.querySelector(
+                    "[data-validation-message]"
+                );
+
+
+            if (subtotalElement) {
+                subtotalElement.textContent =
+                    formatNumber(
+                        amounts.subtotal
+                    );
+            }
+
+
+            if (totalElement) {
+                totalElement.textContent =
+                    formatNumber(
+                        amounts.total
+                    );
+            }
+
+
+            const errors = [];
+
+
+            if (quantity <= 0) {
+
+                errors.push(
+                    "La cantidad debe ser mayor que cero."
+                );
+
+            }
+
+
+            if (quantity < received) {
+
+                errors.push(
+                    "La cantidad no puede ser menor que lo ya recibido."
+                );
+
+            }
+
+
+            if (unitCost <= 0) {
+
+                errors.push(
+                    "El precio debe ser mayor que cero."
+                );
+
+            }
+
+
+            if (
+                unitCost
+                > approvedUnitCost
+                + 0.000001
+            ) {
+
+                errors.push(
+                    "El precio unitario supera el aprobado."
+                );
+
+            }
+
+
+            if (
+                amounts.total
+                > approvedTotal
+                + 0.01
+            ) {
+
+                errors.push(
+                    "El total de la línea supera el monto aprobado."
+                );
+
+            }
+
+
+            if (errors.length) {
+
+                row.classList.add(
+                    "po-line-invalid"
+                );
+
+                row.classList.remove(
+                    "po-line-valid"
+                );
+
+                if (validationElement) {
+
+                    validationElement.textContent =
+                        errors.join(" ");
+
+                }
+
+            } else {
+
+                row.classList.remove(
+                    "po-line-invalid"
+                );
+
+                row.classList.add(
+                    "po-line-valid"
+                );
+
+                if (validationElement) {
+
+                    validationElement.textContent =
+                        "";
+
+                }
+
+            }
+
+
+            const mobileRow =
+                getMobileRow(lineId);
+
+            if (mobileRow) {
+
+                const mobileTotal =
+                    mobileRow.querySelector(
+                        "[data-mobile-total]"
+                    );
+
+                const mobileValidation =
+                    mobileRow.querySelector(
+                        "[data-mobile-validation]"
+                    );
+
+                if (mobileTotal) {
+
+                    mobileTotal.textContent =
+                        formatNumber(
+                            amounts.total
+                        );
+
+                }
+
+                if (errors.length) {
+
+                    mobileRow.classList.add(
+                        "po-line-invalid"
+                    );
+
+                    if (mobileValidation) {
+
+                        mobileValidation.textContent =
+                            errors.join(" ");
+
+                    }
+
+                } else {
+
+                    mobileRow.classList.remove(
+                        "po-line-invalid"
+                    );
+
+                    if (mobileValidation) {
+
+                        mobileValidation.textContent =
+                            "";
+
+                    }
+
+                }
+
+            }
+
+
+            return errors.length === 0;
+        }
+
+
+        function updateSummary() {
+
+            let subtotal = 0;
+            let discount = 0;
+            let tax = 0;
+            let total = 0;
+
+
+            document
+                .querySelectorAll(
+                    "[data-po-line-row]"
+                )
+                .forEach(
+                    function (row) {
+
+                        const quantityInput =
+                            row.querySelector(
+                                ".po-quantity"
+                            );
+
+                        const unitCostInput =
+                            row.querySelector(
+                                ".po-unit-cost"
+                            );
+
+                        const limits =
+                            row.querySelector(
+                                "[data-approved-total]"
+                            );
+
+
+                        if (
+                            !quantityInput
+                            || !unitCostInput
+                            || !limits
+                        ) {
+                            return;
+                        }
+
+
+                        const amounts =
+                            calculateAmounts(
+                                numberValue(
+                                    quantityInput.value
+                                ),
+                                numberValue(
+                                    unitCostInput.value
+                                ),
+                                numberValue(
+                                    limits.dataset.discount
+                                ),
+                                numberValue(
+                                    limits.dataset.tax
+                                )
+                            );
+
+
+                        subtotal +=
+                            amounts.subtotal;
+
+                        discount +=
+                            amounts.discountAmount;
+
+                        tax +=
+                            amounts.taxAmount;
+
+                        total +=
+                            amounts.total;
+
+                    }
+                );
+
+
+            const subtotalElement =
+                document.getElementById(
+                    "poSummarySubtotal"
+                );
+
+            const discountElement =
+                document.getElementById(
+                    "poSummaryDiscount"
+                );
+
+            const taxElement =
+                document.getElementById(
+                    "poSummaryTax"
+                );
+
+            const totalElement =
+                document.getElementById(
+                    "poSummaryTotal"
+                );
+
+
+            if (subtotalElement) {
+                subtotalElement.textContent =
+                    formatNumber(subtotal);
+            }
+
+            if (discountElement) {
+                discountElement.textContent =
+                    "-"
+                    + formatNumber(discount);
+            }
+
+            if (taxElement) {
+                taxElement.textContent =
+                    formatNumber(tax);
+            }
+
+            if (totalElement) {
+                totalElement.textContent =
+                    formatNumber(total);
+            }
+        }
+
+
+        function validateAllLines() {
+
+            let valid = true;
+
+
+            document
+                .querySelectorAll(
+                    "[data-po-line-row]"
+                )
+                .forEach(
+                    function (row) {
+
+                        const lineId =
+                            row.dataset.lineId;
+
+                        if (
+                            !validateAndCalculateLine(
+                                lineId
+                            )
+                        ) {
+                            valid = false;
+                        }
+
+                    }
+                );
+
+
+            updateSummary();
+
+            return valid;
+        }
+
+
+        function setEditing(
+            enabled
+        ) {
+
+            if (!page) {
+                return;
+            }
+
+
+            page.classList.toggle(
+                "po-editing",
+                enabled
+            );
+
+
+            document
+                .querySelectorAll(
+                    ".po-quantity, "
+                    + ".po-unit-cost"
+                )
+                .forEach(
+                    function (input) {
+
+                        input.disabled =
+                            !enabled;
+
+                    }
+                );
+
+
+            document
+                .querySelectorAll(
+                    ".po-mobile-quantity, "
+                    + ".po-mobile-unit-cost"
+                )
+                .forEach(
+                    function (input) {
+
+                        input.disabled =
+                            !enabled;
+
+                    }
+                );
+
+
+            if (enabled) {
+
+                validateAllLines();
+
+            } else {
+
+                document
+                    .querySelectorAll(
+                        "[data-po-line-row]"
+                    )
+                    .forEach(
+                        function (row) {
+
+                            row.classList.remove(
+                                "po-line-invalid",
+                                "po-line-valid"
+                            );
+
+                        }
+                    );
+
+                document
+                    .querySelectorAll(
+                        "[data-po-mobile-line]"
+                    )
+                    .forEach(
+                        function (row) {
+
+                            row.classList.remove(
+                                "po-line-invalid"
+                            );
+
+                        }
+                    );
+
+            }
+        }
+
+
+        function restoreOriginalValues() {
+
+            document
+                .querySelectorAll(
+                    ".po-quantity"
+                )
+                .forEach(
+                    function (input) {
+
+                        input.value =
+                            input.dataset.original;
+
+                        syncMobileFromDesktop(
+                            input.dataset.line
+                        );
+
+                    }
+                );
+
+
+            document
+                .querySelectorAll(
+                    ".po-unit-cost"
+                )
+                .forEach(
+                    function (input) {
+
+                        input.value =
+                            input.dataset.original;
+
+                        syncMobileFromDesktop(
+                            input.dataset.line
+                        );
+
+                    }
+                );
+
+
+            validateAllLines();
+        }
+
+
+        document
+            .querySelectorAll(
+                ".po-quantity, "
+                + ".po-unit-cost"
+            )
+            .forEach(
+                function (input) {
+
+                    input.addEventListener(
+                        "input",
+                        function () {
+
+                            syncMobileFromDesktop(
+                                input.dataset.line
+                            );
+
+                            validateAndCalculateLine(
+                                input.dataset.line
+                            );
+
+                            updateSummary();
+
+                        }
+                    );
+
+                }
+            );
+
+
+        document
+            .querySelectorAll(
+                ".po-mobile-quantity, "
+                + ".po-mobile-unit-cost"
+            )
+            .forEach(
+                function (input) {
+
+                    input.addEventListener(
+                        "input",
+                        function () {
+
+                            syncDesktopFromMobile(
+                                input.dataset.line
+                            );
+
+                            validateAndCalculateLine(
+                                input.dataset.line
+                            );
+
+                            updateSummary();
+
+                        }
+                    );
+
+                }
+            );
+
+
+        if (editButton) {
+
+            editButton.addEventListener(
+                "click",
+                function () {
+
+                    setEditing(true);
+
+                }
+            );
+
+        }
+
+
+        if (cancelButton) {
+
+            cancelButton.addEventListener(
+                "click",
+                function () {
+
+                    restoreOriginalValues();
+
+                    setEditing(false);
+
+                }
+            );
+
+        }
+
+
+        if (form) {
+
+            form.addEventListener(
+                "submit",
+                function (event) {
+
+                    if (
+                        !validateAllLines()
+                    ) {
+
+                        event.preventDefault();
+
+                        window.alert(
+                            "Hay una o más líneas que "
+                            + "superan los límites aprobados. "
+                            + "Revise los valores marcados."
+                        );
+
+                        return;
+                    }
+
+
+                    const confirmed =
+                        window.confirm(
+                            "¿Guardar los nuevos valores "
+                            + "de esta orden de compra?"
+                        );
+
+
+                    if (!confirmed) {
+
+                        event.preventDefault();
+                        return;
+
+                    }
+
+
+                    if (saveButton) {
+
+                        saveButton.disabled = true;
+
+                        saveButton.innerHTML =
+                            '<span '
+                            + 'class="spinner-border '
+                            + 'spinner-border-sm me-2">'
+                            + '</span>'
+                            + 'Guardando...';
+
+                    }
+
+                }
+            );
+
+        }
+
+
+        updateSummary();
+
+    }
+);
 </script>
 
 {% endblock %}

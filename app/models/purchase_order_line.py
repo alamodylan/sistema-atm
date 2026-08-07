@@ -37,8 +37,38 @@ class PurchaseOrderLine(db.Model):
         nullable=True,
     )
 
-    quantity_ordered = db.Column(db.Numeric(14, 2), nullable=False)
-    quantity_received = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+    quantity_ordered = db.Column(
+        db.Numeric(14, 2),
+        nullable=False,
+    )
+
+    quantity_received = db.Column(
+        db.Numeric(14, 2),
+        nullable=False,
+        default=0,
+    )
+
+    # ===========================================
+    # VALORES APROBADOS POR GERENCIA (NO CAMBIAN)
+    # ===========================================
+
+    approved_quantity = db.Column(
+        db.Numeric(14, 2),
+        nullable=False,
+        default=0,
+    )
+
+    approved_unit_cost = db.Column(
+        db.Numeric(14, 4),
+        nullable=False,
+        default=0,
+    )
+
+    approved_line_total = db.Column(
+        db.Numeric(14, 4),
+        nullable=False,
+        default=0,
+    )
 
     unit_id = db.Column(
         db.BigInteger,
@@ -46,11 +76,35 @@ class PurchaseOrderLine(db.Model):
         nullable=True,
     )
 
-    unit_cost = db.Column(db.Numeric(14, 4), nullable=False, default=0)
-    discount_pct = db.Column(db.Numeric(7, 4), nullable=False, default=0)
-    tax_pct = db.Column(db.Numeric(7, 4), nullable=False, default=0)
-    line_subtotal = db.Column(db.Numeric(14, 4), nullable=False, default=0)
-    line_total = db.Column(db.Numeric(14, 4), nullable=False, default=0)
+    unit_cost = db.Column(
+        db.Numeric(14, 4),
+        nullable=False,
+        default=0,
+    )
+
+    discount_pct = db.Column(
+        db.Numeric(7, 4),
+        nullable=False,
+        default=0,
+    )
+
+    tax_pct = db.Column(
+        db.Numeric(7, 4),
+        nullable=False,
+        default=0,
+    )
+
+    line_subtotal = db.Column(
+        db.Numeric(14, 4),
+        nullable=False,
+        default=0,
+    )
+
+    line_total = db.Column(
+        db.Numeric(14, 4),
+        nullable=False,
+        default=0,
+    )
 
     line_notes = db.Column(db.Text)
 
@@ -108,8 +162,16 @@ class PurchaseOrderLine(db.Model):
 
     @property
     def pending_quantity(self):
-        return max((self.quantity_ordered or 0) - (self.quantity_received or 0), 0)
+        return max(
+            (self.quantity_ordered or 0)
+            - (self.quantity_received or 0),
+            0,
+        )
 
     @property
     def is_fully_received(self) -> bool:
-        return (self.quantity_received or 0) >= (self.quantity_ordered or 0)
+        return (
+            self.quantity_received or 0
+        ) >= (
+            self.quantity_ordered or 0
+        )

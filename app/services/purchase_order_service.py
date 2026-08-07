@@ -1413,22 +1413,14 @@ def adjust_approved_purchase_order_line(
             "Solo se pueden ajustar órdenes aprobadas."
         )
 
-    original_quantity = Decimal(
-        str(purchase_order_line.quantity_ordered or 0)
-    )
-
-    original_unit_cost = Decimal(
-        str(purchase_order_line.unit_cost or 0)
-    )
-
     quantity = _normalize_decimal(
         new_quantity,
-        "cantidad"
+        "cantidad",
     )
 
     unit_cost = _normalize_decimal(
         new_unit_cost,
-        "precio unitario"
+        "precio unitario",
     )
 
     if quantity <= 0:
@@ -1439,11 +1431,6 @@ def adjust_approved_purchase_order_line(
     if unit_cost <= 0:
         raise PurchaseOrderServiceError(
             "El precio unitario debe ser mayor que cero."
-        )
-
-    if quantity > original_quantity:
-        raise PurchaseOrderServiceError(
-            "No se puede aumentar la cantidad aprobada."
         )
 
     quantity_received = Decimal(
@@ -1458,34 +1445,74 @@ def adjust_approved_purchase_order_line(
             "La cantidad ordenada no puede ser menor que la cantidad ya recibida."
         )
 
-    if unit_cost > original_unit_cost:
+    approved_unit_cost = Decimal(
+        str(
+            purchase_order_line.approved_unit_cost
+            or 0
+        )
+    )
+
+    if unit_cost > approved_unit_cost:
         raise PurchaseOrderServiceError(
-            "No se puede aumentar el precio unitario aprobado."
+            "El precio unitario no puede ser mayor al aprobado."
         )
 
     discount_pct = Decimal(
-        str(purchase_order_line.discount_pct or 0)
+        str(
+            purchase_order_line.discount_pct
+            or 0
+        )
     )
 
     tax_pct = Decimal(
-        str(purchase_order_line.tax_pct or 0)
+        str(
+            purchase_order_line.tax_pct
+            or 0
+        )
     )
 
-    line_subtotal = quantity * unit_cost
+    line_subtotal = (
+        quantity
+        * unit_cost
+    )
 
     discount_amount = (
-        line_subtotal * (discount_pct / Decimal("100"))
+        line_subtotal
+        * (
+            discount_pct
+            / Decimal("100")
+        )
     )
 
     taxable_base = (
-        line_subtotal - discount_amount
+        line_subtotal
+        - discount_amount
     )
 
     tax_amount = (
-        taxable_base * (tax_pct / Decimal("100"))
+        taxable_base
+        * (
+            tax_pct
+            / Decimal("100")
+        )
     )
 
-    line_total = taxable_base + tax_amount
+    line_total = (
+        taxable_base
+        + tax_amount
+    )
+
+    approved_line_total = Decimal(
+        str(
+            purchase_order_line.approved_line_total
+            or 0
+        )
+    )
+
+    if line_total > approved_line_total:
+        raise PurchaseOrderServiceError(
+            "El monto total de la línea no puede ser mayor al monto aprobado."
+        )
 
     purchase_order_line.quantity_ordered = quantity
     purchase_order_line.unit_cost = unit_cost

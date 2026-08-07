@@ -5108,42 +5108,118 @@ def view_approved_pdf(order_id):
     )
 
 @purchases_bp.route(
-    "/orders/lines/<int:line_id>/adjust",
+    "/orders/<int:order_id>/adjust",
     methods=["POST"],
 )
 @login_required
-def adjust_purchase_order_line(line_id: int):
+def adjust_purchase_order(order_id: int):
 
-    quantity = request.form.get("quantity_ordered")
-    unit_cost = request.form.get("unit_cost")
+    purchase_order = get_purchase_order_or_404(order_id)
 
     try:
 
-        adjusted_line = adjust_approved_purchase_order_line(
-            purchase_order_line_id=line_id,
-            new_quantity=quantity,
-            new_unit_cost=unit_cost,
+        line_ids = request.form.getlist("line_id[]")
+        quantities = request.form.getlist("quantity_ordered[]")
+        unit_costs = request.form.getlist("unit_cost[]")
+
+        total = max(
+            len(line_ids),
+            len(quantities),
+            len(unit_costs),
         )
+
+        if total == 0:
+            raise PurchaseOrderServiceError(
+                "No se recibieron líneas para actualizar."
+            )
+
+        for index in range(total):
+
+            line_id = _to_int(
+                line_ids[index]
+                if index < len(line_ids)
+                else None
+            )
+
+            quantity = (
+                quantities[index]
+                if index < len(quantities)
+                else None
+            )
+
+            unit_cost = (
+                unit_costs[index]
+                if index < len(unit_costs)
+                else None
+            )
+
+            if not line_id:
+                continue
+
+            line = PurchaseOrderLine.query.get(line_id)
+
+            if (
+                not line
+                or line.purchase_order_id != purchase_order.id
+            ):
+                raise PurchaseOrderServiceError(
+                    "Una de las líneas no pertenece a esta orden."
+                )
+
+            adjust_approved_purchase_order_line(
+                purchase_order_line_id=line_id,
+                new_quantity=quantity,
+                new_unit_cost=unit_cost,
+                commit=False,
+            )
+
+        db.session.commit()
 
     except PurchaseOrderServiceError as exc:
 
-        flash(str(exc), "danger")
+        db.session.rollback()
+
+        flash(
+            str(exc),
+            "danger",
+        )
 
         return redirect(
             url_for(
                 "purchases.order_detail",
-                order_id=PurchaseOrderLine.query.get_or_404(line_id).purchase_order_id,
+                order_id=order_id,
+            )
+        )
+
+    except Exception as exc:
+
+        db.session.rollback()
+
+        print(
+            "[ADJUST PURCHASE ORDER ERROR]",
+            exc,
+        )
+
+        flash(
+            "Ocurrió un error al actualizar la orden.",
+            "danger",
+        )
+
+        return redirect(
+            url_for(
+                "purchases.order_detail",
+                order_id=order_id,
             )
         )
 
     flash(
-        "Línea de orden ajustada correctamente.",
+        "Orden de compra actualizada correctamente.",
         "success",
     )
 
     return redirect(
         url_for(
             "purchases.order_detail",
-            order_id=adjusted_line.purchase_order_id,
+            order_id=order_id,
         )
     )
