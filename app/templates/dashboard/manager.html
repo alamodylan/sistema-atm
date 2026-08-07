@@ -535,22 +535,6 @@
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body p-4">
 
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
-            <div>
-                <div class="text-dark small fw-semibold text-uppercase mb-1">
-                    Compras
-                </div>
-
-                <h5 class="fw-bold mb-1">
-                    Solicitudes de compra pendientes
-                </h5>
-
-                <div class="text-muted small">
-                    Revise cantidades y stock antes de enviar la solicitud a proveeduría.
-                </div>
-            </div>
-        </div>
-
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-body p-4">
                 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
@@ -671,6 +655,24 @@
                 {% endfor %}
             </div>
         </div>
+
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+            <div>
+                <div class="text-dark small fw-semibold text-uppercase mb-1">
+                    Compras
+                </div>
+
+                <h5 class="fw-bold mb-1">
+                    Solicitudes de compra pendientes
+                </h5>
+
+                <div class="text-muted small">
+                    Revise cantidades y stock antes de enviar la solicitud a proveeduría.
+                </div>
+            </div>
+        </div>
+
+        
 
         {% for req in purchase_requests %}
         <div class="border rounded-4 p-3 p-lg-4 mb-4 bg-white">
